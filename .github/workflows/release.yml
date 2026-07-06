@@ -1,0 +1,17 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  # Same quality gate as on PRs. Job name must stay "validate" so it produces
+  # the "validate / gate" check. Image build and publication land in phase 2.
+  validate:
+    uses: ./.github/workflows/validate.yml

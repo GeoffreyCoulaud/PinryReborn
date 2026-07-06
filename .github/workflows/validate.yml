@@ -1,0 +1,53 @@
+name: Validate
+
+# Reusable workflow: static analysis (detekt) and tests. Called by the PR
+# workflow and by the release workflow so both run the exact same quality gate.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Detekt
+        run: ./gradlew detekt
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Test
+        run: ./gradlew test
+
+  # Single required check. GitHub counts a skipped job as passing for branch
+  # protection, so the gate always runs (if: always()) and fails explicitly
+  # unless every needed job actually reported "success".
+  gate:
+    needs: [lint, test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all jobs succeeded
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Needed job results: $results"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required job did not succeed (results: $results)"
+              exit 1
+            fi
+          done
