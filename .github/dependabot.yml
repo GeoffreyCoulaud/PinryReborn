@@ -24,3 +24,15 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Base image of the Dockerfile — one grouped weekly PR.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      docker:
+        patterns:
+          - "*"
