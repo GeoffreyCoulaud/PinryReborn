@@ -477,7 +477,8 @@
           "name" : "q",
           "in" : "query",
           "schema" : {
-            "type" : [ "string", "null" ]
+            "type" : [ "string", "null" ],
+            "pattern" : "\\S"
           },
           "required" : true
         } ],
@@ -629,7 +630,8 @@
           "name" : "q",
           "in" : "query",
           "schema" : {
-            "type" : [ "string", "null" ]
+            "type" : [ "string", "null" ],
+            "pattern" : "\\S"
           },
           "required" : true
         } ],
