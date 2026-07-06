@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
-import io.quarkus.security.AuthenticationFailedException
+import io.quarkus.security.UnauthorizedException
 import jakarta.annotation.Priority
 import jakarta.ws.rs.Priorities
 import jakarta.ws.rs.core.Context
@@ -11,15 +11,15 @@ import jakarta.ws.rs.ext.Provider
 
 @Provider
 @Priority(Priorities.AUTHENTICATION)
-class AuthenticationFailedExceptionMapper : ExceptionMapper<AuthenticationFailedException> {
+class UnauthorizedExceptionMapper : ExceptionMapper<UnauthorizedException> {
     @Context
     lateinit var uriInfo: UriInfo
 
-    override fun toResponse(exception: AuthenticationFailedException): Response =
+    override fun toResponse(exception: UnauthorizedException): Response =
         problemResponse(
             status = Response.Status.UNAUTHORIZED,
-            detail = "Invalid username or password",
-            code = "AUTHENTICATION_FAILED",
+            detail = "Authentication required",
+            code = "AUTHENTICATION_REQUIRED",
             uriInfo = uriInfo,
         ).header("WWW-Authenticate", WWW_AUTHENTICATE_BASIC).build()
 }

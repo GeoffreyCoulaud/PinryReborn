@@ -1,6 +1,5 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
-import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BaseError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
 import jakarta.ws.rs.core.Context
@@ -14,21 +13,8 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
     @Context
     lateinit var uriInfo: UriInfo
 
-    override fun toResponse(exception: BaseError): Response {
-        val status = statusFor(exception.code)
-        val problem = ProblemDetail(
-            title = status.reasonPhrase,
-            status = status.statusCode,
-            detail = exception.message,
-            instance = uriInfo.path,
-            code = exception.code.name,
-        )
-        return Response
-            .status(status)
-            .entity(problem)
-            .type(PROBLEM_JSON_MEDIA_TYPE)
-            .build()
-    }
+    override fun toResponse(exception: BaseError): Response =
+        problemResponse(statusFor(exception.code), exception.message, exception.code.name, uriInfo).build()
 
     private fun statusFor(code: ErrorCode): Response.Status =
         when (code) {
