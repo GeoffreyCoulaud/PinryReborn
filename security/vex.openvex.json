@@ -1,0 +1,8 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/GeoffreyCoulaud/pinry-reborn-api/blob/main/security/vex.openvex.json",
+  "author": "GeoffreyCoulaud",
+  "timestamp": "2026-07-06T00:00:00Z",
+  "version": 1,
+  "statements": []
+}
