@@ -3,6 +3,15 @@
 Date: 2026-07-06
 Spec: `docs/specs/2026-07-06-ci-supply-chain.md`
 
+## Mise à jour post-merge (2026-07-06)
+
+Les trois PRs (#1, #2, #5) sont mergées sur `main`. Le **chemin release a été validé
+en conditions réelles** : le run `release` a publié l'image multi-arch sur GHCR avec les
+trois attestations cosign, et `grype-scan` (lancé via `workflow_dispatch`) a **vérifié
+les attestations avec succès**. L'hypothèse du `CERT_REGEXP` sur `validate.yml` était
+donc **correcte** : aucun correctif nécessaire. La section « NON validé » ci-dessous est
+conservée pour mémoire de ce qui était incertain au moment de la construction.
+
 ## État actuel
 
 Trois phases construites, chacune sur une branche empilée sur la précédente, en attente
