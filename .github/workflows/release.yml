@@ -6,6 +6,11 @@ on:
       - main
     tags:
       - "v*"
+    # Skip the release (image rebuild + publish) when a push touches only docs:
+    # nothing shippable changed. A push touching any non-doc file still triggers.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
 
 permissions:
   contents: read
