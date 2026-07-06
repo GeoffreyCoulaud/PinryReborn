@@ -4,7 +4,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.PinSe
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.SearchResultMapper.toPinSearchDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinSearcher
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SearchEmptyQueryError
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
 import jakarta.ws.rs.GET
@@ -32,14 +31,10 @@ class PinSearchController(
 
         val limit = (limitParam ?: DEFAULT_LIMIT).coerceAtMost(MAX_LIMIT)
 
-        return try {
-            pinSearcher
-                .searchPins(user = user, query = query, limit = limit)
-                .toPinSearchDto()
-                .let { RestResponse.ok(it) }
-        } catch (_: SearchEmptyQueryError) {
-            RestResponse.status(RestResponse.Status.BAD_REQUEST)
-        }
+        return pinSearcher
+            .searchPins(user = user, query = query, limit = limit)
+            .toPinSearchDto()
+            .let { RestResponse.ok(it) }
     }
 
     companion object {
