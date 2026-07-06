@@ -183,4 +183,43 @@ class UserCreationIntegrationTest : IntegrationTest() {
             .then()
             .statusCode(401)
     }
+
+    @Test
+    fun `creating a user with a name differing only by case is rejected`() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "CaseUser", "password": "password123"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(200)
+
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "caseuser", "password": "password123"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(409)
+            .body("code", equalTo("USERNAME_ALREADY_EXISTS"))
+    }
+
+    @Test
+    fun `authentication is case-insensitive on username`() {
+        val password = "password123"
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "CaseLogin", "password": "$password"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(200)
+
+        given()
+            .auth().preemptive().basic("caselogin", password)
+            .`when`()
+            .get("/api/v1/pins")
+            .then()
+            .statusCode(200)
+    }
 }
