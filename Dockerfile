@@ -7,7 +7,7 @@
 # Base is glibc (eclipse-temurin:21-jre), NOT alpine/musl: sqlite-jdbc ships
 # native libraries and glibc is the safe choice to load them, which the smoke
 # test confirms by running the SQLite migrations at startup.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 # curl is used only by the HEALTHCHECK below. Install it minimally and drop the
 # apt lists to keep the layer small.
