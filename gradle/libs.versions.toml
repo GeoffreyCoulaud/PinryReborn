@@ -49,6 +49,7 @@ quarkus-rest = { module = "io.quarkus:quarkus-rest" }
 quarkus-rest-jackson = { module = "io.quarkus:quarkus-rest-jackson" }
 quarkus-security = { module = "io.quarkus:quarkus-security" }
 quarkus-smallrye-openapi = { module = "io.quarkus:quarkus-smallrye-openapi" }
+quarkus-smallrye-health = { module = "io.quarkus:quarkus-smallrye-health" }
 smallrye-config = { module = "io.smallrye.config:smallrye-config", version.ref = "smallrye-config" }
 resteasy-reactive-common = { module = "io.quarkus.resteasy.reactive:resteasy-reactive-common", version.ref = "quarkus" }
 resteasy-reactive = { module = "io.quarkus.resteasy.reactive:resteasy-reactive", version.ref = "quarkus" }

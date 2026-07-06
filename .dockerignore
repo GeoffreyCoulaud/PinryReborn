@@ -1,0 +1,6 @@
+# Keep the build context small. Do NOT exclude api-application/build/quarkus-app/:
+# it is the source of the COPY in the Dockerfile.
+.git
+.gradle
+.idea
+.claude
