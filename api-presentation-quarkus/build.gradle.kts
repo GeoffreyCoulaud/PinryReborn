@@ -22,6 +22,7 @@ dependencies {
     compileOnly(libs.bundles.quarkus.compileOnly)
     compileOnly(libs.quarkus.security)
     compileOnly(libs.quarkus.smallrye.openapi)
+    compileOnly(libs.quarkus.hibernate.validator)
 
     // Tests
     testImplementation(testFixtures(project(":api-utilities")))
