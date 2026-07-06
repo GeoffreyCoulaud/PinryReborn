@@ -49,7 +49,6 @@ class UserCreatorTest : BaseTest() {
     @Test
     fun `When creating a user whose name differs only by case, then should throw`() {
         // Given
-        val name = "Bob"
         every { userRepository.findUserByName(any()) } returns mockk(relaxed = true)
 
         // When, Then

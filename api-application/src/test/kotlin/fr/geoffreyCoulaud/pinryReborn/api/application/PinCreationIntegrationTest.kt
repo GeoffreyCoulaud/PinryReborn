@@ -5,6 +5,7 @@ import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
 import jakarta.inject.Inject
+import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.CoreMatchers.notNullValue
 import org.hamcrest.Matchers.emptyIterable
@@ -126,6 +127,23 @@ class PinCreationIntegrationTest : IntegrationTest() {
             .post("/api/v1/pins")
             .then()
             .statusCode(401)
+    }
+
+    @Test
+    fun `requesting pins with wrong password fails with a RFC 7807 problem`() {
+        val username = "problemdetailuser"
+        val password = "correctpassword"
+        userCreator.createUserWithPassword(username, password)
+
+        given()
+            .auth().preemptive().basic(username, "wrongpassword")
+            .`when`()
+            .get("/api/v1/pins")
+            .then()
+            .statusCode(401)
+            .contentType("application/problem+json")
+            .body("code", equalTo("AUTHENTICATION_FAILED"))
+            .header("WWW-Authenticate", containsString("Basic"))
     }
 
     @Test
