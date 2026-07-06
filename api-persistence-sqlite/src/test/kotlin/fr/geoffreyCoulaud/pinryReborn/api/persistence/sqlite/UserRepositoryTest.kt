@@ -2,10 +2,12 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
+import jakarta.persistence.PersistenceException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
 class UserRepositoryTest : RepositoryTest() {
@@ -76,5 +78,30 @@ class UserRepositoryTest : RepositoryTest() {
         val foundUser = repository.findUserById(originalUser.id)
         assertNotNull(foundUser)
         assertEquals("Updated Name", foundUser!!.name)
+    }
+
+    @Test
+    fun `findUserByName is case-insensitive`() {
+        // Given
+        val user = User(id = randomUUID(), name = "Bob")
+        repository.saveUser(user)
+
+        // When
+        val foundUser = repository.findUserByName("bob")
+
+        // Then
+        assertNotNull(foundUser)
+        assertEquals("Bob", foundUser!!.name)
+    }
+
+    @Test
+    fun `saving two users whose names differ only by case is rejected`() {
+        // Given
+        repository.saveUser(User(id = randomUUID(), name = "Alice"))
+
+        // When, Then
+        assertThrows<PersistenceException> {
+            repository.saveUser(User(id = randomUUID(), name = "alice"))
+        }
     }
 }

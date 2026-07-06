@@ -32,7 +32,7 @@ class UserRepository(
     override fun findUserByName(name: String): User? =
         QUserModel()
             .name
-            .equalTo(name)
+            .ieq(name)
             .findOne()
             ?.toDomain()
 
