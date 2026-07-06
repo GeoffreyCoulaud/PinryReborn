@@ -13,11 +13,13 @@ permissions:
 jobs:
   # Same quality gate as on PRs. Job name must stay "validate" so it produces
   # the "validate / gate" check. push=true publishes the multi-arch image to
-  # GHCR; packages:write lets the reusable build-image job push.
+  # GHCR; packages:write lets the reusable build-image job push, and
+  # id-token:write lets it sign the SBOM/VEX attestations via keyless cosign.
   validate:
     permissions:
       contents: read
       packages: write
+      id-token: write
     uses: ./.github/workflows/validate.yml
     with:
       push: true
