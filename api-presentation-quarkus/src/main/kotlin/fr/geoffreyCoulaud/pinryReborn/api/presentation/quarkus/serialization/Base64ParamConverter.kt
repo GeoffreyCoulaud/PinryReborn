@@ -1,8 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.serialization
 
-import com.fasterxml.jackson.annotation.JacksonAnnotationsInside
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import jakarta.inject.Inject
 import jakarta.ws.rs.ext.ParamConverter
 import jakarta.ws.rs.ext.ParamConverterProvider
@@ -63,17 +61,18 @@ class Base64JsonParamConverter<T>(
 }
 
 /**
- * Marks a parameter or field for Base64-encoded JSON handling.
+ * Marks a `@QueryParam` for Base64-encoded JSON **input** handling:
+ * [Base64JsonParamConverterProvider] supplies a [Base64JsonParamConverter] that decodes the
+ * Base64 string and deserializes the JSON to the target type.
  *
- * - On query parameters (`@QueryParam`): Enables [Base64JsonParamConverter] to decode
- *   Base64 input and deserialize the JSON.
- * - On response DTO fields: Enables [Base64JsonSerializer] to serialize the object
- *   as a Base64-encoded JSON string.
+ * This annotation is intentionally **input-only**. For **output** serialization, annotate the
+ * response DTO getter directly with `@get:JsonSerialize(using = Base64JsonSerializer::class)`.
+ * A `@JacksonAnnotationsInside` meta-annotation was previously used for output too, but Jackson
+ * stopped unwrapping it under Kotlin 2.4 / Quarkus 3.37, silently emitting raw JSON cursors
+ * instead of Base64.
  *
- * This makes values opaque to API consumers while remaining structured internally.
+ * This keeps cursor values opaque to API consumers while remaining structured internally.
  */
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FIELD, AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
-@JacksonAnnotationsInside
-@JsonSerialize(using = Base64JsonSerializer::class)
 annotation class Base64Json

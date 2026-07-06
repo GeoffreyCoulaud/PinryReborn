@@ -1,8 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import io.ebean.Database
-import io.ebean.DatabaseFactory
-import io.ebean.config.DatabaseConfig
 import io.ebean.datasource.DataSourceConfig
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.inject.Produces
@@ -21,14 +19,14 @@ class EbeanDatabaseProducer {
         dataSourceConfig.username = "sa"
         dataSourceConfig.password = ""
 
-        val config = DatabaseConfig()
-        config.setDefaultServer(true)
-        config.setDataSourceConfig(dataSourceConfig)
-        config.setDdlGenerate(false)
-        config.setDdlRun(false)
-        config.setRunMigration(true)
-        config.setPackages(listOf("fr.geoffreyCoulaud.pinryReborn.adapters.persistence.models"))
-
-        return DatabaseFactory.create(config)
+        return Database
+            .builder()
+            .defaultDatabase(true)
+            .dataSourceBuilder(dataSourceConfig)
+            .ddlGenerate(false)
+            .ddlRun(false)
+            .runMigration(true)
+            .addPackage("fr.geoffreyCoulaud.pinryReborn.adapters.persistence.models")
+            .build()
     }
 }
