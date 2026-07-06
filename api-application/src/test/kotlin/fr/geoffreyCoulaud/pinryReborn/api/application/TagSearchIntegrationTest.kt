@@ -89,6 +89,8 @@ class TagSearchIntegrationTest : IntegrationTest() {
             .get("/api/v1/tags/search")
             .then()
             .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
     }
 
     @Test
@@ -105,6 +107,8 @@ class TagSearchIntegrationTest : IntegrationTest() {
             .get("/api/v1/tags/search")
             .then()
             .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
     }
 
     @Test

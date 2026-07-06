@@ -84,6 +84,8 @@ class PinSearchIntegrationTest : IntegrationTest() {
             .get("/api/v1/pins/search")
             .then()
             .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
     }
 
     @Test
@@ -100,6 +102,8 @@ class PinSearchIntegrationTest : IntegrationTest() {
             .get("/api/v1/pins/search")
             .then()
             .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
     }
 
     @Test

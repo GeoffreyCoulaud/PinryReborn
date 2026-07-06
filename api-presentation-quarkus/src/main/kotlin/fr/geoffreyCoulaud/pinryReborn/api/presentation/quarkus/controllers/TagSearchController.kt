@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.TagSearcher
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
+import jakarta.validation.constraints.NotBlank
 import jakarta.ws.rs.GET
 import jakarta.ws.rs.Path
 import jakarta.ws.rs.QueryParam
@@ -20,19 +21,14 @@ class TagSearchController(
     @Authenticated
     @Path("/search")
     fun searchTags(
-        @QueryParam("q") query: String?,
+        @QueryParam("q") @NotBlank query: String?,
         @QueryParam("limit") limitParam: Int?,
     ): RestResponse<TagSearchOutputDto> {
         val user = securityIdentity.getUser()
-
-        if (query.isNullOrBlank()) {
-            return RestResponse.status(RestResponse.Status.BAD_REQUEST)
-        }
-
         val limit = (limitParam ?: DEFAULT_LIMIT).coerceAtMost(MAX_LIMIT)
 
         return tagSearcher
-            .searchTags(user = user, query = query, limit = limit)
+            .searchTags(user = user, query = requireNotNull(query), limit = limit)
             .toTagSearchDto()
             .let { RestResponse.ok(it) }
     }
