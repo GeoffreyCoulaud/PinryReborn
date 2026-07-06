@@ -23,9 +23,12 @@ reste explicitement pour la salve suivante**, spec dédiée.
   utilisateur inexistant) pour tuer l'oracle temporel d'énumération.
 - **Erreurs RFC 7807** (`api-presentation-quarkus`) : `ProblemDetail` (7807 + extension
   `code`), `BaseErrorMapper` (`ErrorCode`→statut, `when` exhaustif), 
-  `AuthenticationFailedExceptionMapper` (401 uniforme), `ConstraintViolationExceptionMapper`
-  (400). Constante media-type partagée `PROBLEM_JSON_MEDIA_TYPE`. `try/catch` retirés des
-  controllers.
+  `AuthenticationFailedExceptionMapper` (401 credentials invalides),
+  `UnauthorizedExceptionMapper` (401 sans credentials), `ConstraintViolationExceptionMapper`
+  (400). Helper partagé `problemResponse(...)` + constantes `PROBLEM_JSON_MEDIA_TYPE` /
+  `WWW_AUTHENTICATE_BASIC` (les 4 mappers factorisés). `try/catch` retirés des controllers.
+  **Tous les chemins d'erreur (métier, auth invalide, auth absente, validation) sortent en
+  `application/problem+json`.**
 - **Validation d'entrée** : `quarkus-hibernate-validator`, contraintes Bean sur les 3 DTOs
   (username ASCII `^[A-Za-z0-9._-]+$` 3-50, password 8-72), `@Valid` sur les bodies,
   `@NotBlank` sur le query param `q` de recherche → tout en problem+json.
@@ -40,8 +43,9 @@ reste explicitement pour la salve suivante**, spec dédiée.
 - Les tests d'intégration `@QuarkusTest` **bootent la vraie app** (HTTP réel, auth Basic,
   SQLite + migrations) et couvrent bout-en-bout : POST /users 200 ; nom dupliqué 409
   problem+json ; body invalide 400 problem+json ; nom unicode 400 ; `Bob`/`bob` → 409 ;
-  login `BOB` → 200 ; mauvais mot de passe 401 **problem+json** (`code=AUTHENTICATION_FAILED`,
-  header `WWW-Authenticate`).
+  login `BOB` → 200 ; mauvais mot de passe 401 **problem+json** (`code=AUTHENTICATION_FAILED`) ;
+  **sans credentials** 401 **problem+json** (`code=AUTHENTICATION_REQUIRED`) ; header
+  `WWW-Authenticate` dans les deux cas.
 
 ## Pièges rencontrés (utiles pour la suite)
 
@@ -74,15 +78,9 @@ reste explicitement pour la salve suivante**, spec dédiée.
   observé en conditions réelles.)
 - **Constant-time non testé automatiquement** (mesure de timing non fiable en CI) : garanti
   seulement structurellement (passage par `checkpw` bidon).
-- **401 sans credentials** (`UnauthorizedException`) reste au format **Quarkus par défaut**
-  (corps vide), seul le 401 credentials-invalides est en problem+json. Incohérence résiduelle
-  mineure : mapper `UnauthorizedException` si on veut l'uniformité totale.
 
 ## Follow-ups repérés en revue (non bloquants)
 
-- Les 3 mappers dupliquent encore la construction `ProblemDetail` + `Response.build()` (seul
-  le media-type est factorisé). Un petit helper `problemResponse(status, detail, code, path)`
-  l'éliminerait.
 - Couverture de bornes plus fine possible (username <3/>50, `description` max 2000,
   `PinTagsInputDto` éléments blancs).
 - Naming des tests d'auth en « When…, then… » au lieu du « Given…, Then… » d'AGENTS.md
