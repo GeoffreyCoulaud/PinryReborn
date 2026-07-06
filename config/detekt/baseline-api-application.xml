@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>SpreadOperator:Application.kt$Application.Companion$(*args)</ID>
+    <ID>UnusedPrivateProperty:PinTaggingIntegrationTest.kt$PinTaggingIntegrationTest$val user2 = userCreator.createUserWithPassword("attacker", "password456")</ID>
+    <ID>UtilityClassWithPublicConstructor:Application.kt$Application</ID>
+  </CurrentIssues>
+</SmellBaseline>
