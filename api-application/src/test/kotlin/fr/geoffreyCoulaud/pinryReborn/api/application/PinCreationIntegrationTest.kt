@@ -170,29 +170,6 @@ class PinCreationIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `creating a pin with user without password succeeds`() {
-        val username = "nopassworduser"
-        val user = userCreator.createUser(username)
-
-        // User without password can authenticate with any password
-        given()
-            .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, "anypassword")
-            .body(
-                """{
-                    "sourceContextUrl": "https://nopass.com",
-                    "sourceMediaUrl": "https://nopass.com/img.jpg",
-                    "description": "Pin from user without password"
-                }"""
-            )
-            .`when`()
-            .post("/api/v1/pins")
-            .then()
-            .statusCode(201)
-            .body("authorId", equalTo(user.id.toString()))
-    }
-
-    @Test
     fun `creating a pin with unicode description succeeds`() {
         val username = "unicodeuser"
         val password = "password123"

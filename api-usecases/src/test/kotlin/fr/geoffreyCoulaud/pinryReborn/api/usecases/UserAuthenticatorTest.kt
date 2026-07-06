@@ -46,7 +46,7 @@ class UserAuthenticatorTest {
     }
 
     @Test
-    fun `When authenticating with basic auth and no saved password, then should work`() {
+    fun `When authenticating with basic auth and no saved password, then should throw`() {
         // Given
         val user = User(id = UUID.randomUUID(), name = createRandomString())
         val password = createRandomString()
@@ -54,11 +54,10 @@ class UserAuthenticatorTest {
         every { userRepository.findUserByName(any()) } returns user
         every { userPasswordRepository.findUserPasswordHash((any())) } returns null
 
-        // When
-        val actual = useCase.authenticate(login)
-
-        // Then
-        assertEquals(user, actual)
+        // When, Then
+        assertThrows<UserAuthenticationInvalidPasswordError> {
+            useCase.authenticate(login)
+        }
     }
 
     @Test
