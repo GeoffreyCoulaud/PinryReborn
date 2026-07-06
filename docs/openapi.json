@@ -48,13 +48,16 @@
         "required" : [ "sourceContextUrl", "sourceMediaUrl", "description" ],
         "properties" : {
           "sourceContextUrl" : {
-            "type" : "string"
+            "type" : "string",
+            "pattern" : "\\S"
           },
           "sourceMediaUrl" : {
-            "type" : "string"
+            "type" : "string",
+            "pattern" : "\\S"
           },
           "description" : {
-            "type" : "string"
+            "type" : "string",
+            "maxLength" : 2000
           }
         }
       },
@@ -196,10 +199,16 @@
         "required" : [ "name", "password" ],
         "properties" : {
           "name" : {
-            "type" : "string"
+            "type" : "string",
+            "pattern" : "^[A-Za-z0-9._-]+$",
+            "minLength" : 3,
+            "maxLength" : 50
           },
           "password" : {
-            "type" : "string"
+            "type" : "string",
+            "pattern" : "\\S",
+            "minLength" : 8,
+            "maxLength" : 72
           }
         }
       },
