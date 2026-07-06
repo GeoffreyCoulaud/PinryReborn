@@ -82,7 +82,10 @@ class UserCreationIntegrationTest : IntegrationTest() {
             .`when`()
             .post("/api/v1/users")
             .then()
-            .statusCode(500)  // UsernameAlreadyTakenError causes 500
+            .statusCode(409)
+            .contentType("application/problem+json")
+            .body("code", equalTo("USERNAME_ALREADY_EXISTS"))
+            .body("status", equalTo(409))
     }
 
     @Test
