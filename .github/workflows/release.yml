@@ -12,6 +12,12 @@ permissions:
 
 jobs:
   # Same quality gate as on PRs. Job name must stay "validate" so it produces
-  # the "validate / gate" check. Image build and publication land in phase 2.
+  # the "validate / gate" check. push=true publishes the multi-arch image to
+  # GHCR; packages:write lets the reusable build-image job push.
   validate:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/validate.yml
+    with:
+      push: true

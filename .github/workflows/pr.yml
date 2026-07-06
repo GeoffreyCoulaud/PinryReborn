@@ -14,8 +14,17 @@ concurrency:
 jobs:
   # Job name must stay "validate": branch protection requires the
   # "validate / gate" check produced by the reusable workflow's gate job.
+  # push=false: the image is built (to verify it still builds) but not
+  # published. packages:write is still required here because the reusable
+  # workflow's build-image job declares it; the caller must grant at least as
+  # much or the run fails to start.
   validate:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/validate.yml
+    with:
+      push: false
 
   # PR-only, informational check (not required by branch protection). Lints the
   # PR commit messages against .commitlintrc.json (config-conventional).
