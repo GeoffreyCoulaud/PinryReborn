@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.bundles.quarkus.runtime)
     implementation(libs.quarkus.smallrye.openapi)
     implementation(libs.quarkus.smallrye.health)
+    implementation(libs.quarkus.hibernate.validator)
     implementation(libs.kotlin.stdlib)
 
     // Logging

@@ -19,6 +19,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinRecycleBin
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinTagger
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
+import jakarta.validation.Valid
 import jakarta.ws.rs.DELETE
 import jakarta.ws.rs.GET
 import jakarta.ws.rs.POST
@@ -52,7 +53,7 @@ class PinController(
 
     @POST
     @Authenticated
-    fun createPin(creationDto: PinCreationInputDto): RestResponse<PinOutputDto> {
+    fun createPin(@Valid creationDto: PinCreationInputDto): RestResponse<PinOutputDto> {
         val author = securityIdentity.getUser()
         val pin = pinCreator.createPin(
             author = author,
@@ -97,7 +98,7 @@ class PinController(
     @PUT
     @Authenticated
     @Path("/{pinId}/tags")
-    fun setTags(pinId: UUID, tagsDto: PinTagsInputDto): RestResponse<PinOutputDto> {
+    fun setTags(pinId: UUID, @Valid tagsDto: PinTagsInputDto): RestResponse<PinOutputDto> {
         val user = securityIdentity.getUser()
         return pinTagger
             .setTags(pinId = pinId, tagNames = tagsDto.tags, user = user)

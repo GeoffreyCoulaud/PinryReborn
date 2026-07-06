@@ -102,16 +102,56 @@ class UserCreationIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `creating a user with unicode name succeeds`() {
+    fun `creating a user with unicode name fails validation`() {
         given()
             .contentType(ContentType.JSON)
             .body("""{"name": "用户名", "password": "password123"}""")
             .`when`()
             .post("/api/v1/users")
             .then()
-            .statusCode(200)
-            .body("id", notNullValue())
-            .body("name", equalTo("用户名"))
+            .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
+    }
+
+    @Test
+    fun `creating a user with blank name fails validation`() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "  ", "password": "password123"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
+    }
+
+    @Test
+    fun `creating a user with too short password fails validation`() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "shortpass", "password": "short"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
+    }
+
+    @Test
+    fun `creating a user with too long password fails validation`() {
+        val longPassword = "a".repeat(73)
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "longpass", "password": "$longPassword"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("VALIDATION_ERROR"))
     }
 
     @Test

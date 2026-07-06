@@ -26,7 +26,7 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
         return Response
             .status(status)
             .entity(problem)
-            .type(PROBLEM_JSON)
+            .type(PROBLEM_JSON_MEDIA_TYPE)
             .build()
     }
 
@@ -43,8 +43,4 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.INVALID_PASSWORD -> Response.Status.UNAUTHORIZED
             ErrorCode.INVALID_HTTP_AUTHORIZATION_SCHEME -> Response.Status.UNAUTHORIZED
         }
-
-    companion object {
-        const val PROBLEM_JSON = "application/problem+json"
-    }
 }

@@ -1,9 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
-import io.quarkus.security.AuthenticationFailedException
-import jakarta.annotation.Priority
-import jakarta.ws.rs.Priorities
+import jakarta.validation.ConstraintViolationException
 import jakarta.ws.rs.core.Context
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.UriInfo
@@ -11,25 +9,29 @@ import jakarta.ws.rs.ext.ExceptionMapper
 import jakarta.ws.rs.ext.Provider
 
 @Provider
-@Priority(Priorities.AUTHENTICATION)
-class AuthenticationFailedExceptionMapper : ExceptionMapper<AuthenticationFailedException> {
+class ConstraintViolationExceptionMapper : ExceptionMapper<ConstraintViolationException> {
     @Context
     lateinit var uriInfo: UriInfo
 
-    override fun toResponse(exception: AuthenticationFailedException): Response {
-        val status = Response.Status.UNAUTHORIZED
+    override fun toResponse(exception: ConstraintViolationException): Response {
+        val status = Response.Status.BAD_REQUEST
+        val detail = exception.constraintViolations
+            .joinToString(separator = "; ") { "${it.propertyPath}: ${it.message}" }
         val problem = ProblemDetail(
             title = status.reasonPhrase,
             status = status.statusCode,
-            detail = "Invalid username or password",
+            detail = detail,
             instance = uriInfo.path,
-            code = "AUTHENTICATION_FAILED",
+            code = VALIDATION_ERROR_CODE,
         )
         return Response
             .status(status)
-            .header("WWW-Authenticate", "Basic realm=\"Quarkus\"")
             .entity(problem)
             .type(PROBLEM_JSON_MEDIA_TYPE)
             .build()
+    }
+
+    companion object {
+        const val VALIDATION_ERROR_CODE = "VALIDATION_ERROR"
     }
 }

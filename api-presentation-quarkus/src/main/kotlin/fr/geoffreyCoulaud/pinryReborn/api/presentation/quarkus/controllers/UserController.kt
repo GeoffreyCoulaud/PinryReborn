@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserO
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.UserDtoMapper.toDto
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import jakarta.annotation.security.PermitAll
+import jakarta.validation.Valid
 import jakarta.ws.rs.POST
 import jakarta.ws.rs.Path
 import org.jboss.resteasy.reactive.RestResponse
@@ -15,7 +16,7 @@ class UserController(
 ) {
     @POST
     @PermitAll
-    fun createUser(userDto: UserInputDto): RestResponse<UserOutputDto> {
+    fun createUser(@Valid userDto: UserInputDto): RestResponse<UserOutputDto> {
         val userOutputDto = userCreator.createUserWithPassword(name = userDto.name, password = userDto.password).toDto()
         return RestResponse.ok(userOutputDto)
     }
