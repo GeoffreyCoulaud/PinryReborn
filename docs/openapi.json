@@ -238,13 +238,15 @@
           "schema" : {
             "type" : [ "integer", "null" ],
             "format" : "int32"
-          }
+          },
+          "required" : true
         }, {
           "name" : "q",
           "in" : "query",
           "schema" : {
             "type" : [ "string", "null" ]
-          }
+          },
+          "required" : true
         } ],
         "responses" : {
           "200" : {
@@ -388,13 +390,15 @@
           "schema" : {
             "type" : [ "integer", "null" ],
             "format" : "int32"
-          }
+          },
+          "required" : true
         }, {
           "name" : "q",
           "in" : "query",
           "schema" : {
             "type" : [ "string", "null" ]
-          }
+          },
+          "required" : true
         } ],
         "responses" : {
           "200" : {
@@ -522,6 +526,7 @@
       },
       "PaginationOutputDto" : {
         "type" : "object",
+        "required" : [ "previousCursor", "nextCursor" ],
         "properties" : {
           "previousCursor" : {
             "anyOf" : [ {
@@ -621,7 +626,7 @@
       },
       "PinSearchResultOutputDto" : {
         "type" : "object",
-        "required" : [ "pin" ],
+        "required" : [ "pin", "score" ],
         "properties" : {
           "pin" : {
             "$ref" : "#/components/schemas/PinOutputDto"
@@ -671,7 +676,7 @@
       },
       "TagSearchResultOutputDto" : {
         "type" : "object",
-        "required" : [ "tag" ],
+        "required" : [ "tag", "score" ],
         "properties" : {
           "tag" : {
             "$ref" : "#/components/schemas/TagOutputDto"

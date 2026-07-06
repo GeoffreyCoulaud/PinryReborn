@@ -9,7 +9,8 @@ import kotlin.io.encoding.Base64
 /**
  * Jackson serializer that encodes objects as Base64-encoded JSON strings.
  *
- * Used for **output serialization** of response body fields annotated with [Base64Json].
+ * Used for **output serialization** of response DTO getters annotated with
+ * `@get:JsonSerialize(using = Base64JsonSerializer::class)`.
  * This makes values like pagination cursors opaque to API consumers.
  *
  * For input deserialization of query parameters, see [Base64JsonParamConverter].
