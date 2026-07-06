@@ -26,7 +26,7 @@ class EbeanDatabaseProducer {
             .ddlGenerate(false)
             .ddlRun(false)
             .runMigration(true)
-            .addPackage("fr.geoffreyCoulaud.pinryReborn.adapters.persistence.models")
+            .addPackage("fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models")
             .build()
     }
 }
