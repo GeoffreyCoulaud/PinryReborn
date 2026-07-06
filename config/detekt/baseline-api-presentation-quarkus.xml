@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionOnlyReturningConstant:GreetingController.kt$GreetingController$@GET @Produces(MediaType.TEXT_PLAIN) fun hello()</ID>
+    <ID>MagicNumber:PinController.kt$PinController$409</ID>
+    <ID>MagicNumber:PinRecycleBinController.kt$PinRecycleBinController$409</ID>
+  </CurrentIssues>
+</SmellBaseline>
