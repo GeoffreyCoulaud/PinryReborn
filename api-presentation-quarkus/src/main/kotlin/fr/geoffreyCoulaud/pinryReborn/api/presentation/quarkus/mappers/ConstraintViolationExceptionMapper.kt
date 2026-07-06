@@ -1,6 +1,5 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
-import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
 import jakarta.validation.ConstraintViolationException
 import jakarta.ws.rs.core.Context
 import jakarta.ws.rs.core.Response
@@ -14,21 +13,9 @@ class ConstraintViolationExceptionMapper : ExceptionMapper<ConstraintViolationEx
     lateinit var uriInfo: UriInfo
 
     override fun toResponse(exception: ConstraintViolationException): Response {
-        val status = Response.Status.BAD_REQUEST
         val detail = exception.constraintViolations
             .joinToString(separator = "; ") { "${it.propertyPath}: ${it.message}" }
-        val problem = ProblemDetail(
-            title = status.reasonPhrase,
-            status = status.statusCode,
-            detail = detail,
-            instance = uriInfo.path,
-            code = VALIDATION_ERROR_CODE,
-        )
-        return Response
-            .status(status)
-            .entity(problem)
-            .type(PROBLEM_JSON_MEDIA_TYPE)
-            .build()
+        return problemResponse(Response.Status.BAD_REQUEST, detail, VALIDATION_ERROR_CODE, uriInfo).build()
     }
 
     companion object {

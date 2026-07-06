@@ -147,6 +147,18 @@ class PinCreationIntegrationTest : IntegrationTest() {
     }
 
     @Test
+    fun `requesting pins without credentials fails with a RFC 7807 problem`() {
+        given()
+            .`when`()
+            .get("/api/v1/pins")
+            .then()
+            .statusCode(401)
+            .contentType("application/problem+json")
+            .body("code", equalTo("AUTHENTICATION_REQUIRED"))
+            .header("WWW-Authenticate", containsString("Basic"))
+    }
+
+    @Test
     fun `creating multiple pins as same user succeeds`() {
         val username = "multipleuser"
         val password = "password123"
