@@ -3,7 +3,14 @@
 .gradle
 docs/openapi.yaml
 *.db
+# IntelliJ - fichiers specifiques a l'utilisateur / regeneres depuis Gradle
 .idea/dataSources*
 .idea/workspace.xml
+.idea/kotlinc.xml
+.idea/gradle.xml
+.idea/misc.xml
+.idea/compiler.xml
+.idea/modules/
+*.iml
 .claude
 .gradle
