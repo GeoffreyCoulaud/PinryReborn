@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Gradle dependencies (libs.versions.toml + build scripts) — one grouped
+  # weekly PR covering every update.
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      gradle:
+        patterns:
+          - "*"
+
+  # GitHub Actions pinned to commit SHAs — one grouped weekly PR.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
