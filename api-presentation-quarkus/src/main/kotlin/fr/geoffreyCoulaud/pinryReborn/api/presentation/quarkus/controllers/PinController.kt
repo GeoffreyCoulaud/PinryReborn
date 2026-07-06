@@ -17,14 +17,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinGetter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinRecycleBin
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinTagger
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPermissionError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinAlreadySoftDeletedError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinDoesNotExistError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinRetrievalPermissionError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinRetrievalPinDoesNotExistError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinTaggingPermissionError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinTaggingPinDoesNotExistError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinTaggingSoftDeletedPinError
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
 import jakarta.ws.rs.DELETE
@@ -52,19 +44,10 @@ class PinController(
     @Path("/{pinId}")
     fun getPin(pinId: UUID): RestResponse<PinOutputDto> {
         val user = securityIdentity.getUser()
-
-        return try {
-            pinGetter
-                .getPinForUser(pinId = pinId, reader = user)
-                .toDto()
-                .let { RestResponse.ok(it) }
-        } catch (_: PinRetrievalPinDoesNotExistError) {
-            RestResponse.notFound()
-        } catch (_: PinRetrievalPermissionError) {
-            ResponseBuilder
-                .create<PinOutputDto>(RestResponse.Status.FORBIDDEN)
-                .build()
-        }
+        return pinGetter
+            .getPinForUser(pinId = pinId, reader = user)
+            .toDto()
+            .let { RestResponse.ok(it) }
     }
 
     @POST
@@ -96,18 +79,10 @@ class PinController(
         val sort = sortInput?.toDomain() ?: PinSortStrategy.CREATED_AT_ASC
         val cursor = cursorInput?.let { cursorInput.toDomain() }
 
-        return try {
-            pinGetter
-                .listPinsPaginatedForUser(reader = user, cursor = cursor, pageSize = pageSize, sort = sort)
-                .toDto()
-                .let { RestResponse.ok(it) }
-        } catch (_: PinRetrievalPinDoesNotExistError) {
-            RestResponse.notFound()
-        } catch (_: PinRetrievalPermissionError) {
-            ResponseBuilder
-                .create<PinListOutputDto>(RestResponse.Status.FORBIDDEN)
-                .build()
-        }
+        return pinGetter
+            .listPinsPaginatedForUser(reader = user, cursor = cursor, pageSize = pageSize, sort = sort)
+            .toDto()
+            .let { RestResponse.ok(it) }
     }
 
     @DELETE
@@ -115,20 +90,8 @@ class PinController(
     @Path("/{pinId}")
     fun softDeletePin(pinId: UUID): RestResponse<Void> {
         val user = securityIdentity.getUser()
-        return try {
-            pinRecycleBin.softDelete(pinId = pinId, user = user)
-            RestResponse.noContent()
-        } catch (_: PinDeletionPinDoesNotExistError) {
-            RestResponse.notFound()
-        } catch (_: PinDeletionPermissionError) {
-            ResponseBuilder
-                .create<Void>(RestResponse.Status.FORBIDDEN)
-                .build()
-        } catch (_: PinDeletionPinAlreadySoftDeletedError) {
-            ResponseBuilder
-                .create<Void>(RestResponse.Status.fromStatusCode(409))
-                .build()
-        }
+        pinRecycleBin.softDelete(pinId = pinId, user = user)
+        return RestResponse.noContent()
     }
 
     @PUT
@@ -136,23 +99,10 @@ class PinController(
     @Path("/{pinId}/tags")
     fun setTags(pinId: UUID, tagsDto: PinTagsInputDto): RestResponse<PinOutputDto> {
         val user = securityIdentity.getUser()
-
-        return try {
-            pinTagger
-                .setTags(pinId = pinId, tagNames = tagsDto.tags, user = user)
-                .toDto()
-                .let { RestResponse.ok(it) }
-        } catch (_: PinTaggingPinDoesNotExistError) {
-            RestResponse.notFound()
-        } catch (_: PinTaggingPermissionError) {
-            ResponseBuilder
-                .create<PinOutputDto>(RestResponse.Status.FORBIDDEN)
-                .build()
-        } catch (_: PinTaggingSoftDeletedPinError) {
-            ResponseBuilder
-                .create<PinOutputDto>(RestResponse.Status.fromStatusCode(409))
-                .build()
-        }
+        return pinTagger
+            .setTags(pinId = pinId, tagNames = tagsDto.tags, user = user)
+            .toDto()
+            .let { RestResponse.ok(it) }
     }
 
     companion object {

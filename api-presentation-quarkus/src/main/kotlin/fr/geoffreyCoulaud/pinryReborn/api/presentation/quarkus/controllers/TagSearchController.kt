@@ -4,7 +4,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.TagSe
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.SearchResultMapper.toTagSearchDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.TagSearcher
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SearchEmptyQueryError
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
 import jakarta.ws.rs.GET
@@ -32,14 +31,10 @@ class TagSearchController(
 
         val limit = (limitParam ?: DEFAULT_LIMIT).coerceAtMost(MAX_LIMIT)
 
-        return try {
-            tagSearcher
-                .searchTags(user = user, query = query, limit = limit)
-                .toTagSearchDto()
-                .let { RestResponse.ok(it) }
-        } catch (_: SearchEmptyQueryError) {
-            RestResponse.status(RestResponse.Status.BAD_REQUEST)
-        }
+        return tagSearcher
+            .searchTags(user = user, query = query, limit = limit)
+            .toTagSearchDto()
+            .let { RestResponse.ok(it) }
     }
 
     companion object {
