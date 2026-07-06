@@ -1,5 +1,229 @@
 {
   "openapi" : "3.1.0",
+  "components" : {
+    "schemas" : {
+      "CursorDirectionDto" : {
+        "type" : "string",
+        "enum" : [ "FORWARD", "BACKWARD" ]
+      },
+      "CursorDto" : {
+        "type" : "object",
+        "required" : [ "pivotId", "direction" ],
+        "properties" : {
+          "pivotId" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "direction" : {
+            "$ref" : "#/components/schemas/CursorDirectionDto"
+          }
+        }
+      },
+      "Instant" : {
+        "type" : "string",
+        "format" : "date-time",
+        "examples" : [ "2022-03-10T16:15:50Z" ]
+      },
+      "PaginationOutputDto" : {
+        "type" : "object",
+        "required" : [ "previousCursor", "nextCursor" ],
+        "properties" : {
+          "previousCursor" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CursorDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "nextCursor" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CursorDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "PinCreationInputDto" : {
+        "type" : "object",
+        "required" : [ "sourceContextUrl", "sourceMediaUrl", "description" ],
+        "properties" : {
+          "sourceContextUrl" : {
+            "type" : "string"
+          },
+          "sourceMediaUrl" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PinListOutputDto" : {
+        "type" : "object",
+        "required" : [ "pins", "pagination" ],
+        "properties" : {
+          "pins" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PinOutputDto"
+            }
+          },
+          "pagination" : {
+            "$ref" : "#/components/schemas/PaginationOutputDto"
+          }
+        }
+      },
+      "PinOutputDto" : {
+        "type" : "object",
+        "required" : [ "id", "authorId", "sourceContextUrl", "sourceMediaUrl", "description", "tags" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "authorId" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "sourceContextUrl" : {
+            "type" : "string"
+          },
+          "sourceMediaUrl" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TagOutputDto"
+            }
+          },
+          "softDeletedAt" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Instant"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "PinRecycleBinSortStrategyInputEnum" : {
+        "type" : "string",
+        "enum" : [ "CREATED_AT_ASC", "CREATED_AT_DESC", "DELETED_AT_DESC" ]
+      },
+      "PinSearchOutputDto" : {
+        "type" : "object",
+        "required" : [ "results" ],
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PinSearchResultOutputDto"
+            }
+          }
+        }
+      },
+      "PinSearchResultOutputDto" : {
+        "type" : "object",
+        "required" : [ "pin", "score" ],
+        "properties" : {
+          "pin" : {
+            "$ref" : "#/components/schemas/PinOutputDto"
+          },
+          "score" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "PinSortStrategyInputEnum" : {
+        "type" : "string",
+        "enum" : [ "CREATED_AT_ASC", "CREATED_AT_DESC" ]
+      },
+      "PinTagsInputDto" : {
+        "type" : "object",
+        "required" : [ "tags" ],
+        "properties" : {
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "TagOutputDto" : {
+        "type" : "object",
+        "required" : [ "name" ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TagSearchOutputDto" : {
+        "type" : "object",
+        "required" : [ "results" ],
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TagSearchResultOutputDto"
+            }
+          }
+        }
+      },
+      "TagSearchResultOutputDto" : {
+        "type" : "object",
+        "required" : [ "tag", "score" ],
+        "properties" : {
+          "tag" : {
+            "$ref" : "#/components/schemas/TagOutputDto"
+          },
+          "score" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "UUID" : {
+        "type" : "string",
+        "format" : "uuid",
+        "pattern" : "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
+      },
+      "UserInputDto" : {
+        "type" : "object",
+        "required" : [ "name", "password" ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "password" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UserOutputDto" : {
+        "type" : "object",
+        "required" : [ "id", "name" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "SecurityScheme" : {
+        "type" : "http",
+        "scheme" : "basic",
+        "description" : "Authentication"
+      }
+    }
+  },
   "paths" : {
     "/api/v1/pins" : {
       "get" : {
@@ -454,274 +678,6 @@
         },
         "summary" : "Create User",
         "tags" : [ "User Controller" ]
-      }
-    },
-    "/hello" : {
-      "get" : {
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "text/plain" : {
-                "schema" : {
-                  "type" : "string"
-                }
-              }
-            }
-          }
-        },
-        "summary" : "Hello",
-        "tags" : [ "Greeting Controller" ]
-      }
-    },
-    "/hello/greeting/{name}" : {
-      "get" : {
-        "parameters" : [ {
-          "name" : "name",
-          "in" : "path",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "text/plain" : {
-                "schema" : {
-                  "type" : "string"
-                }
-              }
-            }
-          }
-        },
-        "summary" : "Greet",
-        "tags" : [ "Greeting Controller" ]
-      }
-    }
-  },
-  "components" : {
-    "schemas" : {
-      "CursorDirectionDto" : {
-        "type" : "string",
-        "enum" : [ "FORWARD", "BACKWARD" ]
-      },
-      "CursorDto" : {
-        "type" : "object",
-        "required" : [ "pivotId", "direction" ],
-        "properties" : {
-          "pivotId" : {
-            "$ref" : "#/components/schemas/UUID"
-          },
-          "direction" : {
-            "$ref" : "#/components/schemas/CursorDirectionDto"
-          }
-        }
-      },
-      "Instant" : {
-        "type" : "string",
-        "format" : "date-time",
-        "examples" : [ "2022-03-10T16:15:50Z" ]
-      },
-      "PaginationOutputDto" : {
-        "type" : "object",
-        "required" : [ "previousCursor", "nextCursor" ],
-        "properties" : {
-          "previousCursor" : {
-            "anyOf" : [ {
-              "$ref" : "#/components/schemas/CursorDto"
-            }, {
-              "type" : "null"
-            } ]
-          },
-          "nextCursor" : {
-            "anyOf" : [ {
-              "$ref" : "#/components/schemas/CursorDto"
-            }, {
-              "type" : "null"
-            } ]
-          }
-        }
-      },
-      "PinCreationInputDto" : {
-        "type" : "object",
-        "required" : [ "sourceContextUrl", "sourceMediaUrl", "description" ],
-        "properties" : {
-          "sourceContextUrl" : {
-            "type" : "string"
-          },
-          "sourceMediaUrl" : {
-            "type" : "string"
-          },
-          "description" : {
-            "type" : "string"
-          }
-        }
-      },
-      "PinListOutputDto" : {
-        "type" : "object",
-        "required" : [ "pins", "pagination" ],
-        "properties" : {
-          "pins" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/PinOutputDto"
-            }
-          },
-          "pagination" : {
-            "$ref" : "#/components/schemas/PaginationOutputDto"
-          }
-        }
-      },
-      "PinOutputDto" : {
-        "type" : "object",
-        "required" : [ "id", "authorId", "sourceContextUrl", "sourceMediaUrl", "description", "tags" ],
-        "properties" : {
-          "id" : {
-            "$ref" : "#/components/schemas/UUID"
-          },
-          "authorId" : {
-            "$ref" : "#/components/schemas/UUID"
-          },
-          "sourceContextUrl" : {
-            "type" : "string"
-          },
-          "sourceMediaUrl" : {
-            "type" : "string"
-          },
-          "description" : {
-            "type" : "string"
-          },
-          "tags" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/TagOutputDto"
-            }
-          },
-          "softDeletedAt" : {
-            "anyOf" : [ {
-              "$ref" : "#/components/schemas/Instant"
-            }, {
-              "type" : "null"
-            } ]
-          }
-        }
-      },
-      "PinRecycleBinSortStrategyInputEnum" : {
-        "type" : "string",
-        "enum" : [ "CREATED_AT_ASC", "CREATED_AT_DESC", "DELETED_AT_DESC" ]
-      },
-      "PinSearchOutputDto" : {
-        "type" : "object",
-        "required" : [ "results" ],
-        "properties" : {
-          "results" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/PinSearchResultOutputDto"
-            }
-          }
-        }
-      },
-      "PinSearchResultOutputDto" : {
-        "type" : "object",
-        "required" : [ "pin", "score" ],
-        "properties" : {
-          "pin" : {
-            "$ref" : "#/components/schemas/PinOutputDto"
-          },
-          "score" : {
-            "type" : "number",
-            "format" : "double"
-          }
-        }
-      },
-      "PinSortStrategyInputEnum" : {
-        "type" : "string",
-        "enum" : [ "CREATED_AT_ASC", "CREATED_AT_DESC" ]
-      },
-      "PinTagsInputDto" : {
-        "type" : "object",
-        "required" : [ "tags" ],
-        "properties" : {
-          "tags" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string"
-            }
-          }
-        }
-      },
-      "TagOutputDto" : {
-        "type" : "object",
-        "required" : [ "name" ],
-        "properties" : {
-          "name" : {
-            "type" : "string"
-          }
-        }
-      },
-      "TagSearchOutputDto" : {
-        "type" : "object",
-        "required" : [ "results" ],
-        "properties" : {
-          "results" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/TagSearchResultOutputDto"
-            }
-          }
-        }
-      },
-      "TagSearchResultOutputDto" : {
-        "type" : "object",
-        "required" : [ "tag", "score" ],
-        "properties" : {
-          "tag" : {
-            "$ref" : "#/components/schemas/TagOutputDto"
-          },
-          "score" : {
-            "type" : "number",
-            "format" : "double"
-          }
-        }
-      },
-      "UUID" : {
-        "type" : "string",
-        "format" : "uuid",
-        "pattern" : "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
-      },
-      "UserInputDto" : {
-        "type" : "object",
-        "required" : [ "name", "password" ],
-        "properties" : {
-          "name" : {
-            "type" : "string"
-          },
-          "password" : {
-            "type" : "string"
-          }
-        }
-      },
-      "UserOutputDto" : {
-        "type" : "object",
-        "required" : [ "id", "name" ],
-        "properties" : {
-          "id" : {
-            "$ref" : "#/components/schemas/UUID"
-          },
-          "name" : {
-            "type" : "string"
-          }
-        }
-      }
-    },
-    "securitySchemes" : {
-      "SecurityScheme" : {
-        "type" : "http",
-        "scheme" : "basic",
-        "description" : "Authentication"
       }
     }
   },
