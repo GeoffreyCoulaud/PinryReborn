@@ -175,4 +175,86 @@ class TrigramSimilarityTest {
         // Then
         assertEquals(0.0, trigramScore, 0.001)
     }
+
+    @Test
+    fun `Given empty query, Then Jaro-Winkler similarity is 0`() {
+        // Given
+        val query = ""
+        val target = "landscape"
+
+        // When
+        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+
+        // Then
+        assertEquals(0.0, score, 0.001)
+    }
+
+    @Test
+    fun `Given empty target, Then Jaro-Winkler similarity is 0`() {
+        // Given
+        val query = "landscape"
+        val target = ""
+
+        // When
+        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+
+        // Then
+        assertEquals(0.0, score, 0.001)
+    }
+
+    @Test
+    fun `Given empty query, Then combined similarity is 0`() {
+        // Given
+        val query = ""
+        val target = "landscape"
+
+        // When
+        val score = TrigramSimilarity.combinedSimilarity(query, target)
+
+        // Then
+        assertEquals(0.0, score, 0.001)
+    }
+
+    @Test
+    fun `Given empty target, Then combined similarity is 0`() {
+        // Given
+        val query = "landscape"
+        val target = ""
+
+        // When
+        val score = TrigramSimilarity.combinedSimilarity(query, target)
+
+        // Then
+        assertEquals(0.0, score, 0.001)
+    }
+
+    @Test
+    fun `Given whitespace-only target, Then combined similarity uses only the trigram score`() {
+        // Given
+        val query = "landscape"
+        val target = "   "
+
+        // When
+        val score = TrigramSimilarity.combinedSimilarity(query, target)
+
+        // Then
+        // targetWords is empty (blank-only after split), so bestWordScore is 0.0 and the
+        // whole-string trigram score (also 0.0, no shared trigrams) wins.
+        assertEquals(0.0, score, 0.001)
+    }
+
+    @Test
+    fun `Given target with multiple words where the best match is not the first word, Then combined similarity finds it`() {
+        // Given
+        val query = "landscape"
+        val target = "mountain landscape"
+
+        // When
+        val score = TrigramSimilarity.combinedSimilarity(query, target)
+
+        // Then
+        // "landscape" is the second target word and matches the query exactly, so it must
+        // overtake the running max set by the first word ("mountain").
+        assertTrue(score > 0.8)
+    }
 }
