@@ -68,11 +68,7 @@ object TrigramSimilarity {
 
         // Word-level matching: find the best Jaro-Winkler match against any word in target
         val targetWords = normalizedTarget.split(Regex("\\s+")).filter { it.isNotBlank() }
-        val bestWordScore = if (targetWords.isEmpty()) {
-            0.0
-        } else {
-            targetWords.maxOf { word -> jaroWinklerSimilarity(normalizedQuery, word) }
-        }
+        val bestWordScore = targetWords.maxOfOrNull { word -> jaroWinklerSimilarity(normalizedQuery, word) } ?: 0.0
 
         // Weighted combination: favor word-level matching for partial matches
         return maxOf(trigramScore, bestWordScore * 0.9)
