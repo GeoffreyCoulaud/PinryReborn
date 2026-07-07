@@ -104,4 +104,14 @@ class UserRepositoryTest : RepositoryTest() {
             repository.saveUser(User(id = randomUUID(), name = "alice"))
         }
     }
+
+    @Test
+    fun `Given no user with the given name, Then findUserByName returns null`() {
+        // Given
+        // When
+        val foundUser = repository.findUserByName("nobody")
+
+        // Then
+        assertNull(foundUser)
+    }
 }

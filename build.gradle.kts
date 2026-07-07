@@ -73,6 +73,16 @@ subprojects {
                         // carries this annotation (CLASS retention, readable by Kover's ASM-based
                         // filter). Found during calibration (Task 2).
                         annotatedBy("io.ebean.typequery.Generated")
+                        // Ebean bytecode-enhancement rewrites entity classes in place (adds
+                        // EntityBean-interface bookkeeping: _ebean_intercept, _ebean_get_id, a
+                        // <clinit> building _ebean_props, etc). This injected bookkeeping cannot
+                        // be distinguished from hand-written model code by class name or
+                        // annotation (no marker at class or method level) and is frequently
+                        // mis-attributed to the wrong source line by Kover's report. Operator
+                        // decision B1 (calibration, Task 2 "KNOWN RISK"): exclude the whole
+                        // `models` package (and its `models.bases` subpackage) from coverage.
+                        // Harmless for other modules, which have no such package.
+                        packages("fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models")
                     }
                 }
                 verify {
