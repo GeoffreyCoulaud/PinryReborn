@@ -12,7 +12,7 @@ class ModelPaginationHelper<M : BaseModel, Q : QueryBean<M, Q>> {
         baseQuery: Q,
         sortStrategy: ModelSortStrategy<M, Q>,
     ): ModelPage<M> {
-        val direction = cursor?.direction ?: FORWARD
+        val direction = if (cursor != null) cursor.direction else FORWARD
 
         // +1 to include the cursor (if there is one)
         // +2 to know if there are more than the page in the direction
@@ -35,7 +35,7 @@ class ModelPaginationHelper<M : BaseModel, Q : QueryBean<M, Q>> {
                 // Reorder the elements if backward to preserve order
                 .let { if (direction == BACKWARD) it.reversed() else it }
                 // Remove the pivot
-                .filterNot { it.id == cursor?.pivot?.id }
+                .filterNot { cursor != null && it.id == cursor.pivot.id }
 
         val previousCursor =
             when (direction) {
