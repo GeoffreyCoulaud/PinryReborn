@@ -6,15 +6,20 @@ import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.inject.Produces
 import jakarta.inject.Singleton
 
+/**
+ * Builds the SQLite JDBC URL from the (nullable) `DB_PATH` value, falling back to `data.db`
+ * when it is absent. Extracted as a pure function so the fallback branch is unit-testable
+ * without touching the process environment or building a real database.
+ */
+internal fun sqliteJdbcUrl(dbPath: String?): String = "jdbc:sqlite:${dbPath ?: "data.db"}"
+
 @ApplicationScoped
 class EbeanDatabaseProducer {
     @Produces
     @Singleton
     fun produceDatabase(): Database {
-        val dbPath = System.getenv("DB_PATH") ?: "data.db"
-
         val dataSourceConfig = DataSourceConfig()
-        dataSourceConfig.url = "jdbc:sqlite:$dbPath"
+        dataSourceConfig.url = sqliteJdbcUrl(System.getenv("DB_PATH"))
         dataSourceConfig.driver = "org.sqlite.JDBC"
         dataSourceConfig.username = "sa"
         dataSourceConfig.password = ""
