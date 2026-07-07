@@ -1,0 +1,5 @@
+#!/bin/sh
+# Keep the committed OpenAPI spec in sync. generate-openapi.sh regenerates it,
+# stages it, and exits non-zero if it changed so the commit is re-run up to date.
+set -e
+exec ./scripts/generate-openapi.sh

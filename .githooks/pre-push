@@ -1,0 +1,5 @@
+#!/bin/sh
+# Local gate, mirroring CI: detekt + tests + 100% branch coverage.
+# `check` pulls in detekt and tests; koverVerify adds the branch-coverage gate.
+set -e
+exec ./gradlew check koverVerify
