@@ -19,6 +19,7 @@ quarkus-junit = "3.37.1"
 rest-assured = "6.0.0"
 detekt = "1.23.8"
 kover = "0.9.8"
+konsist = "0.17.3"
 
 [libraries]
 # Testing
@@ -27,6 +28,7 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 quarkus-junit = { module = "io.quarkus:quarkus-junit5", version.ref = "quarkus-junit" }
 rest-assured = { module = "io.rest-assured:rest-assured", version.ref = "rest-assured" }
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 
 # Ebean ORM
 ebean = { module = "io.ebean:ebean", version.ref = "ebean" }

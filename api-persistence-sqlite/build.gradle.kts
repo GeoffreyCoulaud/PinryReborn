@@ -28,6 +28,7 @@ dependencies {
 
     testImplementation(libs.ebean.test)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.konsist)
     testRuntimeOnly(libs.bundles.testing.runtime)
 }
 
