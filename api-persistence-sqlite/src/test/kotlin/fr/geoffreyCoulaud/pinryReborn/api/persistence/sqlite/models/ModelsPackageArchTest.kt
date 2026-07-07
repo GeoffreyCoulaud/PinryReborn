@@ -3,7 +3,9 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoClassDeclaration
 import com.lemonappdev.konsist.api.ext.list.withFunctions
+import com.lemonappdev.konsist.api.ext.list.withPackage
 import com.lemonappdev.konsist.api.ext.list.withProperty
+import com.lemonappdev.konsist.api.ext.list.withoutAnnotationOf
 import com.lemonappdev.konsist.api.verify.assertEmpty
 import com.lemonappdev.konsist.api.verify.assertNotEmpty
 import jakarta.persistence.Entity
@@ -27,7 +29,7 @@ class ModelsPackageArchTest {
         Konsist
             .scopeFromProduction(moduleName = "api-persistence-sqlite")
             .classes()
-            .filter { it.resideInPackage("..persistence.sqlite.models..") }
+            .withPackage("..persistence.sqlite.models..")
 
     @Test
     fun `Given the models package, Then it holds classes (the scope is not mis-configured)`() {
@@ -37,7 +39,7 @@ class ModelsPackageArchTest {
     @Test
     fun `Given the coverage-excluded models package, Then no class is a non-entity`() {
         modelClasses
-            .filterNot { it.hasAnnotationOf(Entity::class) || it.hasAnnotationOf(MappedSuperclass::class) }
+            .withoutAnnotationOf(Entity::class, MappedSuperclass::class)
             .assertEmpty()
     }
 
