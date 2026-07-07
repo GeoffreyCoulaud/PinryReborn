@@ -18,6 +18,7 @@ smallrye-config = "3.18.0"
 quarkus-junit = "3.37.1"
 rest-assured = "6.0.0"
 detekt = "1.23.8"
+kover = "0.9.8"
 
 [libraries]
 # Testing
@@ -106,3 +107,4 @@ quarkus = { id = "io.quarkus", version.ref = "quarkus" }
 ebean = { id = "io.ebean", version.ref = "ebean" }
 jandex = { id = "org.kordamp.gradle.jandex", version.ref = "jandex" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
