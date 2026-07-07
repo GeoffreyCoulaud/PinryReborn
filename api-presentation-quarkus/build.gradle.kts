@@ -26,9 +26,15 @@ dependencies {
 
     // Tests
     testImplementation(testFixtures(project(":api-utilities")))
+    testImplementation(platform(libs.quarkus.bom))
     testImplementation(libs.jakarta.ws.rs.api)
     testImplementation(libs.resteasy.reactive.common)
     testImplementation(libs.resteasy.reactive)
+    testImplementation(libs.quarkus.security)
+    // Needed to unit-test ObjectMapper-consuming collaborators (LoggingRequestResponseFilter,
+    // Base64JsonSerializer, Base64JsonParamConverter*) — compileOnly at main scope, not
+    // inherited by the test source set.
+    testImplementation(libs.jackson.databind)
     testImplementation(libs.bundles.testing)
     testRuntimeOnly(libs.bundles.testing.runtime)
 }
