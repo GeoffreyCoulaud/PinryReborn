@@ -64,10 +64,12 @@ subprojects {
             reports {
                 filters {
                     excludes {
-                        // Ebean generated Kotlin query beans (kapt output). Confirmed during
-                        // calibration (Task 2): FQNs are `<pkg>.query.Q<Entity>Model` (+ nested
-                        // Assoc/AssocOne/AssocMany/Companion), all matched by this wildcard.
-                        classes("*.Q*")
+                        // Ebean generated Kotlin query beans (kapt output). FQNs are
+                        // `...models.query.Q<Entity>Model` (+ nested Assoc/AssocOne/AssocMany/
+                        // Companion). Scoped to the query package so the pattern cannot match a
+                        // hand-written `Q*`-named class elsewhere. (Also covered by the `models`
+                        // package rule below; kept explicit as defense in depth.)
+                        classes("fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.Q*")
                         // Other kapt-generated Ebean classes that don't match the `Q*` naming
                         // convention (e.g. EbeanEntityRegister). All Ebean querybean codegen
                         // carries this annotation (CLASS retention, readable by Kover's ASM-based
