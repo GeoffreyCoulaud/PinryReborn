@@ -162,7 +162,9 @@ git commit -m "chore(coverage): calibrate Kover exclusions and record gap invent
 
 ---
 
-## Tasks 3–7: Fill gaps per module (strict TDD to 100% branch)
+## Tasks 3–8: Fill gaps per module (strict TDD to 100% branch) + B1 guardrail
+
+Task 6 (Konsist guardrail) is the exception to "test-only": it adds an architecture test, not coverage. Task 4 also includes the A1 dead-code removal. All other tasks are test-only.
 
 Each task below is dispatched to a fresh subagent. The oracle for every task is `./gradlew :<module>:koverVerify` turning **green**. The subagent must: read its module's `koverHtmlReport`, enumerate every missed branch, and for each write a failing test first (watch it fail), then the minimal test change to cover it. Follow the test conventions in Global Constraints. Do **not** touch production code except where a branch is genuinely unreachable (see per-task notes) — surface that explicitly instead of deleting/altering logic.
 
@@ -243,23 +245,31 @@ git add api-domain/
 git commit -m "test(domain): 100% branch coverage"
 ```
 
-### Task 4: `api-usecases` to 100% branch
+### Task 4: `api-usecases` to 100% branch (10 testable branches + A1 dead-code removal)
 
 **Files:**
-- Test: `api-usecases/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/**`
+- Test: `api-usecases/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/**` (new `PinGetterTest.kt`; extend `TrigramSimilarityTest.kt`)
+- Modify (A1): `api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/search/TrigramSimilarity.kt`
 
-Already has 10 test classes. Target the branchy files not yet fully covered (from Task 2): `PinGetter` (4), `PinRecycleBin` (5), `PinTagger` (3), `TrigramSimilarity` (7), `UserAuthenticator` (7), plus single-branch files `PinRecycleBinGetter`, `PinSearcher`, `TagCreator`, `TagSearcher`, `UserCreator`.
+The exact per-branch worklist is in `docs/handoffs/2026-07-07 - coverage calibration.md` → "api-usecases" section (12 missed branches). 10 are testable; 2 are provably dead (A1, decided by the operator).
 
 **Interfaces:**
 - Consumes: existing use-case test style (`mockk<...>()`, construct use case, `every { } returns`, `assertThrows<>`).
 
-- [ ] **Step 1: Report → enumerate missed branches**
+- [ ] **Step 1: Read the worklist**
 
-Run: `./gradlew :api-usecases:koverHtmlReport` and list missed branches per class.
+Read the "api-usecases" section of the calibration doc. It names each missed branch (file → method → missing side). Optionally re-run `./gradlew :api-usecases:koverHtmlReport` to cross-check.
 
-- [ ] **Step 2: For each missed branch, write the failing test first**
+- [ ] **Step 2: Cover the 10 testable branches, failing test first**
 
-Mirror `UserAuthenticatorTest` style. Example for a missing null-path branch:
+Mirror `UserAuthenticatorTest` style (Given-When-Then, backtick names). Concretely:
+- `TrigramSimilarity.jaroWinklerSimilarity` line 50 and `combinedSimilarity` line 63: add empty-query and empty-target cases.
+- `combinedSimilarity` line 73: whitespace-only target (`"   "`) so `targetWords` is empty.
+- `combinedSimilarity` line 76: a target with ≥2 words where the max is not the first word.
+- `PinGetter.getPinForUser` line 23 false side: a reader reading their OWN pin succeeds (new `PinGetterTest.kt`).
+- `PinGetter.listPinsPaginatedForUser` line 33: both `cursor == null` and `cursor != null` paths (new `PinGetterTest.kt`).
+
+Example (new null-path branch):
 
 ```kotlin
 @Test
@@ -272,66 +282,162 @@ fun `Given repository returns null, Then throws`() {
 }
 ```
 
-- [ ] **Step 3: Run to verify fail**
+- [ ] **Step 3: A1 — remove the two dead defensive branches**
 
-Run: `./gradlew :api-usecases:test --tests "<NewTestClass>"`
-Expected: FAIL (or the branch stays uncovered).
+In `search/TrigramSimilarity.kt`, remove the provably-unreachable code (operator-approved, no behaviour change because unreachable):
+- line 35 `if (queryTrigrams.isEmpty() || targetTrigrams.isEmpty()) return 0.0` — dead: the line-30 guard already rejects empty query/target, and `generateTrigrams` on a non-empty string always yields ≥1 trigram.
+- line 40 `return if (union > 0) ... else 0.0` — dead: the union of two non-empty sets is never empty; simplify to the non-else expression.
 
-- [ ] **Step 4: Minimal change and re-run**
+First confirm unreachability by reading the method top-to-bottom (the line-30 guard, `generateTrigrams` behaviour). If you find either branch is actually reachable, STOP and report — do not remove reachable code; test it instead. Keep the existing `TrigramSimilarityTest` green throughout.
 
-The change is test-only (production logic exists). Re-run until covered.
+- [ ] **Step 4: Run focused tests to verify fail→pass**
+
+Run: `./gradlew :api-usecases:test --tests "PinGetterTest" --tests "TrigramSimilarityTest"`
 
 - [ ] **Step 5: Verify 100%**
 
 Run: `./gradlew :api-usecases:koverVerify`
-Expected: PASS.
+Expected: PASS (the 2 dead branches are gone, the 10 real ones covered).
 
 - [ ] **Step 6: Commit**
 
+Commit the A1 refactor separately from the tests:
+
 ```bash
+git add api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/search/TrigramSimilarity.kt
+git commit -m "refactor(usecases): remove two provably-unreachable defensive branches in TrigramSimilarity"
 git add api-usecases/
 git commit -m "test(usecases): 100% branch coverage"
 ```
 
-### Task 5: `api-persistence-sqlite` to 100% branch
+### Task 5: `api-persistence-sqlite` to 100% branch (real logic) + B1 models exclusion
 
 **Files:**
 - Test: `api-persistence-sqlite/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/persistence/sqlite/**`
+- Modify (B1): `build.gradle.kts` (add the `models` package to the shared Kover `excludes`)
 
-Branchy targets (Task 2): `pagination/ModelPaginationHelper` (19 — the heavy one), `pagination/ModelSortStrategy` (5), `repositories/PinRepository` (12), `repositories/UserRepository`/`UserPasswordHashRepository`, `EbeanDatabaseProducer`, `pagination/PinModelSortStrategy`, `repositories/ModelRepository`/`TagRepository`.
+Cover the **42 real-logic branches** (repositories + pagination + `EbeanDatabaseProducer`); the ~105 branches in the `models/*` package are Ebean bytecode-enhancement noise (untestable) and are excluded per operator decision B1. The exact worklist is in `docs/handoffs/2026-07-07 - coverage calibration.md` → "api-persistence-sqlite" section (with the "KNOWN RISK" explanation of why `models` is excluded). **Do not** write tests for the `models` package or try to cover `_ebean_*` members.
 
 **Interfaces:**
 - Consumes: `RepositoryTest` base (`database`, `truncateAllTables()` before each) for DB-backed tests; `ebean-test` in-memory DB.
+- Produces: the `models` package exclusion that the Konsist guardrail (Task 6) then protects.
 
-- [ ] **Step 1: Report → enumerate missed branches**
+- [ ] **Step 1: Read the worklist**
 
-Run: `./gradlew :api-persistence-sqlite:koverHtmlReport`.
+Read the "api-persistence-sqlite" section of the calibration doc. Real gaps (42): `repositories/PinRepository` (cursor `?.let` chains + `softDeletedPinIds.isEmpty()` guard), `repositories/{UserPasswordHash,Tag,User}Repository` (`?.toDomain()` / `?: throw`), `pagination/ModelPaginationHelper` (the densest — cursor direction / threshold / has-more), `pagination/ModelSortStrategy` + `PinModelSortStrategy` (`when` over `CursorDirection`/strategy), `EbeanDatabaseProducer` (`System.getenv(...) ?: ...`).
 
-- [ ] **Step 2: Pagination helper — pure unit tests where possible**
+- [ ] **Step 2: B1 — exclude the Ebean-enhanced models package**
 
-`ModelPaginationHelper`/`ModelSortStrategy` hold most branches (cursor direction, sort strategy, first/last page). Prefer plain unit tests over DB tests where the logic is pure. Write one test per branch side (e.g. `CursorDirection.AFTER` vs `BEFORE`, first page vs subsequent).
+In `build.gradle.kts`, add to the shared Kover `excludes { }` block (harmless for other modules, which have no such package):
 
-- [ ] **Step 3: Repository branches — DB-backed tests**
+```kotlin
+packages("fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models")
+```
 
-Extend `RepositoryTest`. For `PinRepository` error/empty paths, arrange DB state (or its absence) to hit each side. Follow the existing `PinRepositoryTest`/`UserRepositoryTest`.
+(`packages(...)` excludes the package and its subpackages, so `models` and `models.bases` are both dropped.) Then `./gradlew :api-persistence-sqlite:koverHtmlReport` and confirm the `models` classes no longer appear in the report.
 
-- [ ] **Step 4: Genuinely unreachable branches**
+- [ ] **Step 3: Pagination — pure unit tests where possible**
 
-If a branch is a defensive path unreachable from tests (e.g. an Ebean-internal null that cannot occur), **do not** exclude silently: note it in the calibration handoff and raise it in the task result for the reviewer to decide (test via a crafted mock, or a justified nominative exclusion).
+`ModelPaginationHelper`/`ModelSortStrategy`/`PinModelSortStrategy` are pure logic (cursor direction, threshold, has-more, sort strategy). Prefer plain unit tests over DB tests. One test per branch side (e.g. `CursorDirection.AFTER` vs `BEFORE`, first page vs subsequent, has-more true/false).
 
-- [ ] **Step 5: Verify 100%**
+- [ ] **Step 4: Repository branches — DB-backed tests**
+
+Extend `RepositoryTest`. For `PinRepository`/`{User,Tag,UserPasswordHash}Repository` null/empty paths, arrange DB state (or its absence) to hit each side (e.g. `findOne()` returns null → `?: throw UserModelDoesNotExistError()`). Follow the existing `PinRepositoryTest`/`UserRepositoryTest`.
+
+- [ ] **Step 5: Verify 100% (excluding models)**
 
 Run: `./gradlew :api-persistence-sqlite:koverVerify`
-Expected: PASS.
+Expected: PASS. If a NON-`models` branch is genuinely unreachable, STOP and report to the controller (do not exclude or alter production code unilaterally).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add api-persistence-sqlite/
-git commit -m "test(persistence): 100% branch coverage"
+git add build.gradle.kts api-persistence-sqlite/
+git commit -m "test(persistence): 100% branch coverage; exclude Ebean-enhanced models package"
 ```
 
-### Task 6: `api-presentation-quarkus` to 100% branch (largest)
+### Task 6: Konsist guardrail on the excluded `models` package
+
+Because Task 5 removes the `models` package from the coverage gate, a Konsist architecture test enforces that the package stays harmless (only field-storage entity classes — no hand-written branchy logic can hide there). This is the operator-mandated guardrail for decision B1.
+
+**Files:**
+- Modify: `gradle/libs.versions.toml` (add Konsist version + library)
+- Modify: `api-persistence-sqlite/build.gradle.kts` (add `testImplementation` Konsist)
+- Create: `api-persistence-sqlite/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/persistence/sqlite/models/ModelsPackageArchTest.kt`
+
+**Interfaces:**
+- Consumes: the `models` package (`fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models` + `.bases`) excluded from Kover in Task 5.
+
+The invariant: every class residing in `..persistence.sqlite.models..` (a) is annotated `@Entity` or `@MappedSuperclass`, (b) declares no functions, (c) has no property with a custom getter/setter.
+
+- [ ] **Step 1: Confirm the current Konsist API via context7**
+
+This project mandates context7 for library questions. Fetch the current Konsist Gradle dependency coordinates/version and confirm the exact API for: scoping to a module/package, `classes()`, `resideInPackage("..pattern..")`, `hasAnnotationOf(KClass)`, `functions()`, and property custom-accessor predicates (e.g. `hasCustomGetter`/`hasCustomSetter` — verify the real names). Adjust the code below to the confirmed API.
+
+- [ ] **Step 2: Add Konsist to the version catalog**
+
+In `gradle/libs.versions.toml`: add `konsist = "<latest stable, confirmed via context7>"` under `[versions]` and `konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }` under `[libraries]`.
+
+- [ ] **Step 3: Add the test dependency**
+
+In `api-persistence-sqlite/build.gradle.kts`, add `testImplementation(libs.konsist)` alongside the existing test deps.
+
+- [ ] **Step 4: Write the arch-test (failing-first mindset: it must actually exercise the invariant)**
+
+Create `ModelsPackageArchTest.kt` (adjust to the confirmed API). Konsist fails on an empty scope by default — good; if the scope resolves empty (wrong module/package pattern), fix the scope, do not relax the assertion.
+
+```kotlin
+package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
+
+import com.lemonappdev.konsist.api.Konsist
+import jakarta.persistence.Entity
+import jakarta.persistence.MappedSuperclass
+import org.junit.jupiter.api.Test
+
+class ModelsPackageArchTest {
+    private val modelClasses = Konsist
+        .scopeFromModule("api-persistence-sqlite")
+        .classes()
+        .filter { it.resideInPackage("..persistence.sqlite.models..") }
+
+    @Test
+    fun `Given the coverage-excluded models package, Then every class is a persistence entity`() {
+        modelClasses.assertTrue {
+            it.hasAnnotationOf(Entity::class) || it.hasAnnotationOf(MappedSuperclass::class)
+        }
+    }
+
+    @Test
+    fun `Given the coverage-excluded models package, Then no class declares functions`() {
+        modelClasses.assertTrue { it.functions().isEmpty() }
+    }
+
+    @Test
+    fun `Given the coverage-excluded models package, Then no property has a custom accessor`() {
+        modelClasses.assertTrue {
+            it.properties().all { property -> !property.hasCustomGetter && !property.hasCustomSetter }
+        }
+    }
+}
+```
+
+- [ ] **Step 5: Run the test — it must PASS on the current (harmless) models, and the scope must be non-empty**
+
+Run: `./gradlew :api-persistence-sqlite:test --tests "ModelsPackageArchTest"`
+Expected: PASS. Sanity-check the scope is non-empty (Konsist errors on empty scope; if it does, the module/package scoping is wrong — fix it). If any assertion fails on the CURRENT code, that is a real finding (a model already has a function / custom accessor) — report it, do not weaken the rule.
+
+- [ ] **Step 6: Confirm this test does not affect coverage**
+
+`ModelsPackageArchTest` lives in `src/test`; it is not measured by Kover (which measures `main`). Run `./gradlew :api-persistence-sqlite:koverVerify` and confirm still PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add gradle/libs.versions.toml api-persistence-sqlite/build.gradle.kts api-persistence-sqlite/src/test/
+git commit -m "test(persistence): Konsist guardrail keeps the coverage-excluded models package harmless"
+```
+
+### Task 7: `api-presentation-quarkus` to 100% branch (largest)
 
 **Files:**
 - Create: `api-presentation-quarkus/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/presentation/quarkus/**` (no test files exist yet)
@@ -415,7 +521,7 @@ git add api-presentation-quarkus/
 git commit -m "test(presentation): 100% branch coverage"
 ```
 
-### Task 7: `api-utilities` to 100% branch
+### Task 8: `api-utilities` to 100% branch
 
 **Files:**
 - Create: `api-utilities/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/utilities/StringUtilsTest.kt`
@@ -475,7 +581,7 @@ git commit -m "test(utilities): 100% branch coverage"
 
 ---
 
-## Task 8: Wire the gate (CI + `.githooks/`, remove `pre-commit`)
+## Task 9: Wire the gate (CI + `.githooks/`, remove `pre-commit`)
 
 Only after **every** in-gate module's `koverVerify` is green. Flip the gate on and replace the `pre-commit` framework.
 
@@ -564,7 +670,7 @@ git commit -m "chore(coverage): gate koverVerify in CI and pre-push, drop pre-co
 
 ---
 
-## Task 9: Holistic verify + handoff
+## Task 10: Holistic verify + handoff
 
 **Files:**
 - Create: `docs/handoffs/2026-07-07 - handoff - coverage-enforcement.md`

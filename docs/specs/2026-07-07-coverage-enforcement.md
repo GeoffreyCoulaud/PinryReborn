@@ -200,3 +200,43 @@ Once set, Git uses `.githooks/` and ignores `.git/hooks/`.
   that is surfaced explicitly rather than worked around by lowering the threshold.
 - **Not validated against real hardware**: this is a build/CI/test change; no runtime
   behaviour change is expected.
+
+## 10. Calibration outcomes and amendments (2026-07-07)
+
+Task 2 (calibration) resolved the open points. Verdicts and the resulting decisions,
+approved by the operator:
+
+- **Kover ignores compiler-generated members.** Data-class `equals`/`hashCode`/`copy`/
+  `componentN` and top-level `$default` bridges are absent from the report. Consequence:
+  `api-domain` is already at 100% branch (0 branches) with no tests; the generated-`equals`
+  fallback from §9 is not needed.
+- **A1 — `api-usecases` dead defensive branches.** `search/TrigramSimilarity` has two
+  provably unreachable branches (line 35 empty-trigram guard, already covered by the
+  line-30 guard; line 40 `union > 0` else, unreachable for two non-empty sets). Decision:
+  **remove the dead code** (honest 100%, no behaviour change), rather than exclude the class.
+- **B1 — `api-persistence-sqlite` Ebean-enhanced entity models.** Ebean rewrites the
+  compiled entity classes in place, injecting `_ebean_*` bookkeeping whose branches Kover
+  counts but no test can reach (plus at least one Kover reporting artifact). These share the
+  entity FQN and carry no marker, so only class/package-level exclusion is possible.
+  Decision: **exclude the `...persistence.sqlite.models` package** (including `models.bases`)
+  from coverage as Ebean-enhanced infrastructure. All other persistence code (repositories,
+  pagination, `EbeanDatabaseProducer`) is covered to 100%.
+- **Guardrail for the excluded models package (Konsist).** Because `models` leaves the
+  coverage gate, a **Konsist** architecture test (JUnit, in `api-persistence-sqlite/src/test`)
+  enforces that the package stays harmless: every class in `..persistence.sqlite.models..`
+  **(a)** is annotated `@Entity` or `@MappedSuperclass`, **(b)** declares no functions, and
+  **(c)** has no property with a custom getter/setter. This makes it impossible to hide
+  hand-written branchy logic in the coverage-excluded package. Konsist scans `src` only (not
+  `build/generated`), so generated `Q*` beans are not in scope, and it fails on an empty
+  scope (protects against a vacuous test). Konsist is added as a `testImplementation`
+  dependency; the test lives in the test source set and does not affect main coverage.
+
+Frozen exclusion filter (per in-gate module, in the root `subprojects` block):
+
+```kotlin
+excludes {
+    classes("*.Q*")                                   // Ebean generated query beans
+    annotatedBy("io.ebean.typequery.Generated")       // e.g. EbeanEntityRegister
+    packages("fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models")  // B1: Ebean-enhanced entities (guarded by Konsist)
+}
+```
