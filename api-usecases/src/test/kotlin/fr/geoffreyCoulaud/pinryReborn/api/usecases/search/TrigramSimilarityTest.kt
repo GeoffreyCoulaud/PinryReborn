@@ -244,7 +244,7 @@ class TrigramSimilarityTest {
     }
 
     @Test
-    fun `Given target with multiple words where the best match is not the first word, Then combined similarity finds it`() {
+    fun `Given target words where the best match is not the first word, Then combined similarity finds it`() {
         // Given
         val query = "landscape"
         val target = "mountain landscape"
