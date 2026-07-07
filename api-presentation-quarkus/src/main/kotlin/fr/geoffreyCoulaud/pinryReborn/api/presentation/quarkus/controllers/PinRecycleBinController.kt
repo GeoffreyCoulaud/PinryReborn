@@ -37,7 +37,7 @@ class PinRecycleBinController(
     ): RestResponse<PinListOutputDto> {
         val user = securityIdentity.getUser()
         val pageSize = pageSizeInput ?: DEFAULT_PAGE_SIZE
-        val sort = sortInput?.toDomain() ?: PinSortStrategy.DELETED_AT_DESC
+        val sort = if (sortInput != null) sortInput.toDomain() else PinSortStrategy.DELETED_AT_DESC
         val cursor = cursorInput?.toDomain()
 
         return pinRecycleBinGetter
