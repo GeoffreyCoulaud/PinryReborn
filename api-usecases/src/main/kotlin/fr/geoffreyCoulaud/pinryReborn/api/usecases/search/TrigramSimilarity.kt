@@ -32,12 +32,10 @@ object TrigramSimilarity {
         val queryTrigrams = generateTrigrams(query)
         val targetTrigrams = generateTrigrams(target)
 
-        if (queryTrigrams.isEmpty() || targetTrigrams.isEmpty()) return 0.0
-
         val intersection = queryTrigrams.intersect(targetTrigrams).size
         val union = queryTrigrams.union(targetTrigrams).size
 
-        return if (union > 0) intersection.toDouble() / union else 0.0
+        return intersection.toDouble() / union
     }
 
     /**
