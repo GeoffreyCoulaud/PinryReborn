@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.quarkus) apply false
     alias(libs.plugins.ebean) apply false
     alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.kover) apply false
 }
 
 allprojects {
@@ -50,5 +51,34 @@ subprojects {
         // Also analyse the java-test-fixtures source set (used by api-utilities)
         // in addition to detekt's default main/test source directories.
         source.from("src/testFixtures/kotlin")
+    }
+
+    // Branch-coverage gate (Kover). Applied to every module EXCEPT api-application,
+    // which is the composition root + end-to-end tests and has no unit tests by design.
+    // Coverage is measured per-module from that module's own tests (no aggregation):
+    // integration tests in api-application must NOT count toward other modules.
+    if (project.name != "api-application") {
+        apply(plugin = "org.jetbrains.kotlinx.kover")
+
+        extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
+            reports {
+                filters {
+                    excludes {
+                        // Ebean generated Kotlin query beans (kapt output). Confirmed/adjusted
+                        // during calibration (Task 2).
+                        classes("*.Q*")
+                    }
+                }
+                verify {
+                    rule("100% branch coverage per package") {
+                        groupBy = kotlinx.kover.gradle.plugin.dsl.GroupingEntityType.PACKAGE
+                        bound {
+                            coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH
+                            minValue = 100
+                        }
+                    }
+                }
+            }
+        }
     }
 }
