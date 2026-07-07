@@ -1,15 +1,21 @@
 This file provides guidance to AI Agents when working with code in this repository.
 
-## Build Commands
+## Hard rules (enforced, non-negotiable — do not relax)
 
-```bash
-./gradlew quarkusDev                              # Start dev server with hot reload
-./gradlew test                                    # Run all tests
-./gradlew :api-usecases:test                      # Run tests for a specific module
-./gradlew :api-usecases:test --tests "UserCreatorTest"  # Run a single test class
-./gradlew build                                   # Build the application
-./gradlew :api-persistence-sqlite:generateDbMigration   # Generate Ebean DB migrations
-```
+- **100% branch coverage on unit tests, per package**, gated in CI and the pre-push hooks. Never lower the unit-test
+  threshold; add the missing test (exercise *both* sides of every conditional).
+- **Strict TDD**: tests are the spec; write the failing test first, watch it fail, then the minimal implementation. Code
+  review judges the tests first.
+- **Clean / Hexagonal**: `api-domain/` is **pure** — no I/O, no config/DB/network/clock/logging imports. All I/O lives
+  in `api-persistence-sqlite/` and `api-presentation-quarkus/`. The dependency graph is a DAG.
+- **Conventional commits** (`feat(domain):`, `fix(domain):`, `test:`, `chore:`, `docs:`).
+- **Language: all code is English** (decided 2026-07-07) — identifiers AND prose: comments, docstrings, runtime-emitted
+  messages/logs, CI step names, and commit messages. **New docs under `docs/specs/`, `docs/plans/` and `docs/handoffs/`
+  are written in English** ; past docs keep their original language (no retro-translation). Conversational replies to
+  the operator stay their chosen language.
+- **Subagent-driven execution** (Act phase) + **holistic review** (Verify phase): the cross-cutting review regularly
+  catches bugs — don't skip it.
+- For library/framework/CLI questions, use the **context7 MCP** (current docs), not recalled knowledge.
 
 ## Architecture
 
@@ -121,6 +127,17 @@ Once the gate is green and code reviewed:
 4. **Clean up** branch and/or worktree if applicable.
 
 Use the `finishing-a-development-branch` skill to guide this phase.
+
+## Build Commands
+
+```bash
+./gradlew quarkusDev                              # Start dev server with hot reload
+./gradlew test                                    # Run all tests
+./gradlew :api-usecases:test                      # Run tests for a specific module
+./gradlew :api-usecases:test --tests "UserCreatorTest"  # Run a single test class
+./gradlew build                                   # Build the application
+./gradlew :api-persistence-sqlite:generateDbMigration   # Generate Ebean DB migrations
+```
 
 ## Testing
 
