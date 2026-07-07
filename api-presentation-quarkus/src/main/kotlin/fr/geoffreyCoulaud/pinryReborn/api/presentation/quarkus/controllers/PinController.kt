@@ -77,7 +77,7 @@ class PinController(
     ): RestResponse<PinListOutputDto> {
         val user = securityIdentity.getUser()
         val pageSize = pageSizeInput ?: DEFAULT_PAGE_SIZE
-        val sort = sortInput?.toDomain() ?: PinSortStrategy.CREATED_AT_ASC
+        val sort = if (sortInput != null) sortInput.toDomain() else PinSortStrategy.CREATED_AT_ASC
         val cursor = cursorInput?.let { cursorInput.toDomain() }
 
         return pinGetter
