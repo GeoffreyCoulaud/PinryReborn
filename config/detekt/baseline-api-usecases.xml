@@ -2,10 +2,8 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>MagicNumber:TrigramSimilarity.kt$TrigramSimilarity$0.9</ID>
-    <ID>MagicNumber:TrigramSimilarity.kt$TrigramSimilarity$3</ID>
-    <ID>MemberNameEqualsClassName:TrigramSimilarity.kt$TrigramSimilarity$fun trigramSimilarity(query: String, target: String): Double</ID>
-    <ID>ReturnCount:TrigramSimilarity.kt$TrigramSimilarity$fun trigramSimilarity(query: String, target: String): Double</ID>
-    <ID>ThrowsCount:PinTagger.kt$PinTagger$fun setTags( pinId: UUID, tagNames: List&lt;String&gt;, user: User, ): Pin</ID>
+    <ID>MagicNumber:TrigramSimilarity.kt:TrigramSimilarity$0.9</ID>
+    <ID>MagicNumber:TrigramSimilarity.kt:TrigramSimilarity$3</ID>
+    <ID>ThrowsCount:PinTagger.kt:PinTagger$fun setTags: Pin</ID>
   </CurrentIssues>
 </SmellBaseline>

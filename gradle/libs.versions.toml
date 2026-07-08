@@ -17,7 +17,7 @@ commons-text = "1.15.0"
 smallrye-config = "3.18.0"
 quarkus-junit = "3.37.1"
 rest-assured = "6.0.0"
-detekt = "1.23.8"
+detekt = "2.0.0-alpha.5"
 kover = "0.9.8"
 konsist = "0.17.3"
 
@@ -111,5 +111,5 @@ kotlin-noarg = { id = "org.jetbrains.kotlin.plugin.noarg", version.ref = "kotlin
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }
 ebean = { id = "io.ebean", version.ref = "ebean" }
 jandex = { id = "org.kordamp.gradle.jandex", version.ref = "jandex" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
