@@ -110,7 +110,7 @@ class EbeanTaskQueue(
         leaseId: String,
         now: Instant,
     ): Boolean =
-        taskLeaseGuard(database, id, leaseId)
+        leaseGuard(id, leaseId)
             .asUpdate()
             .set("state", TaskState.SUCCEEDED.name)
             .setRaw("version = version + 1")
@@ -123,7 +123,7 @@ class EbeanTaskQueue(
         now: Instant,
         lastError: String?,
     ): Boolean =
-        taskLeaseGuard(database, id, leaseId)
+        leaseGuard(id, leaseId)
             .asUpdate()
             .set("state", TaskState.PENDING.name)
             .set("availableAt", availableAt)
@@ -139,7 +139,7 @@ class EbeanTaskQueue(
         now: Instant,
         lastError: String?,
     ): Boolean =
-        taskLeaseGuard(database, id, leaseId)
+        leaseGuard(id, leaseId)
             .asUpdate()
             .set("state", TaskState.DEAD.name)
             .set("lastError", lastError)
@@ -151,7 +151,7 @@ class EbeanTaskQueue(
         leaseId: String,
         now: Instant,
     ): Boolean =
-        taskLeaseGuard(database, id, leaseId)
+        leaseGuard(id, leaseId)
             .cancelRequested.equalTo(true)
             .asUpdate()
             .set("state", TaskState.CANCELLED.name)
@@ -187,11 +187,10 @@ class EbeanTaskQueue(
             .setNull("leaseExpiresAt")
             .setRaw("version = version + 1")
             .update()
-}
 
-/** Query for the task row identified by [id], guarded by its current [leaseId] (fencing). */
-private fun taskLeaseGuard(
-    database: Database,
-    id: UUID,
-    leaseId: String,
-) = QTaskModel(database).id.equalTo(id).leaseId.equalTo(leaseId)
+    /** Query for the task row identified by [id], guarded by its current [leaseId] (fencing). */
+    private fun leaseGuard(
+        id: UUID,
+        leaseId: String,
+    ) = QTaskModel(database).id.equalTo(id).leaseId.equalTo(leaseId)
+}
