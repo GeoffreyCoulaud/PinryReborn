@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BaseError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
 import io.mockk.every
@@ -70,5 +71,35 @@ class BaseErrorMapperTest {
     @Test
     fun `Given INVALID_HTTP_AUTHORIZATION_SCHEME, Then status is UNAUTHORIZED`() {
         assertEquals(Response.Status.UNAUTHORIZED, statusFor(ErrorCode.INVALID_HTTP_AUTHORIZATION_SCHEME))
+    }
+
+    @Test
+    fun `Given IMAGE_DOES_NOT_EXIST, Then status is NOT_FOUND`() {
+        assertEquals(Response.Status.NOT_FOUND, statusFor(ErrorCode.IMAGE_DOES_NOT_EXIST))
+    }
+
+    @Test
+    fun `Given IMAGE_INSUFFICIENT_PERMISSIONS, Then status is FORBIDDEN`() {
+        assertEquals(Response.Status.FORBIDDEN, statusFor(ErrorCode.IMAGE_INSUFFICIENT_PERMISSIONS))
+    }
+
+    @Test
+    fun `Given IMAGE_TOO_LARGE, Then status is 413 REQUEST_ENTITY_TOO_LARGE`() {
+        assertEquals(Response.Status.REQUEST_ENTITY_TOO_LARGE, statusFor(ErrorCode.IMAGE_TOO_LARGE))
+    }
+
+    @Test
+    fun `Given IMAGE_INVALID, Then status is 422`() {
+        // jakarta.ws.rs 4.0's Response.Status has no UNPROCESSABLE_ENTITY constant, so this
+        // asserts the raw status code instead of going through Response.Status.fromStatusCode.
+        val exception = BaseError(message = "boom", code = ErrorCode.IMAGE_INVALID)
+
+        val response = mapper.toResponse(exception)
+
+        assertEquals(422, response.status)
+        val body = response.entity as ProblemDetail
+        assertEquals("Unprocessable Entity", body.title)
+        assertEquals(422, body.status)
+        assertEquals("IMAGE_INVALID", body.code)
     }
 }
