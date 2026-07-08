@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createTable name="tasks" identityType="external" pkName="pk_tasks">
+            <column name="id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="kind" type="varchar" notnull="true"/>
+            <column name="payload" type="varchar" notnull="true"/>
+            <column name="state" type="varchar" notnull="true"/>
+            <column name="priority" type="integer" notnull="true"/>
+            <column name="available_at" type="timestamp" notnull="true"/>
+            <column name="attempts" type="integer" notnull="true"/>
+            <column name="max_attempts" type="integer" notnull="true"/>
+            <column name="lease_id" type="varchar"/>
+            <column name="lease_expires_at" type="timestamp"/>
+            <column name="cancel_requested" type="boolean" defaultValue="false" notnull="true"/>
+            <column name="dedup_key" type="varchar"/>
+            <column name="last_error" type="varchar"/>
+            <column name="when_created" type="timestamp" notnull="true"/>
+            <column name="when_modified" type="timestamp" notnull="true"/>
+            <column name="version" type="bigint" notnull="true"/>
+        </createTable>
+    </changeSet>
+</migration>
