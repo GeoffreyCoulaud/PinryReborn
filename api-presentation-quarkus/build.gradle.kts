@@ -24,6 +24,7 @@ dependencies {
     compileOnly(libs.quarkus.smallrye.openapi)
     compileOnly(libs.quarkus.hibernate.validator)
     compileOnly(libs.quarkus.core)
+    compileOnly(libs.quarkus.micrometer)
 
     // Tests
     testImplementation(testFixtures(project(":api-utilities")))
@@ -40,6 +41,9 @@ dependencies {
     // (StartupEvent/ShutdownEvent) — compileOnly at main scope, not inherited by the test
     // source set.
     testImplementation(libs.quarkus.core)
+    // Needed to unit-test TaskQueueMetrics with a real SimpleMeterRegistry —
+    // compileOnly at main scope, not inherited by the test source set.
+    testImplementation(libs.quarkus.micrometer)
     testImplementation(libs.bundles.testing)
     testRuntimeOnly(libs.bundles.testing.runtime)
 }
