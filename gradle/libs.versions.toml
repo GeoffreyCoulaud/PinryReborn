@@ -47,6 +47,7 @@ jakarta-transaction-api = { module = "jakarta.transaction:jakarta.transaction-ap
 # Quarkus
 quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
 quarkus-arc = { module = "io.quarkus:quarkus-arc" }
+quarkus-core = { module = "io.quarkus:quarkus-core" }
 quarkus-kotlin = { module = "io.quarkus:quarkus-kotlin" }
 quarkus-rest = { module = "io.quarkus:quarkus-rest" }
 quarkus-rest-jackson = { module = "io.quarkus:quarkus-rest-jackson" }

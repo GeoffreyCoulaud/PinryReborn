@@ -23,6 +23,7 @@ dependencies {
     compileOnly(libs.quarkus.security)
     compileOnly(libs.quarkus.smallrye.openapi)
     compileOnly(libs.quarkus.hibernate.validator)
+    compileOnly(libs.quarkus.core)
 
     // Tests
     testImplementation(testFixtures(project(":api-utilities")))
@@ -35,6 +36,10 @@ dependencies {
     // Base64JsonSerializer, Base64JsonParamConverter*) — compileOnly at main scope, not
     // inherited by the test source set.
     testImplementation(libs.jackson.databind)
+    // Needed to unit-test TaskWorkerLifecycle's onStart/onStop CDI event delegators
+    // (StartupEvent/ShutdownEvent) — compileOnly at main scope, not inherited by the test
+    // source set.
+    testImplementation(libs.quarkus.core)
     testImplementation(libs.bundles.testing)
     testRuntimeOnly(libs.bundles.testing.runtime)
 }
