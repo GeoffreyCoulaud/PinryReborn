@@ -14,7 +14,7 @@ class PinCreator(
     fun createPin(
         author: User,
         sourceContextUrl: String,
-        sourceMediaUrl: String,
+        sourceMediaUrl: String?,
         description: String,
         tags: List<String>,
     ): Pin {
