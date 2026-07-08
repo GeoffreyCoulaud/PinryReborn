@@ -28,22 +28,21 @@ subprojects {
             languageVersion.set(JavaLanguageVersion.of(25))
             vendor.set(JvmVendorSpec.ADOPTIUM)
         }
-        // Run the toolchain on JDK 25 but emit Java 21 bytecode (see the Kotlin
-        // jvmTarget note below): keeps compileJava consistent with compileKotlin
-        // (Kotlin enforces matching JVM targets) and the bytecode floor at 21 for
-        // tool compatibility (detekt/Kover/Ebean). Raise to 25 once detekt supports it.
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        // Toolchain and bytecode target are both JDK 25 (no split): detekt 2.0
+        // runs and analyses on JDK 25, so the old Java-21 floor (forced by detekt
+        // 1.23.8's --jvm-target 22 cap) is gone. A 25 target is also required to
+        // consume vips-ffm, whose Gradle metadata declares org.gradle.jvm.version 22
+        // (a Java-21 consumer variant is rejected); vips-ffm additionally needs a
+        // JDK 23+ runtime, which the toolchain satisfies. Keep compileJava consistent
+        // with compileKotlin (Kotlin enforces matching JVM targets).
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         compilerOptions {
-            // Runtime toolchain is JDK 25 (above), but the bytecode floor stays 21:
-            // detekt 1.23.8's bundled analyzer caps --jvm-target at 22, and Java-21
-            // bytecode runs natively on a JDK 25 runtime. vips-ffm only requires the
-            // runtime to be JDK 23+, which the toolchain satisfies. Raise this to 25
-            // once detekt supports it.
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+            // Bytecode target matches the JDK 25 toolchain (see the Java note above).
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
             javaParameters.set(true)
         }
     }
@@ -69,10 +68,10 @@ subprojects {
         source.from("src/testFixtures/kotlin")
     }
 
-    // Analyse against the Java 21 bytecode floor (matches the Kotlin jvmTarget above),
-    // even though detekt 2.0 itself runs on the JDK 25 toolchain.
+    // Analyse against the JDK 25 bytecode target (matches the Kotlin jvmTarget above);
+    // detekt 2.0 runs and analyses on the JDK 25 toolchain.
     tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
-        jvmTarget = "21"
+        jvmTarget = "25"
     }
 
     // Branch-coverage gate (Kover). Applied to every module EXCEPT api-application,
