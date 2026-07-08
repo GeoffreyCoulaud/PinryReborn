@@ -92,7 +92,7 @@ both policy and lease-expiry comparisons deterministic and injectable (the preco
 | `TaskHandler` interface + `TaskHandlerRegistry` (dispatch by `kind`) | `api-usecases` | Pure orchestration |
 | `TaskProcessor` use-case (claim -> dispatch -> settle) | `api-usecases` | Pure orchestration |
 | `EnqueueTask`, `CancelTask`, `ReapExpiredTasks` use-cases | `api-usecases` | Pure orchestration |
-| Ebean `TaskEntity`, `EbeanTaskQueue` (raw SQL, `BEGIN IMMEDIATE`), SQLite pragmas, migration | `api-persistence-sqlite` | I/O |
+| Ebean `TaskEntity`, `EbeanTaskQueue` (typed query beans + `UpdateQuery`, IMMEDIATE txn), SQLite pragmas, migration | `api-persistence-sqlite` | I/O |
 | Worker pool, poller (`@Scheduled`), lifecycle hooks, system `Clock` impl, config | `api-presentation-quarkus` | I/O |
 
 The worker runtime is a **driving adapter** (a scheduler-triggered poller that invokes the
@@ -182,7 +182,9 @@ Three phases; correctness is entirely about *which phase holds the write lock*.
 | **Execute** | **None** | seconds-minutes | Run the handler (download, file I/O). Zero DB locks held. |
 | **Settle** | Short `BEGIN IMMEDIATE` write txn | sub-ms | Conditional on fencing token: `SUCCEEDED`, or reschedule `PENDING` with backoff, or `DEAD`, or `CANCELLED` |
 
-Claim query shape (executed by `EbeanTaskQueue` via raw SQL inside one IMMEDIATE txn):
+The claim below is the *effective* SQL; it is implemented with **Ebean's typed query beans
+and `UpdateQuery`, not hand-written SQL** (see "Ebean mapping" after the block), inside one
+IMMEDIATE transaction:
 
 ```sql
 SELECT id FROM task
@@ -196,19 +198,37 @@ UPDATE task
  WHERE id=:id;                   -- safe: we hold the single write lock
 ```
 
-Because the whole `BEGIN IMMEDIATE` block holds the write lock, no other worker can
-interleave between `SELECT` and `UPDATE`: the guarantee that Postgres needs `SKIP LOCKED`
-for is free here.
+Because the whole IMMEDIATE transaction holds the write lock, no other worker can interleave
+between the select and the update: the guarantee that Postgres needs `SKIP LOCKED` for is
+free here.
+
+**Ebean mapping (no raw SQL).** Verified against the Ebean 17.2.0 sources:
+
+- **Claim**: `QTask().state.eq(PENDING).availableAt.le(now).orderBy()...setMaxRows(1).findOneOrEmpty()`,
+  then mutate the fetched bean (`state`, `leaseId`, `leaseExpiresAt`, `attempts++`) and
+  `db.save(it)` (Ebean bumps `@Version` automatically). The select already returns `kind` +
+  `payload` for dispatch. Safe because the IMMEDIATE transaction serializes writers.
+- **Settle (fenced)**: `QTask().id.eq(id).leaseId.eq(leaseId).asUpdate().set(...).update()`.
+  `UpdateQuery.update()` returns the **number of rows affected**; `0` means "I was fenced"
+  (discard the result, no exception). This is the fencing check, in the typed API.
+- **Reaper**: `QTask().state.eq(RUNNING).leaseExpiresAt.le(now).asUpdate().set("state", PENDING)...update()`.
+- **Increment** (`attempts = attempts + 1`) on the set-based path uses `UpdateQuery.setRaw("attempts = attempts + 1")`
+  (a typed-query property expression, not free-form SQL). The fetch-mutate-save claim path
+  does not even need this (`bean.attempts++` in Kotlin).
+- Raw `SqlUpdate` is reserved as a **last-resort escape hatch** only if a specific construct
+  cannot be expressed in the typed API; none is anticipated.
 
 Critical mechanics:
 
-- **Force `BEGIN IMMEDIATE`, not the default deferred begin.** With deferred begin, two
-  workers can each take a read lock then both try to upgrade to write -> unresolvable upgrade
-  deadlock that `busy_timeout` cannot save. `IMMEDIATE` takes the write lock at `BEGIN`, so
-  the second worker cleanly waits. Configure the sqlite-jdbc datasource with
-  `transaction_mode=IMMEDIATE`. This is the single most important connection-level setting.
+- **Force IMMEDIATE begin, not the default deferred begin.** With deferred begin, two workers
+  can each take a read lock then both try to upgrade to write -> unresolvable upgrade deadlock
+  that `busy_timeout` cannot save. IMMEDIATE takes the write lock at begin, so the second
+  worker cleanly waits. This is a **datasource / connection-level** setting
+  (sqlite-jdbc `transaction_mode=IMMEDIATE`), independent of the typed-vs-raw choice; the
+  single most important connection-level setting. `Transaction.connection()` is available as a
+  per-connection escape hatch if a pragma must be set that way.
 - **Keep write-lock hold time minimal**: claim/settle do only the state flip. JSON
-  encode/decode and any computation happen before `BEGIN` / after `COMMIT`, never inside.
+  encode/decode and any computation happen before / after the transaction, never inside.
 - **Never span a write transaction across the download** (the cardinal sin, §15).
 
 ## 8. Crash recovery: lease + reaper + fencing
@@ -354,7 +374,8 @@ against sqlite-jdbc docs during implementation:
 - Generic queue infrastructure across `api-domain` (entity, states, ports, backoff policy,
   clock port), `api-usecases` (handler interface + registry, `TaskProcessor`, `EnqueueTask`,
   `CancelTask`, `ReapExpiredTasks`), `api-persistence-sqlite` (Ebean model, `EbeanTaskQueue`
-  with raw-SQL IMMEDIATE claim/settle/reap, SQLite pragmas, migration), and the
+  using typed query beans + `UpdateQuery` for IMMEDIATE claim/settle/reap, SQLite pragmas,
+  migration), and the
   `api-presentation-quarkus` worker runtime (pool, poller, lifecycle, system clock, config).
 - The full state machine, claim/execute/settle protocol, lease + reaper + fencing crash
   recovery, exponential-backoff-with-jitter retries, dead-letter, transactional enqueue,
@@ -419,10 +440,12 @@ first under TDD:
 - **Runtime module placement**: v1 puts the worker runtime in `api-presentation-quarkus`
   (in-gate, correct adapter role). If it grows, extract a dedicated `api-task-runtime`
   module. Flagged for operator sign-off.
-- **Ebean + `IMMEDIATE` transactions on SQLite**: forcing IMMEDIATE begin via sqlite-jdbc
-  and running the claim/settle as raw SQL through Ebean must be confirmed during
-  implementation (Ebean `SqlUpdate` / explicit transaction API; sqlite-jdbc
-  `transaction_mode`).
+- **Ebean typed API is sufficient (confirmed on the 17.2.0 sources)**: `UpdateQuery` gives
+  typed `set`/`setRaw`/`where`/`update()`-with-row-count (the fencing signal), and query
+  beans give `setMaxRows(1)`/`findOneOrEmpty()` for the claim. No raw SQL needed. The one item
+  still to confirm during implementation is the **IMMEDIATE begin-mode wiring** (sqlite-jdbc
+  `transaction_mode=IMMEDIATE` on the `ebean-datasource` / JDBC URL), which is a
+  connection-level setting orthogonal to the query API.
 - **100% branch on error/concurrency paths**: `SQLITE_BUSY` handling, fencing "0 rows", and
   shutdown deadline branches need deliberate seams to cover both sides without flakiness.
 - **`@Version` + fencing interplay**: ensure the optimistic-lock back-stop does not turn a
