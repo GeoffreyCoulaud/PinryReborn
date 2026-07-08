@@ -66,4 +66,9 @@ interface PinRepositoryInterface {
         pageSize: Int,
         sortStrategy: PinSortStrategy,
     ): Page<Pin>
+
+    /**
+     * Find all soft-deleted pins for a user (unpaginated)
+     */
+    fun findAllSoftDeletedPinsForUser(user: User): List<Pin>
 }

@@ -24,6 +24,11 @@ import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
+// PinRepositoryInterface's surface (10 methods) plus this adapter's two private query helpers
+// (getTagsForPin, savePinTags) trips detekt's default per-class threshold. Suppressed rather than
+// split, since splitting would fragment one cohesive adapter across artificial classes for no
+// readability gain (mirrors EbeanTaskQueue's precedent for the same rule).
+@Suppress("TooManyFunctions")
 class PinRepository(
     private val database: Database,
 ) : PinRepositoryInterface {
@@ -149,6 +154,14 @@ class PinRepository(
         QPinTagModel().pin.id.isIn(softDeletedPinIds).delete()
         QPinModel().id.isIn(softDeletedPinIds).delete()
     }
+
+    override fun findAllSoftDeletedPinsForUser(user: User): List<Pin> =
+        QPinModel()
+            .author.id
+            .equalTo(user.id)
+            .softDeletedAt.isNotNull
+            .findList()
+            .map { it.toDomain(getTagsForPin(it.id)) }
 
     override fun findSoftDeletedPinsForUser(
         reader: User,
