@@ -29,27 +29,42 @@ class TaskDispatcherTest {
     }
 
     @Test
-    fun `Given two tasks and capacity, Then both are claimed and submitted`() {
+    fun `Given capacity, Then it acquires a permit, claims a task, and submits it`() {
         // Given
-        val a = claim(); val b = claim()
-        every { queue.claimNext(now, any()) } returnsMany listOf(a, b, null)
-        every { executor.trySubmit(any()) } answers { firstArg<Runnable>().run(); true }
-        // When
-        dispatcher().pollOnce()
-        // Then
-        verify { processor.execute(a) }
-        verify { processor.execute(b) }
-    }
-
-    @Test
-    fun `Given no capacity, Then it stops after the first claim`() {
-        // Given
-        every { queue.claimNext(now, any()) } returns claim()
-        every { executor.trySubmit(any()) } returns false
+        val a = claim()
+        every { executor.tryAcquire() } returnsMany listOf(true, false)
+        every { queue.claimNext(now, any()) } returns a
+        every { executor.submit(any()) } answers { firstArg<Runnable>().run() }
         // When
         dispatcher().pollOnce()
         // Then
         verify(exactly = 1) { queue.claimNext(now, any()) }
+        verify { executor.submit(any()) }
+        verify { processor.execute(a) }
+    }
+
+    @Test
+    fun `Given no capacity, Then it stops without claiming any task`() {
+        // Given
+        every { executor.tryAcquire() } returns false
+        // When
+        dispatcher().pollOnce()
+        // Then
+        verify(exactly = 0) { queue.claimNext(any(), any()) }
+    }
+
+    @Test
+    fun `Given capacity but nothing to claim, Then it releases the permit and stops`() {
+        // Given
+        every { executor.tryAcquire() } returns true
+        every { queue.claimNext(now, any()) } returns null
+        every { executor.release() } returns Unit
+        // When
+        dispatcher().pollOnce()
+        // Then
+        verify(exactly = 1) { queue.claimNext(now, any()) }
+        verify { executor.release() }
+        verify(exactly = 0) { executor.submit(any()) }
     }
 
     @Test
