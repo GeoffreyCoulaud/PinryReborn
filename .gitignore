@@ -3,6 +3,8 @@
 .gradle
 docs/openapi.yaml
 *.db
+*.db-shm
+*.db-wal
 # IntelliJ : tout ignorer par defaut...
 .idea/*
 # ...sauf la config partagee volontairement
