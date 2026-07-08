@@ -7,6 +7,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskHandlerRegistry
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.inject.Instance
 import jakarta.enterprise.inject.Produces
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadLocalRandom
 
 @ApplicationScoped
@@ -22,4 +25,13 @@ class TaskRuntimeProducers {
     @ApplicationScoped
     fun taskHandlerRegistry(handlers: Instance<TaskHandler>): TaskHandlerRegistry =
         TaskHandlerRegistry(handlers.stream().toList())
+
+    @Produces
+    @ApplicationScoped
+    fun workerExecutor(config: TaskQueueConfig): WorkerExecutor =
+        BoundedWorkerExecutor(Semaphore(config.workerCount()), Executors.newFixedThreadPool(config.workerCount()))
+
+    @Produces
+    @ApplicationScoped
+    fun pollScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 }
