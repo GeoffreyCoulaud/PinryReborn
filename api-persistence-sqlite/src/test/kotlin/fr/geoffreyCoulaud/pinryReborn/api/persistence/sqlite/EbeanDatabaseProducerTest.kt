@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -42,5 +43,27 @@ class EbeanDatabaseProducerTest {
         assertTrue(url.contains("journal_mode=WAL"))
         assertTrue(url.contains("busy_timeout=5000"))
         assertTrue(url.contains("synchronous=NORMAL"))
+    }
+
+    @Test
+    fun `Given a db path, Then the data source config is constrained to a single connection`() {
+        // When
+        val dataSourceConfig = sqliteDataSourceConfig("data.db")
+
+        // Then
+        assertEquals(1, dataSourceConfig.minConnections)
+        assertEquals(1, dataSourceConfig.maxConnections)
+    }
+
+    @Test
+    fun `Given a db path, Then the data source config URL carries the queue pragmas but not transaction mode`() {
+        // When
+        val dataSourceConfig = sqliteDataSourceConfig("data.db")
+
+        // Then
+        assertTrue(dataSourceConfig.url.contains("journal_mode=WAL"))
+        assertTrue(dataSourceConfig.url.contains("synchronous=NORMAL"))
+        assertTrue(dataSourceConfig.url.contains("busy_timeout=5000"))
+        assertFalse(dataSourceConfig.url.contains("transaction_mode"))
     }
 }

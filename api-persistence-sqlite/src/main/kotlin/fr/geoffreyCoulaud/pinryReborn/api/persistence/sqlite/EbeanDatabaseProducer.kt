@@ -29,22 +29,30 @@ internal fun sqliteJdbcUrl(dbPath: String?): String {
     return "jdbc:sqlite:$path?$params"
 }
 
+/**
+ * Builds the single-connection SQLite [DataSourceConfig] (option A): SQLite is single-writer, so
+ * constraining the pool to exactly one connection makes the whole concurrency story trivially
+ * correct and removes the multi-connection pool deadlock that IMMEDIATE transactions caused
+ * against the default pool. Extracted as a pure function so `minConnections`/`maxConnections`
+ * staying at 1 is unit-testable without building a real database.
+ */
+internal fun sqliteDataSourceConfig(dbPath: String?): DataSourceConfig {
+    val dataSourceConfig = DataSourceConfig()
+    dataSourceConfig.url = sqliteJdbcUrl(dbPath)
+    dataSourceConfig.driver = "org.sqlite.JDBC"
+    dataSourceConfig.username = "sa"
+    dataSourceConfig.password = ""
+    dataSourceConfig.minConnections = 1
+    dataSourceConfig.maxConnections = 1
+    return dataSourceConfig
+}
+
 @ApplicationScoped
 class EbeanDatabaseProducer {
     @Produces
     @Singleton
     fun produceDatabase(): Database {
-        val dataSourceConfig = DataSourceConfig()
-        dataSourceConfig.url = sqliteJdbcUrl(System.getenv("DB_PATH"))
-        dataSourceConfig.driver = "org.sqlite.JDBC"
-        dataSourceConfig.username = "sa"
-        dataSourceConfig.password = ""
-        // Single-connection datasource (option A): SQLite is single-writer, so one connection
-        // makes the whole concurrency story trivially correct and removes the multi-connection
-        // pool deadlock that IMMEDIATE transactions caused against the default pool.
-        dataSourceConfig.minConnections = 1
-        dataSourceConfig.maxConnections = 1
-
+        val dataSourceConfig = sqliteDataSourceConfig(System.getenv("DB_PATH"))
         return Database
             .builder()
             .defaultDatabase(true)
