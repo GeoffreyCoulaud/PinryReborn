@@ -8,11 +8,18 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
+@Suppress("TooManyFunctions")
 interface TaskQueueInterface {
-    /** Insert a PENDING task. If [NewTask.dedupKey] matches a live (PENDING/RUNNING) task, returns that existing task without inserting. */
+    /**
+     * Insert a PENDING task. If [NewTask.dedupKey] matches a live (PENDING/RUNNING) task,
+     * returns that existing task without inserting.
+     */
     fun enqueue(task: NewTask): Task
 
-    /** Atomically claim the highest-priority, earliest-available PENDING task whose availableAt <= now, flipping it to RUNNING with a fresh lease. Returns null if none. */
+    /**
+     * Atomically claim the highest-priority, earliest-available PENDING task whose
+     * availableAt <= now, flipping it to RUNNING with a fresh lease. Returns null if none.
+     */
     fun claimNext(now: Instant, leaseDuration: Duration): ClaimedTask?
 
     /** Fenced settle to SUCCEEDED. Returns false if the lease no longer matches (fenced). */
@@ -24,7 +31,10 @@ interface TaskQueueInterface {
     /** Fenced settle to DEAD. */
     fun markDead(id: UUID, leaseId: String, now: Instant, lastError: String?): Boolean
 
-    /** Fenced: if cancelRequested is set on the leased row, settle to CANCELLED and return true; otherwise return false. */
+    /**
+     * Fenced: if cancelRequested is set on the leased row, settle to CANCELLED and return
+     * true; otherwise return false.
+     */
     fun markCancelledIfRequested(id: UUID, leaseId: String, now: Instant): Boolean
 
     /** Cancel a PENDING task (guarded WHERE state=PENDING). Returns true if it was cancelled. */
