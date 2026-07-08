@@ -21,7 +21,7 @@ allprojects {
 
 subprojects {
     apply(plugin = "java")
-    apply(plugin = "io.gitlab.arturbosch.detekt")
+    apply(plugin = "dev.detekt")
 
     extensions.configure<JavaPluginExtension> {
         toolchain {
@@ -57,7 +57,7 @@ subprojects {
         jvmArgs("--enable-native-access=ALL-UNNAMED")
     }
 
-    extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
+    extensions.configure<dev.detekt.gradle.extensions.DetektExtension> {
         buildUponDefaultConfig = true
         config.setFrom("$rootDir/config/detekt/detekt.yml")
         // Baselines are per-module: a single shared file cannot work because each
@@ -69,11 +69,9 @@ subprojects {
         source.from("src/testFixtures/kotlin")
     }
 
-    // detekt 1.23.8's bundled analyzer caps --jvm-target at 22 and otherwise derives
-    // it from the Java toolchain (now 25), which it rejects. Pin it to the bytecode
-    // floor (21). (detekt also cannot run in a JDK 25 daemon at all, so the lint CI
-    // job runs its Gradle daemon on 21; see .github/workflows/validate.yml.)
-    tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    // Analyse against the Java 21 bytecode floor (matches the Kotlin jvmTarget above),
+    // even though detekt 2.0 itself runs on the JDK 25 toolchain.
+    tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
         jvmTarget = "21"
     }
 

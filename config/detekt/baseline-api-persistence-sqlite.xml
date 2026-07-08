@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:ModelPaginationHelper.kt$ModelPaginationHelper$fun getPage( cursor: ModelCursor&lt;M&gt;?, pageSize: Int, baseQuery: Q, sortStrategy: ModelSortStrategy&lt;M, Q&gt;, ): ModelPage&lt;M&gt;</ID>
-    <ID>TooManyFunctions:PinRepository.kt$PinRepository : PinRepositoryInterface</ID>
+    <ID>CyclomaticComplexMethod:ModelPaginationHelper.kt:ModelPaginationHelper$fun getPage: ModelPage&lt;M&gt;</ID>
   </CurrentIssues>
 </SmellBaseline>
