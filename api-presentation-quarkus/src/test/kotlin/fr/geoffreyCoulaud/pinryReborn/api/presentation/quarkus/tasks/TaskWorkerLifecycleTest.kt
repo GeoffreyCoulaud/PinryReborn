@@ -26,12 +26,25 @@ class TaskWorkerLifecycleTest {
     }
 
     @Test
-    fun `Given startup, Then it reaps orphans and schedules polling`() {
+    fun `Given startup, Then it reaps orphans and schedules both polling and periodic reaping`() {
+        // Given
+        every { config.leaseDuration() } returns Duration.ofSeconds(2)
         // When
         lifecycle().start()
         // Then
         verify { reap.reap() }
         verify { scheduler.scheduleWithFixedDelay(any(), 0L, 1000L, TimeUnit.MILLISECONDS) }
+        verify { scheduler.scheduleWithFixedDelay(any(), 1000L, 1000L, TimeUnit.MILLISECONDS) }
+    }
+
+    @Test
+    fun `Given a lease duration shorter than 2ms, Then the reap interval is clamped to at least 1ms`() {
+        // Given
+        every { config.leaseDuration() } returns Duration.ZERO
+        // When
+        lifecycle().start()
+        // Then
+        verify { scheduler.scheduleWithFixedDelay(any(), 1L, 1L, TimeUnit.MILLISECONDS) }
     }
 
     @Test
@@ -51,6 +64,25 @@ class TaskWorkerLifecycleTest {
         lifecycle().safePoll()
         // Then
         verify(exactly = 1) { dispatcher.pollOnce() }
+    }
+
+    @Test
+    fun `Given a reap failure, Then safeReap swallows it`() {
+        // Given
+        every { reap.reap() } throws RuntimeException("boom")
+        // When / Then (no exception escapes)
+        lifecycle().safeReap()
+        verify { reap.reap() }
+    }
+
+    @Test
+    fun `Given a clean reap, Then safeReap delegates once`() {
+        // Given
+        every { reap.reap() } returns 0
+        // When
+        lifecycle().safeReap()
+        // Then
+        verify(exactly = 1) { reap.reap() }
     }
 
     @Test
@@ -75,6 +107,8 @@ class TaskWorkerLifecycleTest {
 
     @Test
     fun `Given the CDI startup event, Then onStart delegates to start`() {
+        // Given
+        every { config.leaseDuration() } returns Duration.ofSeconds(2)
         // When
         lifecycle().onStart(mockk<StartupEvent>())
         // Then
