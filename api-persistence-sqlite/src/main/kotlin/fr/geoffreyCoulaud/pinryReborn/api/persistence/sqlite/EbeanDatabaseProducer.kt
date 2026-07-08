@@ -8,10 +8,22 @@ import jakarta.inject.Singleton
 
 /**
  * Builds the SQLite JDBC URL from the (nullable) `DB_PATH` value, falling back to `data.db`
- * when it is absent. Extracted as a pure function so the fallback branch is unit-testable
- * without touching the process environment or building a real database.
+ * when it is absent, and appends the queue's connection-level pragmas (WAL journal mode,
+ * `synchronous=NORMAL`, a busy timeout, and `IMMEDIATE` transactions) as query parameters that
+ * the xerial sqlite-jdbc driver reads into its `SQLiteConfig`. Extracted as a pure function so
+ * the fallback branch is unit-testable without touching the process environment or building a
+ * real database.
  */
-internal fun sqliteJdbcUrl(dbPath: String?): String = "jdbc:sqlite:${dbPath ?: "data.db"}"
+internal fun sqliteJdbcUrl(dbPath: String?): String {
+    val path = dbPath ?: "data.db"
+    val params = listOf(
+        "journal_mode=WAL",
+        "synchronous=NORMAL",
+        "busy_timeout=5000",
+        "transaction_mode=IMMEDIATE",
+    ).joinToString("&")
+    return "jdbc:sqlite:$path?$params"
+}
 
 @ApplicationScoped
 class EbeanDatabaseProducer {
