@@ -191,6 +191,53 @@ class PinRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given soft-deleted pin, Then findAllSoftDeletedPinsForUser includes it`() {
+        // Given
+        val user = createAndSaveUser()
+        createAndSavePin(user)
+        val softDeletedPin = createAndSavePin(user)
+        repository.softDeletePin(softDeletedPin)
+
+        // When
+        val pins = repository.findAllSoftDeletedPinsForUser(user)
+
+        // Then
+        assertEquals(1, pins.size)
+        assertEquals(softDeletedPin.id, pins[0].id)
+    }
+
+    @Test
+    fun `Given no soft-deleted pins, Then findAllSoftDeletedPinsForUser returns an empty list`() {
+        // Given
+        val user = createAndSaveUser()
+        createAndSavePin(user)
+
+        // When
+        val pins = repository.findAllSoftDeletedPinsForUser(user)
+
+        // Then
+        assertTrue(pins.isEmpty())
+    }
+
+    @Test
+    fun `Given another user's soft-deleted pin, Then findAllSoftDeletedPinsForUser excludes it`() {
+        // Given
+        val userA = createAndSaveUser()
+        val userB = createAndSaveUser()
+        val userASoftDeletedPin = createAndSavePin(userA)
+        repository.softDeletePin(userASoftDeletedPin)
+        val userBSoftDeletedPin = createAndSavePin(userB)
+        repository.softDeletePin(userBSoftDeletedPin)
+
+        // When
+        val pins = repository.findAllSoftDeletedPinsForUser(userA)
+
+        // Then
+        assertEquals(1, pins.size)
+        assertEquals(userASoftDeletedPin.id, pins[0].id)
+    }
+
+    @Test
     fun `Given soft-deleted pin, Then findSoftDeletedPinsForUser includes it`() {
         // Given
         val user = createAndSaveUser()
