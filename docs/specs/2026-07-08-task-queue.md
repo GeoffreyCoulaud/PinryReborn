@@ -202,7 +202,8 @@ Because the whole IMMEDIATE transaction holds the write lock, no other worker ca
 between the select and the update: the guarantee that Postgres needs `SKIP LOCKED` for is
 free here.
 
-**Ebean mapping (no raw SQL).** Verified against the Ebean 17.2.0 sources:
+**Ebean mapping (no raw SQL).** Verified against the Ebean 19.2.0 sources (the version in
+`libs.versions.toml`):
 
 - **Claim**: `QTask().state.eq(PENDING).availableAt.le(now).orderBy()...setMaxRows(1).findOneOrEmpty()`,
   then mutate the fetched bean (`state`, `leaseId`, `leaseExpiresAt`, `attempts++`) and
@@ -440,7 +441,7 @@ first under TDD:
 - **Runtime module placement**: v1 puts the worker runtime in `api-presentation-quarkus`
   (in-gate, correct adapter role). If it grows, extract a dedicated `api-task-runtime`
   module. Flagged for operator sign-off.
-- **Ebean typed API is sufficient (confirmed on the 17.2.0 sources)**: `UpdateQuery` gives
+- **Ebean typed API is sufficient (confirmed on the 19.2.0 sources)**: `UpdateQuery` gives
   typed `set`/`setRaw`/`where`/`update()`-with-row-count (the fencing signal), and query
   beans give `setMaxRows(1)`/`findOneOrEmpty()` for the claim. No raw SQL needed. The one item
   still to confirm during implementation is the **IMMEDIATE begin-mode wiring** (sqlite-jdbc
