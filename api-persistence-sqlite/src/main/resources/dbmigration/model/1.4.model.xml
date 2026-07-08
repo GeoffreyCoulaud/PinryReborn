@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createTable name="images" identityType="external" pkName="pk_images">
+            <column name="id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="pin_id" type="uuid" notnull="true" unique="uq_images_pin_id"/>
+            <column name="mime_type" type="varchar" notnull="true"/>
+            <column name="width" type="integer" notnull="true"/>
+            <column name="height" type="integer" notnull="true"/>
+            <column name="byte_size" type="bigint" notnull="true"/>
+            <column name="content_hash" type="varchar" notnull="true"/>
+            <column name="storage_key" type="varchar" notnull="true"/>
+            <column name="created_at" type="timestamp" notnull="true"/>
+        </createTable>
+        <alterColumn columnName="source_media_url" tableName="pins" currentType="varchar" notnull="false" currentNotnull="true"/>
+    </changeSet>
+</migration>
