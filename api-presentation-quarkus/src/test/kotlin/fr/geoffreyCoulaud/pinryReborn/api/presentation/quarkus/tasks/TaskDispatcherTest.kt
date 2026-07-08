@@ -8,6 +8,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID.randomUUID
@@ -76,5 +77,17 @@ class TaskDispatcherTest {
         d.pollOnce()
         // Then
         verify(exactly = 0) { queue.claimNext(any(), any()) }
+    }
+
+    @Test
+    fun `Given claimNext throws, Then the acquired permit is released`() {
+        // Given
+        every { executor.tryAcquire() } returns true
+        every { queue.claimNext(any(), any()) } throws IllegalStateException("boom")
+        every { executor.release() } returns Unit
+        // When
+        assertThrows<IllegalStateException> { dispatcher().pollOnce() }
+        // Then
+        verify(exactly = 1) { executor.release() }
     }
 }
