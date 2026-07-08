@@ -7,8 +7,9 @@ data class Pin(
     override val id: UUID,
     val author: User,
     val sourceContextUrl: String,
-    val sourceMediaUrl: String,
+    val sourceMediaUrl: String?,
     val description: String,
     val tags: List<Tag>,
     val softDeletedAt: Instant? = null,
+    val image: Image? = null,
 ) : Identifiable

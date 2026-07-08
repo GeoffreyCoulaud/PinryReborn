@@ -12,7 +12,7 @@ class PinModel(
     id: UUID,
     author: UserModel,
     var sourceContextUrl: String,
-    var sourceMediaUrl: String,
+    var sourceMediaUrl: String?,
     var description: String,
     var softDeletedAt: Instant? = null,
 ) : AuthoredBaseModel(

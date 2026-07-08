@@ -7,7 +7,7 @@ data class PinOutputDto(
     val id: UUID,
     val authorId: UUID,
     val sourceContextUrl: String,
-    val sourceMediaUrl: String,
+    val sourceMediaUrl: String?,
     val description: String,
     val tags: List<TagOutputDto>,
     val softDeletedAt: Instant? = null,
