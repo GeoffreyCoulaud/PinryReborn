@@ -451,3 +451,52 @@ first under TDD:
   shutdown deadline branches need deliberate seams to cover both sides without flakiness.
 - **`@Version` + fencing interplay**: ensure the optimistic-lock back-stop does not turn a
   legitimate fenced no-op into a thrown `OptimisticLockException` we fail to handle.
+
+## 21. Amendments during implementation (2026-07-08)
+
+Deviations from the sections above, decided during the build and operator-approved. These
+supersede the earlier text where they conflict.
+
+- **Connection model: single-connection datasource (option A), NOT `transaction_mode=IMMEDIATE`
+  + multi-connection pool.** Setting `IMMEDIATE` as a connection-wide pragma makes *every*
+  transaction (including reads) take SQLite's single write lock at `BEGIN`; with Ebean's default
+  multi-connection pool the connections contend for that one lock and the pool self-deadlocks.
+  Resolution: constrain the Ebean datasource to a single connection
+  (`DataSourceConfig.minConnections = maxConnections = 1`) and DROP `transaction_mode=IMMEDIATE`.
+  Claim atomicity (§7) is instead achieved by wrapping the claim's `findOne` + `save` (and
+  `enqueue`'s dedup check + insert) in ONE explicit Ebean transaction
+  (`database.beginTransaction().use { … commit() }`); on the single connection the whole claim
+  serializes. Kept pragmas: `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000`.
+  This makes the concurrency story trivially correct at the cost of REST-vs-queue read
+  concurrency (acceptable for a single-node self-hosted deployment; revisit if read throughput
+  bottlenecks). `@Version` is retained purely as a back-stop.
+- **Bulk `UpdateQuery` fencing (§7) needs no `@Version` handling.** Settles/reap/cancel are bulk
+  updates guarded by `id + leaseId`; a fenced update reports `0` rows and returns `false` (no
+  `OptimisticLockException` thrown) — the §20 open point is resolved.
+- **Periodic reaper (§8) IS implemented.** The runtime schedules `reapExpired` every
+  `leaseDuration / 2` (plus a one-time boot sweep), matching §8's "periodic sweep" intent.
+- **Dispatcher acquires a worker permit *before* claiming.** To avoid orphaning a claimed
+  task when the worker pool is at capacity, `pollOnce` reserves a permit
+  (`WorkerExecutor.tryAcquire()`) before `claimNext`; it releases the permit if the queue is
+  empty or if the claim throws, and submits (permit consumed) only for a task it actually
+  claimed. This replaces the earlier "claim then trySubmit, over-claim reaped later" sketch,
+  which (combined with a non-periodic reaper) could strand tasks under sustained backlog.
+- **Test DB fixed to isolated in-memory single-connection.** Repository tests were silently
+  running against an on-disk `data.db` because the override file was misnamed
+  `ebean-test.properties` (avaje-config expects `application-test.properties`). Renamed and set
+  to `jdbc:sqlite::memory:` with one connection.
+- **Config keys are underscore SNAKE_CASE** (`tasks.worker_count`, …) to match the
+  `@ConfigMapping(SNAKE_CASE)` strategy, with `@WithDefault` on every accessor so the app boots
+  without a properties file.
+- **`pollScheduler` needs `@Identifier("task-poll-scheduler")`** on both producer and injection
+  point to avoid colliding with Quarkus's built-in `@Default ScheduledExecutorService`.
+- **Transactional-outbox enqueue (§11) is DEFERRED to sub-project 2.** `enqueue` currently
+  opens its own transaction (dedup-safe on the single connection, backstopped by the
+  `ux_tasks_dedup` partial-unique index). Enqueuing within a *caller's* transaction (the outbox
+  guarantee: create Pin + enqueue download atomically) needs an additive
+  `currentTransaction()`-aware variant; there is no domain-write caller yet, so it lands with
+  the `pin.download` handler. The §11/§16/§17 "transactional enqueue" scope is therefore
+  partially realized in v1 (own-transaction + dedup) and completed in sub-project 2.
+- **Micrometer metrics (§14) DEFERRED** to a fast follow-up; v1 observability is structured
+  logging on state transitions (the presentation-layer `TaskWorkerLifecycle`). Queue-depth /
+  DEAD-rate gauges are a small additive task over the existing `countByState` port method.
