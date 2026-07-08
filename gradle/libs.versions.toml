@@ -20,6 +20,7 @@ rest-assured = "6.0.0"
 detekt = "2.0.0-alpha.5"
 kover = "0.9.8"
 konsist = "0.17.3"
+vips-ffm = "1.9.8"
 
 [libraries]
 # Testing
@@ -74,6 +75,8 @@ kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8" }
 
 jbcrypt = { module = "org.mindrot:jbcrypt", version.ref = "jbcrypt" }
 commons-text = { module = "org.apache.commons:commons-text", version.ref = "commons-text" }
+
+vips-ffm-core = { module = "app.photofox.vips-ffm:vips-ffm-core", version.ref = "vips-ffm" }
 
 [bundles]
 testing = [

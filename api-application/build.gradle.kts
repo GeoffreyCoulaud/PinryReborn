@@ -10,6 +10,8 @@ dependencies {
     implementation(project(":api-usecases"))
     implementation(project(":api-persistence-sqlite"))
     implementation(project(":api-presentation-quarkus"))
+    implementation(project(":api-storage-filesystem"))
+    implementation(project(":api-imaging-vips"))
 
     // BOM
     implementation(enforcedPlatform(libs.quarkus.bom))
