@@ -3,7 +3,6 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
-import jakarta.enterprise.context.ApplicationScoped
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
@@ -22,8 +21,13 @@ import java.util.HexFormat
  * [dataDir] is a plain string (not injected) so this class stays framework-light and
  * unit-testable with a temp directory; CDI wiring of the actual data directory is done by
  * a producer elsewhere.
+ *
+ * Deliberately NOT `@ApplicationScoped`: ARC cannot satisfy a plain `String` constructor
+ * parameter on its own, so this class is instantiated exclusively by
+ * `ImageAdapterProducers` (`api-presentation-quarkus`), which resolves `dataDir` from
+ * `ImagesConfig`. Adding `@ApplicationScoped` back here alongside that `@Produces` method
+ * would create an ambiguous `ImageStore` bean resolution.
  */
-@ApplicationScoped
 class FilesystemImageStore(private val dataDir: String) : ImageStore {
 
     private companion object {
