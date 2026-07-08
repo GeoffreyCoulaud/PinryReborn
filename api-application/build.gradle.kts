@@ -19,6 +19,7 @@ dependencies {
     implementation(libs.quarkus.smallrye.openapi)
     implementation(libs.quarkus.smallrye.health)
     implementation(libs.quarkus.hibernate.validator)
+    implementation(libs.quarkus.micrometer.registry.prometheus)
     implementation(libs.kotlin.stdlib)
 
     // Logging
