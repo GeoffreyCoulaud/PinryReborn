@@ -48,7 +48,7 @@ persistence implementations.
 ## Key Technologies
 
 - **Quarkus 3** - REST framework with Jakarta REST, HTTP Basic Auth via Quarkus Security
-- **Ebean 17** - ORM with Kotlin query beans and SQLite
+- **Ebean 19** - ORM with Kotlin query beans and SQLite
 - **Java 25** (Adoptium)
 - **Testing**: JUnit 5, MockK, REST Assured
 
