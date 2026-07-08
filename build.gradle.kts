@@ -25,13 +25,24 @@ subprojects {
 
     extensions.configure<JavaPluginExtension> {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
             vendor.set(JvmVendorSpec.ADOPTIUM)
         }
+        // Run the toolchain on JDK 25 but emit Java 21 bytecode (see the Kotlin
+        // jvmTarget note below): keeps compileJava consistent with compileKotlin
+        // (Kotlin enforces matching JVM targets) and the bytecode floor at 21 for
+        // tool compatibility (detekt/Kover/Ebean). Raise to 25 once detekt supports it.
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         compilerOptions {
+            // Runtime toolchain is JDK 25 (above), but the bytecode floor stays 21:
+            // detekt 1.23.8's bundled analyzer caps --jvm-target at 22, and Java-21
+            // bytecode runs natively on a JDK 25 runtime. vips-ffm only requires the
+            // runtime to be JDK 23+, which the toolchain satisfies. Raise this to 25
+            // once detekt supports it.
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
             javaParameters.set(true)
         }
@@ -39,6 +50,11 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
+        // sqlite-jdbc loads a native library via the restricted System::load; on JDK 25
+        // this warns ("Restricted methods will be blocked in a future release unless
+        // native access is enabled"). Grant it explicitly so tests run clean and stay
+        // forward-compatible. (The runtime image passes the same flag; see Dockerfile.)
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
     }
 
     extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
@@ -51,6 +67,13 @@ subprojects {
         // Also analyse the java-test-fixtures source set (used by api-utilities)
         // in addition to detekt's default main/test source directories.
         source.from("src/testFixtures/kotlin")
+    }
+
+    // detekt 1.23.8's bundled analyzer caps --jvm-target at 22 and otherwise derives
+    // it from the Java toolchain (now 25), which it rejects. Pin it to the bytecode
+    // floor (21). Raise once detekt supports jvm-target 25.
+    tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+        jvmTarget = "21"
     }
 
     // Branch-coverage gate (Kover). Applied to every module EXCEPT api-application,

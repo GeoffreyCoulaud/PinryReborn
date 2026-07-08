@@ -4,7 +4,7 @@
 # BEFORE `docker build` runs. The JVM jars are architecture-independent, so a
 # single Gradle build feeds every target platform of a multi-arch buildx run.
 #
-# Base is glibc (eclipse-temurin:21-jre), NOT alpine/musl: sqlite-jdbc ships
+# Base is glibc (eclipse-temurin:25-jre), NOT alpine/musl: sqlite-jdbc ships
 # native libraries and glibc is the safe choice to load them, which the smoke
 # test confirms by running the SQLite migrations at startup.
 FROM eclipse-temurin:25-jre
@@ -41,4 +41,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8080/q/health || exit 1
 
-ENTRYPOINT ["java", "-jar", "quarkus-run.jar"]
+# --enable-native-access: sqlite-jdbc loads its native library via the restricted
+# System::load, which JDK 25 warns about and will block in a future release unless
+# native access is granted. (vips-ffm, added later, needs the same grant.)
+ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-jar", "quarkus-run.jar"]
