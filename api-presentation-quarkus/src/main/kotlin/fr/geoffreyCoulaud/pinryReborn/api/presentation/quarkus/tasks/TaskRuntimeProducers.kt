@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.BackoffPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ExponentialBackoffWithJitter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskHandler
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskHandlerRegistry
+import io.smallrye.common.annotation.Identifier
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.inject.Instance
 import jakarta.enterprise.inject.Produces
@@ -33,5 +34,6 @@ class TaskRuntimeProducers {
 
     @Produces
     @ApplicationScoped
+    @Identifier(TASK_POLL_SCHEDULER)
     fun pollScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 }
