@@ -55,7 +55,7 @@ class TaskProcessorTest {
         // When
         p.execute(c)
         // Then
-        verify { queue.markDead(c.id, "lease-1", now, any()) }
+        verify { queue.markDead(c.id, "lease-1", now, "no handler for kind unknown") }
     }
 
     @Test

@@ -20,7 +20,6 @@ rest-assured = "6.0.0"
 detekt = "1.23.8"
 kover = "0.9.8"
 konsist = "0.17.3"
-slf4j = "2.0.18"
 
 [libraries]
 # Testing
@@ -64,7 +63,6 @@ jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
 
 # Logging
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
-slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 slf4j-jboss-logmanager = { module = "org.jboss.slf4j:slf4j-jboss-logmanager" }
 
 # Other

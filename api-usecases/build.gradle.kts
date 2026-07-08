@@ -10,7 +10,6 @@ dependencies {
     implementation(libs.jbcrypt)
     implementation(libs.commons.text)
     implementation(libs.kotlin.logging)
-    implementation(libs.slf4j.api)
     compileOnly(libs.jakarta.cdi.api)
     compileOnly(libs.jakarta.transaction.api)
 

@@ -5,8 +5,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.BackoffPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
-import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.enterprise.context.ApplicationScoped
+import java.time.Instant
 
 /**
  * Executes an already-claimed task through its registered [TaskHandler] and settles it
@@ -37,14 +37,13 @@ class TaskProcessor(
             val outcome = runHandler(handler, claimed.payload)
             val now = clock.now()
             if (taskQueue.markCancelledIfRequested(claimed.id, claimed.leaseId, now)) {
-                logger.info { "task ${claimed.id} cancelled during execution" }
-            } else {
-                settle(claimed, outcome, now)
+                return
             }
+            settle(claimed, outcome, now)
         }
     }
 
-    private fun settle(claimed: ClaimedTask, outcome: Outcome, now: java.time.Instant) {
+    private fun settle(claimed: ClaimedTask, outcome: Outcome, now: Instant) {
         when (outcome) {
             is Success -> taskQueue.markSucceeded(claimed.id, claimed.leaseId, now)
             is Permanent -> taskQueue.markDead(claimed.id, claimed.leaseId, now, outcome.message)
@@ -58,20 +57,14 @@ class TaskProcessor(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught", "UnsafeCallOnNullableType")
+    @Suppress("TooGenericExceptionCaught")
     private fun runHandler(handler: TaskHandler, payload: String): Outcome =
         try {
             handler.handle(payload)
             Success
         } catch (e: PermanentTaskException) {
-            // PermanentTaskException(message: String) guarantees a non-null message; the `!!`
-            // documents that invariant without an unreachable (and uncoverable) `?:` fallback branch.
-            Permanent(e.message!!)
+            Permanent(e.reason)
         } catch (e: Exception) {
             Retryable(e.message ?: "transient failure")
         }
-
-    private companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 }
