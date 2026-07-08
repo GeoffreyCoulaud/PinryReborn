@@ -21,7 +21,10 @@ internal const val TASK_POLL_SCHEDULER = "task-poll-scheduler"
 
 /**
  * Drives the task worker lifecycle: sweeps orphaned leases and starts the poll loop on
- * application startup, and stops claiming new work and drains in-flight workers on shutdown.
+ * application startup, keeps sweeping expired leases periodically (at half the lease
+ * duration) so tasks stuck behind a crashed/hung worker are recovered at runtime rather
+ * than only at the next boot, and stops claiming new work and drains in-flight workers
+ * on shutdown.
  */
 @ApplicationScoped
 class TaskWorkerLifecycle(
@@ -47,6 +50,13 @@ class TaskWorkerLifecycle(
             config.pollInterval().toMillis(),
             TimeUnit.MILLISECONDS,
         )
+        val reapIntervalMs = (config.leaseDuration().toMillis() / 2).coerceAtLeast(1)
+        pollScheduler.scheduleWithFixedDelay(
+            { safeReap() },
+            reapIntervalMs,
+            reapIntervalMs,
+            TimeUnit.MILLISECONDS,
+        )
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -55,6 +65,15 @@ class TaskWorkerLifecycle(
             dispatcher.pollOnce()
         } catch (e: Exception) {
             logger.error(e) { "task poll failed" }
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    fun safeReap() {
+        try {
+            reapExpiredTasks.reap()
+        } catch (e: Exception) {
+            logger.error(e) { "task reap failed" }
         }
     }
 
