@@ -1,14 +1,17 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Covers the `DB_PATH ?: "data.db"` fallback branch via the pure [sqliteJdbcUrl] helper, so no
- * process-environment mocking (e.g. `mockkStatic(System::class)`, which deadlocks the test JVM)
- * and no real database build are needed.
+ * Covers the `DB_PATH ?: "data.db"` fallback branch and the queue pragma suffix via the pure
+ * [sqliteJdbcUrl] helper, so no process-environment mocking (e.g. `mockkStatic(System::class)`,
+ * which deadlocks the test JVM) and no real database build are needed.
  */
 class EbeanDatabaseProducerTest {
+    private val pragmas = "journal_mode=WAL&synchronous=NORMAL&busy_timeout=5000&transaction_mode=IMMEDIATE"
+
     @Test
     fun `Given a DB path, Then the JDBC URL uses it`() {
         // Given
@@ -18,7 +21,7 @@ class EbeanDatabaseProducerTest {
         val url = sqliteJdbcUrl(dbPath)
 
         // Then
-        assertEquals("jdbc:sqlite:/tmp/custom-pinry-reborn.db", url)
+        assertEquals("jdbc:sqlite:/tmp/custom-pinry-reborn.db?$pragmas", url)
     }
 
     @Test
@@ -27,6 +30,18 @@ class EbeanDatabaseProducerTest {
         val url = sqliteJdbcUrl(null)
 
         // Then
-        assertEquals("jdbc:sqlite:data.db", url)
+        assertEquals("jdbc:sqlite:data.db?$pragmas", url)
+    }
+
+    @Test
+    fun `Given a db path, Then the JDBC URL carries the queue pragmas`() {
+        // When
+        val url = sqliteJdbcUrl("data.db")
+        // Then
+        assertTrue(url.startsWith("jdbc:sqlite:data.db"))
+        assertTrue(url.contains("journal_mode=WAL"))
+        assertTrue(url.contains("busy_timeout=5000"))
+        assertTrue(url.contains("synchronous=NORMAL"))
+        assertTrue(url.contains("transaction_mode=IMMEDIATE"))
     }
 }
