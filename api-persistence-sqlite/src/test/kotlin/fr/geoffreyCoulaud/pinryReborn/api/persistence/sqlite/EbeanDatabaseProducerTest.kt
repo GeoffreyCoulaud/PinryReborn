@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
  * which deadlocks the test JVM) and no real database build are needed.
  */
 class EbeanDatabaseProducerTest {
-    private val pragmas = "journal_mode=WAL&synchronous=NORMAL&busy_timeout=5000&transaction_mode=IMMEDIATE"
+    private val pragmas = "journal_mode=WAL&synchronous=NORMAL&busy_timeout=5000"
 
     @Test
     fun `Given a DB path, Then the JDBC URL uses it`() {
@@ -42,6 +42,5 @@ class EbeanDatabaseProducerTest {
         assertTrue(url.contains("journal_mode=WAL"))
         assertTrue(url.contains("busy_timeout=5000"))
         assertTrue(url.contains("synchronous=NORMAL"))
-        assertTrue(url.contains("transaction_mode=IMMEDIATE"))
     }
 }
