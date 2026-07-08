@@ -7,9 +7,12 @@ import jakarta.enterprise.context.ApplicationScoped
 
 /**
  * Polls the task queue for claimable work and hands each claimed task off to the
- * [WorkerExecutor]. One [pollOnce] call performs a single tick: it claims and submits
- * tasks until either the queue is empty, the worker pool is at capacity, or draining
- * has been requested via [stopClaiming].
+ * [WorkerExecutor]. One [pollOnce] call performs a single tick: it reserves a worker
+ * slot *before* claiming ([WorkerExecutor.tryAcquire]) so a claimed task (already
+ * flipped to RUNNING with a lease) is never left without a worker to run it. It stops
+ * claiming once either the worker pool is at capacity, the queue is empty (giving back
+ * the reserved slot via [WorkerExecutor.release]), or draining has been requested via
+ * [stopClaiming].
  */
 @ApplicationScoped
 class TaskDispatcher(
@@ -29,9 +32,13 @@ class TaskDispatcher(
     @Suppress("LoopWithTooManyJumpStatements")
     fun pollOnce() {
         while (!draining) {
-            val claimed = taskQueue.claimNext(clock.now(), config.leaseDuration()) ?: break
-            val submitted = workerExecutor.trySubmit { taskProcessor.execute(claimed) }
-            if (!submitted) break
+            if (!workerExecutor.tryAcquire()) break
+            val claimed = taskQueue.claimNext(clock.now(), config.leaseDuration())
+            if (claimed == null) {
+                workerExecutor.release()
+                break
+            }
+            workerExecutor.submit { taskProcessor.execute(claimed) }
         }
     }
 }
