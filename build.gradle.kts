@@ -71,7 +71,8 @@ subprojects {
 
     // detekt 1.23.8's bundled analyzer caps --jvm-target at 22 and otherwise derives
     // it from the Java toolchain (now 25), which it rejects. Pin it to the bytecode
-    // floor (21). Raise once detekt supports jvm-target 25.
+    // floor (21). (detekt also cannot run in a JDK 25 daemon at all, so the lint CI
+    // job runs its Gradle daemon on 21; see .github/workflows/validate.yml.)
     tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
         jvmTarget = "21"
     }
