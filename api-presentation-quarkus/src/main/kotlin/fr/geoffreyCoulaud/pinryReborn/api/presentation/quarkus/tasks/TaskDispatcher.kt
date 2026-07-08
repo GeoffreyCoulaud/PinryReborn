@@ -12,7 +12,9 @@ import jakarta.enterprise.context.ApplicationScoped
  * flipped to RUNNING with a lease) is never left without a worker to run it. It stops
  * claiming once either the worker pool is at capacity, the queue is empty (giving back
  * the reserved slot via [WorkerExecutor.release]), or draining has been requested via
- * [stopClaiming].
+ * [stopClaiming]. If claiming itself throws (e.g. a persistence error under write
+ * contention), the reserved slot is released before the exception propagates, so a
+ * failed claim never leaks a permit.
  */
 @ApplicationScoped
 class TaskDispatcher(
@@ -29,11 +31,17 @@ class TaskDispatcher(
         draining = true
     }
 
-    @Suppress("LoopWithTooManyJumpStatements")
+    @Suppress("LoopWithTooManyJumpStatements", "TooGenericExceptionCaught")
     fun pollOnce() {
         while (!draining) {
             if (!workerExecutor.tryAcquire()) break
-            val claimed = taskQueue.claimNext(clock.now(), config.leaseDuration())
+            val claimed =
+                try {
+                    taskQueue.claimNext(clock.now(), config.leaseDuration())
+                } catch (e: Exception) {
+                    workerExecutor.release()
+                    throw e
+                }
             if (claimed == null) {
                 workerExecutor.release()
                 break
