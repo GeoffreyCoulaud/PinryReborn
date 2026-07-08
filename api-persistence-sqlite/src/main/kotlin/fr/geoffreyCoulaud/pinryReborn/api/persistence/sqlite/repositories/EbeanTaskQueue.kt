@@ -22,6 +22,11 @@ import java.util.UUID.randomUUID
  * using the row-count returned by [io.ebean.UpdateQuery.update] as the success signal instead
  * of loading, mutating and saving the entity. This avoids racing with a concurrent claim/settle
  * on the same row.
+ *
+ * [enqueue]'s dedup check-then-insert and [claimNext]'s select-then-update are each wrapped in a
+ * single explicit [io.ebean.Transaction] (`database.beginTransaction()`), so on the single-connection
+ * SQLite datasource the whole read+write pair serializes atomically instead of racing across two
+ * separate auto-commit statements.
  */
 @ApplicationScoped
 // TaskQueueInterface itself has exactly 11 methods (the port's minimal surface); a full,
@@ -32,30 +37,35 @@ import java.util.UUID.randomUUID
 class EbeanTaskQueue(
     private val database: Database,
 ) : TaskQueueInterface {
-    override fun enqueue(task: NewTask): Task {
-        if (task.dedupKey != null) {
-            val existing =
-                QTaskModel(database)
-                    .dedupKey.equalTo(task.dedupKey)
-                    .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
-                    .findOne()
-            if (existing != null) return existing.toDomain()
+    override fun enqueue(task: NewTask): Task =
+        database.beginTransaction().use { transaction ->
+            if (task.dedupKey != null) {
+                val existing =
+                    QTaskModel(database)
+                        .dedupKey.equalTo(task.dedupKey)
+                        .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
+                        .findOne()
+                if (existing != null) {
+                    transaction.commit()
+                    return@use existing.toDomain()
+                }
+            }
+            val model =
+                TaskModel(
+                    id = randomUUID(),
+                    kind = task.kind,
+                    payload = task.payload,
+                    state = TaskState.PENDING.name,
+                    priority = task.priority,
+                    availableAt = task.availableAt,
+                    attempts = 0,
+                    maxAttempts = task.maxAttempts,
+                    dedupKey = task.dedupKey,
+                )
+            database.save(model)
+            transaction.commit()
+            model.toDomain()
         }
-        val model =
-            TaskModel(
-                id = randomUUID(),
-                kind = task.kind,
-                payload = task.payload,
-                state = TaskState.PENDING.name,
-                priority = task.priority,
-                availableAt = task.availableAt,
-                attempts = 0,
-                maxAttempts = task.maxAttempts,
-                dedupKey = task.dedupKey,
-            )
-        database.save(model)
-        return model.toDomain()
-    }
 
     override fun findById(id: UUID): Task? = QTaskModel(database).id.equalTo(id).findOne()?.toDomain()
 
@@ -64,31 +74,36 @@ class EbeanTaskQueue(
     override fun claimNext(
         now: Instant,
         leaseDuration: Duration,
-    ): ClaimedTask? {
-        val model =
-            QTaskModel(database)
-                .state.equalTo(TaskState.PENDING.name)
-                .availableAt.le(now)
-                .orderBy("priority desc, availableAt asc, id asc")
-                .setMaxRows(1)
-                .findOne()
-                ?: return null
-        val leaseId = randomUUID().toString()
-        model.state = TaskState.RUNNING.name
-        model.leaseId = leaseId
-        model.leaseExpiresAt = now.plus(leaseDuration)
-        model.attempts += 1
-        database.save(model)
-        return ClaimedTask(
-            id = model.id,
-            kind = model.kind,
-            payload = model.payload,
-            attempts = model.attempts,
-            maxAttempts = model.maxAttempts,
-            leaseId = leaseId,
-            cancelRequested = model.cancelRequested,
-        )
-    }
+    ): ClaimedTask? =
+        database.beginTransaction().use { transaction ->
+            val model =
+                QTaskModel(database)
+                    .state.equalTo(TaskState.PENDING.name)
+                    .availableAt.le(now)
+                    .orderBy("priority desc, availableAt asc, id asc")
+                    .setMaxRows(1)
+                    .findOne()
+            if (model == null) {
+                transaction.commit()
+                return@use null
+            }
+            val leaseId = randomUUID().toString()
+            model.state = TaskState.RUNNING.name
+            model.leaseId = leaseId
+            model.leaseExpiresAt = now.plus(leaseDuration)
+            model.attempts += 1
+            database.save(model)
+            transaction.commit()
+            ClaimedTask(
+                id = model.id,
+                kind = model.kind,
+                payload = model.payload,
+                attempts = model.attempts,
+                maxAttempts = model.maxAttempts,
+                leaseId = leaseId,
+                cancelRequested = model.cancelRequested,
+            )
+        }
 
     override fun markSucceeded(
         id: UUID,
