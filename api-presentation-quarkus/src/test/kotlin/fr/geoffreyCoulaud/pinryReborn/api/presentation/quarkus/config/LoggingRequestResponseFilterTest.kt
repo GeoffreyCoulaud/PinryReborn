@@ -3,8 +3,10 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import jakarta.ws.rs.container.ContainerRequestContext
 import jakarta.ws.rs.container.ContainerResponseContext
+import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.MultivaluedHashMap
 import jakarta.ws.rs.core.UriInfo
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
@@ -44,11 +46,36 @@ class LoggingRequestResponseFilterTest {
             ctx.headers
         } returns MultivaluedHashMap<String, String>().apply { add("Content-Type", "application/json") }
         every { ctx.hasEntity() } returns true
+        every { ctx.mediaType } returns MediaType.valueOf("application/json")
         every { ctx.entityStream } returns ByteArrayInputStream(bodyBytes)
         every { ctx.entityStream = any() } answers { }
 
         // When, Then
         assertDoesNotThrow { filter.requestFilter(ctx) }
+    }
+
+    @Test
+    fun `Given a multipart request, Then requestFilter does not read the entity stream`() {
+        // Given - a canonical-image upload can be up to 32 MiB; buffering it into memory to log
+        // it as UTF-8 garbage would defeat the streaming design, so the entity stream must be
+        // left completely untouched for the multipart parser downstream.
+        val ctx = mockk<ContainerRequestContext>()
+        val uriInfo = mockk<UriInfo>()
+        every { ctx.method } returns "PUT"
+        every { ctx.uriInfo } returns uriInfo
+        every { uriInfo.requestUri } returns URI.create("http://localhost/api/v1/pins/1/image")
+        every {
+            ctx.headers
+        } returns MultivaluedHashMap<String, String>().apply {
+            add("Content-Type", "multipart/form-data; boundary=----WebKitFormBoundary")
+        }
+        every { ctx.hasEntity() } returns true
+        every { ctx.mediaType } returns MediaType.valueOf("multipart/form-data; boundary=----WebKitFormBoundary")
+
+        // When, Then
+        assertDoesNotThrow { filter.requestFilter(ctx) }
+        verify(exactly = 0) { ctx.entityStream }
+        verify(exactly = 0) { ctx.entityStream = any() }
     }
 
     @Test
