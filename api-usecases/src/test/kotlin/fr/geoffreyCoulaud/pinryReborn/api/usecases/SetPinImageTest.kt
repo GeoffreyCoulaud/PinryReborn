@@ -20,7 +20,10 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageTooLargeError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -28,6 +31,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.time.Instant
 import java.util.UUID.randomUUID
 
@@ -118,5 +122,54 @@ class SetPinImageTest : BaseTest() {
         assertThrows(RuntimeException::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
         verify { store.discard(staged) }
         verify(exactly = 0) { images.save(any()) }
+    }
+
+    @Test fun `Given an IO failure during promote, Then it discards the temp and rethrows`() {
+        // FilesystemImageStore.promote throws java.io.IOException (Files.createDirectories /
+        // Files.move), not a RuntimeException; the cleanup catch must cover it too.
+        val p = pin()
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5)
+        every { images.findByPinId(p.id) } returns null
+        every { clock.now() } returns Instant.EPOCH
+        every { store.promote(any(), any()) } throws IOException("disk full")
+
+        assertThrows(IOException::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
+        verify { store.discard(staged) }
+        verify(exactly = 0) { images.save(any()) }
+    }
+
+    @Test fun `Given save fails after a successful promote, Then it discards the temp and deletes the promoted file`() {
+        val p = pin()
+        val storageKeySlot = slot<String>()
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5)
+        every { images.findByPinId(p.id) } returns null
+        every { clock.now() } returns Instant.EPOCH
+        every { store.promote(staged, capture(storageKeySlot)) } just runs
+        every { images.save(any()) } throws RuntimeException("db down")
+
+        assertThrows(RuntimeException::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
+
+        verify { store.discard(staged) }
+        verify { store.delete(storageKeySlot.captured) }
+    }
+
+    @Test fun `Given the old file delete fails during replace, Then the request still succeeds`() {
+        val p = pin()
+        val old = Image(randomUUID(), p.id, "image/png", 1, 1, 1, "old", "originals/o/old.png", Instant.EPOCH)
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2)
+        every { images.findByPinId(p.id) } returns old
+        every { clock.now() } returns Instant.EPOCH
+        every { images.save(any()) } answers { firstArg() }
+        every { store.delete("originals/o/old.png") } throws RuntimeException("locked")
+
+        val result = useCase.set(p.id, owner, upload(), 30, 50)
+
+        assertTrue(result.replaced)
     }
 }

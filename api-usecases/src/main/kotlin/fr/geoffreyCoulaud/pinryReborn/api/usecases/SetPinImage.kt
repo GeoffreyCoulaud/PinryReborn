@@ -60,18 +60,26 @@ class SetPinImage(
             contentHash = staged.contentHash, storageKey = storageKey, createdAt = clock.now(),
         )
         val existing = imageRepository.findByPinId(pinId)
-        // Promote/save can fail for many reasons (I/O failure, DB constraint, disk pressure);
-        // whatever the cause, the staged temp file must never be left behind. Catch broadly,
-        // discard, and rethrow unchanged so the caller still sees the original failure.
+        // Promote/save can fail for many reasons: an I/O failure during promote (disk full,
+        // permission denied -- FilesystemImageStore.promote throws java.io.IOException, a
+        // checked exception, not a RuntimeException), a DB constraint violation on save, or any
+        // other Throwable. Whatever the cause, both the staged temp file AND a
+        // promoted-but-unsaved file at storageKey must never be left behind. Catch broadly,
+        // clean up both paths, and rethrow unchanged so the caller still sees the original
+        // failure.
         @Suppress("TooGenericExceptionCaught")
-        try {
+        val saved = try {
             imageStore.promote(staged, storageKey)
-            val saved = imageRepository.save(image)
-            existing?.let { imageStore.delete(it.storageKey) }
-            return SetPinImageResult(image = saved, replaced = existing != null)
-        } catch (e: RuntimeException) {
+            imageRepository.save(image)
+        } catch (e: Exception) {
             imageStore.discard(staged)
+            imageStore.delete(storageKey)
             throw e
         }
+        // Deleting the superseded file is best-effort only: the new row is already committed, so
+        // a failure here (old file already gone, transient I/O error, ...) must not turn a
+        // successful upload into a 500.
+        existing?.let { old -> runCatching { imageStore.delete(old.storageKey) } }
+        return SetPinImageResult(image = saved, replaced = existing != null)
     }
 }

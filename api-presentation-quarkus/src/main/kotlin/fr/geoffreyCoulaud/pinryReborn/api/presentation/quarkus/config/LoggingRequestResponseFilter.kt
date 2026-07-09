@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.ws.rs.container.ContainerRequestContext
 import jakarta.ws.rs.container.ContainerResponseContext
+import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.MultivaluedMap
 import org.jboss.resteasy.reactive.server.ServerRequestFilter
 import org.jboss.resteasy.reactive.server.ServerResponseFilter
@@ -36,12 +37,25 @@ class LoggingRequestResponseFilter(
 
     private fun logRequestBody(ctx: ContainerRequestContext) {
         if (ctx.hasEntity()) {
-            val bodyBytes = ctx.entityStream.readAllBytes()
-            val bodyString = String(bodyBytes, Charsets.UTF_8)
-            logger.info { "Body: $bodyString" }
-            ctx.entityStream = ByteArrayInputStream(bodyBytes)
+            if (isMultipart(ctx)) {
+                // A canonical-image upload can be up to 32 MiB; buffering it into memory just to
+                // dump it as UTF-8 garbage would defeat the streaming design ("never hold a
+                // 30 MiB body in memory"). Leave entityStream completely untouched so the
+                // multipart parser downstream still sees the original stream.
+                logger.info { "Body: <multipart upload, not logged>" }
+            } else {
+                val bodyBytes = ctx.entityStream.readAllBytes()
+                val bodyString = String(bodyBytes, Charsets.UTF_8)
+                logger.info { "Body: $bodyString" }
+                ctx.entityStream = ByteArrayInputStream(bodyBytes)
+            }
         }
     }
+
+    // Matching only type/subtype (not equals()) means a charset or boundary parameter on the
+    // Content-Type header can never defeat this check.
+    private fun isMultipart(ctx: ContainerRequestContext): Boolean =
+        MediaType.MULTIPART_FORM_DATA_TYPE.isCompatible(ctx.mediaType)
 
     // Not every response entity is JSON-serializable (e.g. the image endpoints hand back a
     // StreamingOutput lambda for the raw bytes); falling back to a placeholder keeps this
