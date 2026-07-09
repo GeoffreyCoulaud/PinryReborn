@@ -77,4 +77,20 @@ class LoggingRequestResponseFilterTest {
         // When, Then
         assertDoesNotThrow { filter.responseFilter(ctx) }
     }
+
+    @Test
+    fun `Given a non-JSON-serializable entity, Then responseFilter logs a placeholder instead of throwing`() {
+        // Given - a bare Any() has no bean properties, so Jackson's default mapper refuses it
+        // (same failure shape as a StreamingOutput lambda, e.g. the image endpoints' raw bytes).
+        val ctx = mockk<ContainerResponseContext>()
+        every { ctx.status } returns 200
+        every {
+            ctx.headers
+        } returns MultivaluedHashMap<String, Any>().apply { add("Content-Type", "application/octet-stream") }
+        every { ctx.hasEntity() } returns true
+        every { ctx.entity } returns Any()
+
+        // When, Then
+        assertDoesNotThrow { filter.responseFilter(ctx) }
+    }
 }
