@@ -43,9 +43,13 @@ class LoggingRequestResponseFilter(
         }
     }
 
+    // Not every response entity is JSON-serializable (e.g. the image endpoints hand back a
+    // StreamingOutput lambda for the raw bytes); falling back to a placeholder keeps this
+    // debug-only filter from turning an otherwise-successful response into a 500.
     private fun logResponseBody(ctx: ContainerResponseContext) {
         if (ctx.hasEntity()) {
-            val bodyString = objectMapper.writeValueAsString(ctx.entity)
+            val bodyString = runCatching { objectMapper.writeValueAsString(ctx.entity) }
+                .getOrElse { "<unloggable body: ${ctx.entity::class.simpleName}>" }
             logger.info { "Body: $bodyString" }
         }
     }
