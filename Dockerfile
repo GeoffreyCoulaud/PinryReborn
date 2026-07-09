@@ -9,10 +9,12 @@
 # test confirms by running the SQLite migrations at startup.
 FROM eclipse-temurin:25-jre
 
-# curl is used only by the HEALTHCHECK below. Install it minimally and drop the
-# apt lists to keep the layer small.
+# curl is used only by the HEALTHCHECK below. libvips42t64 is the native
+# library vips-ffm loads for api-imaging-vips (eclipse-temurin:25-jre is
+# Ubuntu-based, post 64-bit-time_t transition, hence the t64 suffix). Install
+# both minimally and drop the apt lists to keep the layer small.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libvips42t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root runtime user.
