@@ -50,6 +50,7 @@ persistence implementations.
 - **Quarkus 3** - REST framework with Jakarta REST, HTTP Basic Auth via Quarkus Security
 - **Ebean 19** - ORM with Kotlin query beans and SQLite
 - **Java 25** (Adoptium)
+- **libvips** (native) required for the imaging tests (local dev + CI)
 - **Testing**: JUnit 5, MockK, REST Assured
 
 ## Database Migrations

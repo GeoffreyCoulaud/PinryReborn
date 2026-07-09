@@ -37,6 +37,11 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Install libvips
+        # api-imaging-vips's tests load the native libvips shared library.
+        # ubuntu-latest (24.04, "noble") ships it under the t64-suffixed name
+        # after the 64-bit time_t transition.
+        run: sudo apt-get update && sudo apt-get install -y libvips42t64
       - name: Test and verify coverage
         # `test` runs every module's tests (including api-application's end-to-end
         # integration tests, which Kover does not cover); `koverVerify` then enforces
