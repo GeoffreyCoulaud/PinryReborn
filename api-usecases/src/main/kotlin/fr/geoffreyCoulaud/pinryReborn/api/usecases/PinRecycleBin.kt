@@ -17,6 +17,7 @@ class PinRecycleBin(
     private val pinRepository: PinRepositoryInterface,
     private val imageRepository: ImageRepositoryInterface,
     private val imageStore: ImageStore,
+    private val clearPinDownload: ClearPinDownload,
 ) {
     private fun findPinAndValidateOwnership(pinId: UUID, user: User): Pin {
         val pin = pinRepository.findPinById(id = pinId) ?: throw PinDeletionPinDoesNotExistError()
@@ -39,6 +40,7 @@ class PinRecycleBin(
     fun permanentlyDelete(pinId: UUID, user: User) {
         val pin = findPinAndValidateOwnership(pinId, user)
         if (pin.softDeletedAt == null) throw PinDeletionPinNotSoftDeletedError()
+        clearPinDownload.clear(pin.id)
         val image = imageRepository.findByPinId(pin.id)
         imageRepository.deleteByPinId(pin.id)
         pinRepository.permanentlyDeletePin(pin)
@@ -48,6 +50,7 @@ class PinRecycleBin(
     fun emptyRecycleBin(user: User) {
         val pins = pinRepository.findAllSoftDeletedPinsForUser(user)
         val storageKeysToDelete = pins.mapNotNull { pin ->
+            clearPinDownload.clear(pin.id)
             val image = imageRepository.findByPinId(pin.id)
             imageRepository.deleteByPinId(pin.id)
             image?.storageKey

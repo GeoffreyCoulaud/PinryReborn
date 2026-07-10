@@ -25,10 +25,12 @@ class PinRecycleBinTest {
     private val pinRepository = mockk<PinRepositoryInterface>()
     private val imageRepository = mockk<ImageRepositoryInterface>(relaxed = true)
     private val imageStore = mockk<ImageStore>(relaxed = true)
+    private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
     private val useCase = PinRecycleBin(
         pinRepository = pinRepository,
         imageRepository = imageRepository,
         imageStore = imageStore,
+        clearPinDownload = clearPinDownload,
     )
 
     private fun createPin(author: User, softDeletedAt: Instant? = null) = Pin(
@@ -199,6 +201,23 @@ class PinRecycleBinTest {
         }
     }
 
+    @Test
+    fun `Given a permanently deleted pin, Then its download is cleared`() {
+        // Given
+        val user = User(id = randomUUID(), name = "John Doe")
+        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val pinId = pin.id
+        every { pinRepository.findPinById(pinId) } returns pin
+        every { imageRepository.findByPinId(pinId) } returns null
+        justRun { pinRepository.permanentlyDeletePin(pin) }
+
+        // When
+        useCase.permanentlyDelete(pinId = pinId, user = user)
+
+        // Then
+        verify { clearPinDownload.clear(pinId) }
+    }
+
     // --- Empty recycle bin ---
 
     @Test
@@ -244,5 +263,23 @@ class PinRecycleBinTest {
             imageStore.delete(image.storageKey)
         }
         verify(exactly = 1) { imageStore.delete(any()) }
+    }
+
+    @Test
+    fun `Given soft-deleted pins, Then empty recycle bin clears each pin's download`() {
+        // Given
+        val user = User(id = randomUUID(), name = "John Doe")
+        val firstPin = createPin(author = user, softDeletedAt = Instant.now())
+        val secondPin = createPin(author = user, softDeletedAt = Instant.now())
+        every { pinRepository.findAllSoftDeletedPinsForUser(user) } returns listOf(firstPin, secondPin)
+        every { imageRepository.findByPinId(any()) } returns null
+        justRun { pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user) }
+
+        // When
+        useCase.emptyRecycleBin(user = user)
+
+        // Then
+        verify { clearPinDownload.clear(firstPin.id) }
+        verify { clearPinDownload.clear(secondPin.id) }
     }
 }
