@@ -42,6 +42,7 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.IMAGE_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.IMAGE_TOO_LARGE -> Response.Status.REQUEST_ENTITY_TOO_LARGE.statusCode
             ErrorCode.IMAGE_INVALID -> UNPROCESSABLE_ENTITY_STATUS_CODE
+            ErrorCode.IMAGE_SOURCE_URL_INVALID -> Response.Status.BAD_REQUEST.statusCode
         }
 
     private companion object {
