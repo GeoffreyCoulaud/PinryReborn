@@ -3,20 +3,29 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.controllers
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ApiConfig
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinImageDownloadInputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ImageOutputDto
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.PinImageStateDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.ImageMapper.toDto
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinImageStateMapper.toDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.DeletePinImage
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.GetPinImage
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinImageState
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinImageStatus
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.RequestPinImageDownload
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.ResolvePinImageState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SetPinImage
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
+import jakarta.validation.Valid
 import jakarta.ws.rs.Consumes
 import jakarta.ws.rs.DELETE
 import jakarta.ws.rs.GET
 import jakarta.ws.rs.HeaderParam
 import jakarta.ws.rs.PUT
 import jakarta.ws.rs.Path
+import jakarta.ws.rs.core.HttpHeaders
 import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.StreamingOutput
 import org.jboss.resteasy.reactive.RestForm
@@ -32,6 +41,8 @@ class ImageController(
     private val setPinImage: SetPinImage,
     private val getPinImage: GetPinImage,
     private val deletePinImage: DeletePinImage,
+    private val requestPinImageDownload: RequestPinImageDownload,
+    private val resolvePinImageState: ResolvePinImageState,
     private val imageStore: ImageStore,
     private val imagesConfig: ImagesConfig,
     private val securityIdentity: SecurityIdentity,
@@ -83,6 +94,26 @@ class ImageController(
         val requester = securityIdentity.getUser()
         deletePinImage.delete(pinId = pinId, requester = requester)
         return RestResponse.noContent()
+    }
+
+    @PUT
+    @Path("/{pinId}/image")
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun requestImageDownload(pinId: UUID, @Valid body: PinImageDownloadInputDto): RestResponse<PinImageStateDto> {
+        val requester = securityIdentity.getUser()
+        val download = requestPinImageDownload.request(pinId, requester, body.sourceUrl)
+        val dto = PinImageState(PinImageStatus.PENDING, null, null, null).toDto(baseUrl(), pinId)
+        return ResponseBuilder.create<PinImageStateDto>(RestResponse.Status.ACCEPTED, dto)
+            .header(HttpHeaders.LOCATION, "${baseUrl()}/api/v1/pins/$pinId/image/status")
+            .build()
+    }
+
+    @GET
+    @Path("/{pinId}/image/status")
+    fun getImageStatus(pinId: UUID): RestResponse<PinImageStateDto> {
+        val requester = securityIdentity.getUser()
+        val state = resolvePinImageState.resolve(pinId = pinId, requester = requester)
+        return RestResponse.ok(state.toDto(baseUrl(), pinId))
     }
 
     private fun baseUrl(): String = apiConfig.baseUrl()

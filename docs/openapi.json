@@ -91,6 +91,56 @@
           }
         }
       },
+      "PinImageDownloadInputDto" : {
+        "type" : "object",
+        "required" : [ "sourceUrl" ],
+        "properties" : {
+          "sourceUrl" : {
+            "type" : "string",
+            "pattern" : "\\S"
+          }
+        }
+      },
+      "PinImageStateDto" : {
+        "type" : "object",
+        "required" : [ "status" ],
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : [ "string", "null" ]
+          },
+          "mimeType" : {
+            "type" : [ "string", "null" ]
+          },
+          "width" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "height" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "byteSize" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "reasonCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "message" : {
+            "type" : [ "string", "null" ]
+          },
+          "replacement" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/ReplacementDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
       "PinListOutputDto" : {
         "type" : "object",
         "required" : [ "pins", "pagination" ],
@@ -182,6 +232,21 @@
             "items" : {
               "type" : "string"
             }
+          }
+        }
+      },
+      "ReplacementDto" : {
+        "type" : "object",
+        "required" : [ "status" ],
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "message" : {
+            "type" : [ "string", "null" ]
           }
         }
       },
@@ -624,6 +689,11 @@
                   }
                 }
               }
+            },
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PinImageDownloadInputDto"
+              }
             }
           },
           "required" : true
@@ -634,7 +704,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ImageOutputDto"
+                  "$ref" : "#/components/schemas/PinImageStateDto"
                 }
               }
             }
@@ -646,7 +716,7 @@
             "description" : "Not Allowed"
           }
         },
-        "summary" : "Set Image",
+        "summary" : "Request Image Download",
         "tags" : [ "Image Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
@@ -713,6 +783,41 @@
           }
         },
         "summary" : "Delete Image",
+        "tags" : [ "Image Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/pins/{pinId}/image/status" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "pinId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PinImageStateDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Get Image Status",
         "tags" : [ "Image Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]

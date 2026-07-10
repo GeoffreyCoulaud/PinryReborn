@@ -8,6 +8,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConf
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ImageOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.DeletePinImage
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.GetPinImage
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.RequestPinImageDownload
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.ResolvePinImageState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SetPinImage
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SetPinImageResult
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
@@ -34,6 +36,8 @@ class ImageControllerTest {
     private val setPinImage = mockk<SetPinImage>()
     private val getPinImage = mockk<GetPinImage>()
     private val deletePinImage = mockk<DeletePinImage>()
+    private val requestPinImageDownload = mockk<RequestPinImageDownload>()
+    private val resolvePinImageState = mockk<ResolvePinImageState>()
     private val imageStore = mockk<ImageStore>()
     private val imagesConfig = mockk<ImagesConfig>()
     private val securityIdentity = mockk<SecurityIdentity>()
@@ -42,6 +46,8 @@ class ImageControllerTest {
         setPinImage = setPinImage,
         getPinImage = getPinImage,
         deletePinImage = deletePinImage,
+        requestPinImageDownload = requestPinImageDownload,
+        resolvePinImageState = resolvePinImageState,
         imageStore = imageStore,
         imagesConfig = imagesConfig,
         securityIdentity = securityIdentity,
