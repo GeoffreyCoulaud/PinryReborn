@@ -38,4 +38,10 @@ class PinImageStateTest {
         assertEquals(PinImageStatus.READY, s.status)
         assertEquals(DownloadStatus.PENDING, s.replacement?.status)
     }
+    @Test fun `Given an image and a FAILED download, Then READY with a FAILED replacement carrying the reason`() {
+        val s = PinImageState.derive(image(), download(DownloadStatus.FAILED, DownloadReason.ACCESS_DENIED))
+        assertEquals(PinImageStatus.READY, s.status)
+        assertEquals(DownloadStatus.FAILED, s.replacement?.status)
+        assertEquals(DownloadReason.ACCESS_DENIED, s.replacement?.reasonCode)
+    }
 }
