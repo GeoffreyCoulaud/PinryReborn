@@ -302,18 +302,9 @@ class ModeBImageHostingIntegrationTest : IntegrationTest() {
         assertTrue(statusOf(pinId, username, password).getString("status") == "NONE", "no download should exist")
     }
 
-    /**
-     * SPEC GAP (reported as a concern, production intentionally left untouched: this is a test-only
-     * task). The 2b spec (section 16, "DELETE during PENDING cancels") and the task brief expect a
-     * DELETE while a first-time download is PENDING to cancel it and return the pin to NONE (204).
-     * The current `DeletePinImage` rejects the request with 404 first, because it requires an
-     * existing image row before it reaches the download-clearing step; a first-time (image-less)
-     * download therefore cannot be cancelled via DELETE. This test characterises the actual
-     * behaviour: DELETE returns 404 and the download proceeds to completion uncancelled.
-     */
     @Test
-    fun `Given a PENDING download and no image yet, Then DELETE returns 404 and does not cancel it`() {
-        // Given: a gated download held PENDING with no image yet
+    fun `Given a PENDING download and no image yet, Then DELETE cancels it and returns the pin to NONE`() {
+        // Given: a gated first-time download held PENDING with no image yet
         val username = "modebdelete"
         val password = "password123"
         val pinId = createUserAndPin(username, password)
@@ -322,20 +313,27 @@ class ModeBImageHostingIntegrationTest : IntegrationTest() {
             requestDownload(pinId, username, password, originUrl("/gated")).then().statusCode(202)
             assertTrue(statusOf(pinId, username, password).getString("status") == "PENDING", "download must be PENDING")
 
-            // When: delete the image while the download is still in flight
+            // When: delete the image while the first-time download is still in flight
             given()
                 .auth().preemptive().basic(username, password)
                 .`when`().delete("/api/v1/pins/$pinId/image")
-                .then().statusCode(404)
+                .then().statusCode(204)
 
-            // Then: the download was not cancelled; it is still PENDING
-            assertTrue(statusOf(pinId, username, password).getString("status") == "PENDING", "still PENDING")
+            // Then: the in-flight download is cancelled and the pin is back to NONE
+            assertTrue(statusOf(pinId, username, password).getString("status") == "NONE", "the download is cancelled")
         } finally {
             gateLatch.countDown()
         }
 
-        // Then: because it was never cancelled, the released fetch runs to completion (READY)
-        pollStatus(pinId, username, password, "READY")
+        // Then: the released fetch finds no PENDING row and discards, so the pin stays NONE (no bytes)
+        repeat(POLL_SETTLE_CONFIRMATIONS) {
+            assertTrue(statusOf(pinId, username, password).getString("status") == "NONE", "stays NONE after release")
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        given()
+            .auth().preemptive().basic(username, password)
+            .`when`().get("/api/v1/pins/$pinId/image")
+            .then().statusCode(404)
     }
 
     @Test

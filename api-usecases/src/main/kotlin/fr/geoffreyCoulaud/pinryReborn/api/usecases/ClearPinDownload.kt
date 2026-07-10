@@ -15,9 +15,14 @@ class ClearPinDownload(
     private val imageDownloadRepository: ImageDownloadRepositoryInterface,
     private val cancelTask: CancelTask,
 ) {
-    fun clear(pinId: UUID) {
-        val download = imageDownloadRepository.findByPinId(pinId) ?: return
+    /**
+     * Cancel the pin's (possibly in-flight) mode-B download and drop its row, best-effort.
+     * Returns true when a download row existed and was cleared, false when there was nothing to clear.
+     */
+    fun clear(pinId: UUID): Boolean {
+        val download = imageDownloadRepository.findByPinId(pinId) ?: return false
         runCatching { cancelTask.cancel(download.taskId) }
         imageDownloadRepository.deleteByPinId(pinId)
+        return true
     }
 }
