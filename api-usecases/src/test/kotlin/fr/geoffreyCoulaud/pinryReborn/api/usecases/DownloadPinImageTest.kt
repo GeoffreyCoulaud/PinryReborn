@@ -35,6 +35,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.time.Instant
 import java.util.UUID.randomUUID
 
@@ -173,6 +174,28 @@ class DownloadPinImageTest {
         every { store.stage(any(), any()) } throws ImageTooLargeException("too big")
         assertThrows(PermanentTaskException::class.java) { subject.download(pinId, ctx(), 100, 100) }
         verify { downloads.markFailed(pinId, DownloadReason.TOO_LARGE, now) }
+    }
+
+    @Test
+    fun `Given a mid-stream stage failure below the attempt limit, Then it records the error and rethrows`() {
+        stubUntilFetch()
+        every { fetcher.openStream(any()) } returns ByteArrayInputStream(byteArrayOf(1))
+        every { store.stage(any(), any()) } throws IOException("connection reset")
+        assertThrows(IOException::class.java) {
+            subject.download(pinId, ctx(attempt = 1, max = 3), 100, 100)
+        }
+        verify { downloads.recordLastError(pinId, "connection reset", now) }
+    }
+
+    @Test
+    fun `Given a mid-stream stage failure at the attempt limit, Then it marks FAILED and throws Permanent`() {
+        stubUntilFetch()
+        every { fetcher.openStream(any()) } returns ByteArrayInputStream(byteArrayOf(1))
+        every { store.stage(any(), any()) } throws IOException("connection reset")
+        assertThrows(PermanentTaskException::class.java) {
+            subject.download(pinId, ctx(attempt = 3, max = 3), 100, 100)
+        }
+        verify { downloads.markFailed(pinId, DownloadReason.UNREACHABLE, now) }
     }
 
     @Test

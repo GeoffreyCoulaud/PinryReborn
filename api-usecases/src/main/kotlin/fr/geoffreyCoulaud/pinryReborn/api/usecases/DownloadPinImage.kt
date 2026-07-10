@@ -55,6 +55,7 @@ class DownloadPinImage(
         promoteAndSwap(pinId, staged, image, context)
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun stageFromSource(pinId: UUID, sourceUrl: String, maxBytes: Long, context: TaskContext): StagedFile =
         try {
             imageFetcher.openStream(sourceUrl).use { imageStore.stage(it, maxBytes) }
@@ -67,6 +68,12 @@ class DownloadPinImage(
             }
         } catch (ignored: ImageTooLargeException) {
             failPermanent(pinId, DownloadReason.TOO_LARGE)
+        } catch (e: Exception) {
+            // A failure while streaming the fetched body (connection reset, read timeout, I/O error)
+            // is a transient reachability problem. Route it through the failure policy as UNREACHABLE
+            // so the download row is updated and an exhausted retry becomes terminal FAILED rather than
+            // leaving the row stuck PENDING.
+            failRetryable(pinId, DownloadReason.UNREACHABLE, context, e)
         }
 
     private fun probeStaged(pinId: UUID, staged: StagedFile, maxPixels: Long): ProbeResult =
