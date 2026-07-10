@@ -28,6 +28,10 @@ import jakarta.ws.rs.Path
 import jakarta.ws.rs.core.HttpHeaders
 import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.StreamingOutput
+import org.eclipse.microprofile.openapi.annotations.Operation
+import org.eclipse.microprofile.openapi.annotations.media.Content
+import org.eclipse.microprofile.openapi.annotations.media.Schema
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.jboss.resteasy.reactive.RestForm
 import org.jboss.resteasy.reactive.RestResponse
 import org.jboss.resteasy.reactive.RestResponse.ResponseBuilder
@@ -51,6 +55,27 @@ class ImageController(
     @PUT
     @Path("/{pinId}/image")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Operation(summary = SET_IMAGE_OPERATION_SUMMARY)
+    @APIResponse(
+        responseCode = "201",
+        description = "Image created",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = ImageOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "200",
+        description = "Image replaced",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = ImageOutputDto::class),
+            ),
+        ],
+    )
     fun setImage(pinId: UUID, @RestForm("file") file: FileUpload): RestResponse<ImageOutputDto> {
         val requester = securityIdentity.getUser()
         val result = Files.newInputStream(file.uploadedFile()).use { upload ->
@@ -99,6 +124,17 @@ class ImageController(
     @PUT
     @Path("/{pinId}/image")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = SET_IMAGE_OPERATION_SUMMARY)
+    @APIResponse(
+        responseCode = "202",
+        description = "Download accepted",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = PinImageStateDto::class),
+            ),
+        ],
+    )
     fun requestImageDownload(pinId: UUID, @Valid body: PinImageDownloadInputDto): RestResponse<PinImageStateDto> {
         val requester = securityIdentity.getUser()
         val download = requestPinImageDownload.request(pinId, requester, body.sourceUrl)
@@ -117,4 +153,12 @@ class ImageController(
     }
 
     private fun baseUrl(): String = apiConfig.baseUrl()
+
+    private companion object {
+        // Shared by `setImage` and `requestImageDownload`: both are `PUT /{pinId}/image`, and
+        // SmallRye OpenAPI merges the two `@Consumes`-differentiated methods into a single
+        // Operation. Keeping the summary in one place avoids the two annotations drifting apart.
+        const val SET_IMAGE_OPERATION_SUMMARY =
+            "Set the pin's canonical image (upload bytes, or request a server-side fetch)"
+    }
 }

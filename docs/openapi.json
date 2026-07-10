@@ -668,6 +668,7 @@
     },
     "/api/v1/pins/{pinId}/image" : {
       "put" : {
+        "summary" : "Set the pin's canonical image (upload bytes, or request a server-side fetch)",
         "parameters" : [ {
           "name" : "pinId",
           "in" : "path",
@@ -699,8 +700,28 @@
           "required" : true
         },
         "responses" : {
+          "201" : {
+            "description" : "Image created",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImageOutputDto"
+                }
+              }
+            }
+          },
           "200" : {
-            "description" : "OK",
+            "description" : "Image replaced",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImageOutputDto"
+                }
+              }
+            }
+          },
+          "202" : {
+            "description" : "Download accepted",
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -716,7 +737,6 @@
             "description" : "Not Allowed"
           }
         },
-        "summary" : "Request Image Download",
         "tags" : [ "Image Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
