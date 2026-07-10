@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.time.Duration
@@ -213,5 +214,31 @@ class HttpImageFetcherTest {
 
         // When / Then
         assertThrows(UrlNotAllowedException::class.java) { guardedFetcher.openStream("${base()}/i.png") }
+    }
+
+    @Test
+    fun `Given a redirect target the policy rejects, Then it throws UrlNotAllowed`() {
+        // Given: the initial hop is allowed but the redirect target is blocked, proving the
+        // per-hop SSRF re-check runs against the resolved redirect location, not only the first URL.
+        handle("/redirect", 302, headers = mapOf("Location" to "/blocked.png"))
+        val redirectGuardedFetcher =
+            HttpImageFetcher(
+                connectTimeout = Duration.ofSeconds(2),
+                requestTimeout = Duration.ofSeconds(2),
+                maxRedirects = 3,
+                addressPolicy = FirstHopOnlyPolicy(),
+            )
+
+        // When / Then
+        assertThrows(UrlNotAllowedException::class.java) {
+            redirectGuardedFetcher.openStream("${base()}/redirect")
+        }
+    }
+
+    /** Allows the first address check (the initial URL) and blocks every later one (redirect targets). */
+    private class FirstHopOnlyPolicy : AddressPolicy {
+        private var checks = 0
+
+        override fun isAllowed(address: InetAddress): Boolean = checks++ == 0
     }
 }

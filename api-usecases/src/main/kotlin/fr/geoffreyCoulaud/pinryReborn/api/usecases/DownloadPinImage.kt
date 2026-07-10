@@ -50,7 +50,7 @@ class DownloadPinImage(
         val pin = pinRepository.findPinById(pinId) ?: return
 
         val staged = stageFromSource(pinId, downloadRow.sourceUrl, maxBytes, context)
-        val probeResult = probeStaged(pinId, staged, maxPixels)
+        val probeResult = probeStaged(pinId, staged, maxPixels, context)
         val image = buildImage(pin, pinId, staged, probeResult)
         promoteAndSwap(pinId, staged, image, context)
     }
@@ -76,16 +76,25 @@ class DownloadPinImage(
             failRetryable(pinId, DownloadReason.UNREACHABLE, context, e)
         }
 
-    private fun probeStaged(pinId: UUID, staged: StagedFile, maxPixels: Long): ProbeResult =
+    @Suppress("TooGenericExceptionCaught")
+    private fun probeStaged(pinId: UUID, staged: StagedFile, maxPixels: Long, context: TaskContext): ProbeResult =
         try {
             imageProbe.probe(staged, maxPixels)
         } catch (e: ImageProbeException) {
             imageStore.discard(staged)
             failPermanent(pinId, mapProbe(e))
+        } catch (e: Exception) {
+            // A probe failure outside the declared ImageProbeException contract (e.g. a native/FFM
+            // error) must still route through the failure policy; otherwise the download row is
+            // left stuck PENDING and the staged temp file leaks. Treat it as a transient internal
+            // error so an exhausted retry becomes terminal FAILED instead of DEAD-with-PENDING-row.
+            imageStore.discard(staged)
+            failRetryable(pinId, DownloadReason.INTERNAL_ERROR, context, e)
         }
 
     @Suppress("TooGenericExceptionCaught")
     private fun promoteAndSwap(pinId: UUID, staged: StagedFile, image: Image, context: TaskContext) {
+        val superseded = imageRepository.findByPinId(pinId)
         try {
             imageStore.promote(staged, image.storageKey)
             val swapped =
@@ -97,7 +106,15 @@ class DownloadPinImage(
                         false
                     }
                 }
-            if (!swapped) imageStore.delete(image.storageKey)
+            if (swapped) {
+                // Best-effort delete of the superseded file on a successful mode-B replace (spec
+                // section 8 step 7), mirroring the mode-A path: the new row is committed, so a
+                // failure here must not fail the task. Only after a real swap; a no-op swap kept
+                // the old image, which must not be touched.
+                superseded?.let { old -> runCatching { imageStore.delete(old.storageKey) } }
+            } else {
+                imageStore.delete(image.storageKey)
+            }
         } catch (e: Exception) {
             imageStore.discard(staged)
             imageStore.delete(image.storageKey)

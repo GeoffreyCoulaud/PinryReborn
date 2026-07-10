@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.ImageDownload
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
@@ -226,14 +227,42 @@ class DownloadPinImageTest {
     }
 
     @Test
+    fun `Given a generic probe failure below the attempt limit, Then it discards and records a retryable error`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } throws RuntimeException("boom")
+        assertThrows(RuntimeException::class.java) { subject.download(pinId, ctx(attempt = 1, max = 3), 100, 100) }
+        verify { store.discard(staged()) }
+        verify { downloads.recordLastError(pinId, "boom", now) }
+    }
+
+    @Test
     fun `Given a successful fetch and a still-PENDING row, Then it promotes and swaps`() {
         stubUntilStage()
         every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1)
+        every { images.findByPinId(pinId) } returns null
         every { downloads.deleteIfPending(pinId) } returns 1
         every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
         subject.download(pinId, ctx(), 100, 100)
         verify { store.promote(staged(), any()) }
         verify { images.save(any()) }
+        // First-time download: no superseded image, so nothing is deleted.
+        verify(exactly = 0) { store.delete(any()) }
+    }
+
+    @Test
+    fun `Given a still-PENDING row over an existing image, Then it swaps and deletes the superseded file`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1)
+        val supersededKey = "originals/x/$pinId/old.png"
+        every { images.findByPinId(pinId) } returns
+            Image(randomUUID(), pinId, "image/png", 1, 1, 3, "oldhash", supersededKey, now)
+        every { downloads.deleteIfPending(pinId) } returns 1
+        every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
+        subject.download(pinId, ctx(), 100, 100)
+        verify { images.save(any()) }
+        // Only the superseded file is deleted; the freshly promoted new file is kept.
+        verify(exactly = 1) { store.delete(supersededKey) }
+        verify(exactly = 1) { store.delete(any()) }
     }
 
     @Test
