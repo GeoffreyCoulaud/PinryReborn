@@ -34,7 +34,7 @@ class TaskProcessor(
         if (handler == null) {
             taskQueue.markDead(claimed.id, claimed.leaseId, clock.now(), "no handler for kind ${claimed.kind}")
         } else {
-            val outcome = runHandler(handler, claimed.payload)
+            val outcome = runHandler(handler, claimed.payload, TaskContext(claimed.attempts, claimed.maxAttempts))
             val now = clock.now()
             if (taskQueue.markCancelledIfRequested(claimed.id, claimed.leaseId, now)) {
                 return
@@ -58,9 +58,9 @@ class TaskProcessor(
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun runHandler(handler: TaskHandler, payload: String): Outcome =
+    private fun runHandler(handler: TaskHandler, payload: String, context: TaskContext): Outcome =
         try {
-            handler.handle(payload)
+            handler.handle(payload, context)
             Success
         } catch (e: PermanentTaskException) {
             Permanent(e.reason)

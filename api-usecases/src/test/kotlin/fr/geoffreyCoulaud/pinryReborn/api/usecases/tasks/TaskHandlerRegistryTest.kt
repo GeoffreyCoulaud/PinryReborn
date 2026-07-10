@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 class TaskHandlerRegistryTest {
     private fun handler(k: String) = object : TaskHandler {
         override val kind = k
-        override fun handle(payload: String) = Unit
+        override fun handle(payload: String, context: TaskContext) = Unit
     }
 
     @Test

@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTas
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID.randomUUID
@@ -31,7 +32,7 @@ class TaskProcessorTest {
 
     private fun handler(kind: String, body: () -> Unit) = object : TaskHandler {
         override val kind = kind
-        override fun handle(payload: String) = body()
+        override fun handle(payload: String, context: TaskContext) = body()
     }
 
     @Test
@@ -138,5 +139,21 @@ class TaskProcessorTest {
         p.execute(c)
         // Then
         verify { queue.markPendingRetry(c.id, "lease-1", now.plusSeconds(1), now, "transient failure") }
+    }
+
+    @Test
+    fun `Given a handler, Then it receives the claim's attempt and maxAttempts`() {
+        // Given
+        every { clock.now() } returns now
+        var seen: TaskContext? = null
+        val c = claimed(attempts = 2, maxAttempts = 3)
+        val p = processorWith(object : TaskHandler {
+            override val kind = "k"
+            override fun handle(payload: String, context: TaskContext) { seen = context }
+        })
+        // When
+        p.execute(c)
+        // Then
+        assertEquals(TaskContext(2, 3), seen)
     }
 }
