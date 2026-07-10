@@ -41,7 +41,8 @@ class SetPinImageTest : BaseTest() {
     private val store = mockk<ImageStore>(relaxed = true)
     private val probe = mockk<ImageProbe>()
     private val clock = mockk<Clock>()
-    private val useCase = SetPinImage(pins, images, store, probe, clock)
+    private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
+    private val useCase = SetPinImage(pins, images, store, probe, clock, clearPinDownload)
 
     private val owner = User(randomUUID(), createRandomString())
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
@@ -65,6 +66,7 @@ class SetPinImageTest : BaseTest() {
         assertFalse(result.replaced)
         verify { store.promote(staged, result.image.storageKey) }
         verify { images.save(result.image) }
+        verify { clearPinDownload.clear(p.id) }
     }
 
     @Test fun `Given a replacement, Then the old file is deleted after commit`() {
