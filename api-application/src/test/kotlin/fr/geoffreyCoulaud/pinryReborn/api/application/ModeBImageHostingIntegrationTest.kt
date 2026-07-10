@@ -23,6 +23,7 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -418,6 +419,7 @@ class ModeBImageHostingIntegrationTest : IntegrationTest() {
         private const val NO_RESPONSE_BODY = -1L
 
         private lateinit var server: HttpServer
+        private lateinit var originExecutor: ExecutorService
 
         @Volatile
         private var port: Int = 0
@@ -437,8 +439,11 @@ class ModeBImageHostingIntegrationTest : IntegrationTest() {
             textBytes = Files.readAllBytes(File("src/test/resources/fixtures/not-an-image.txt").toPath())
             server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
             // A cached thread pool so a deliberately-blocked `/gated` handler cannot stall the other
-            // paths the 4 real workers may hit concurrently.
-            server.executor = Executors.newCachedThreadPool()
+            // paths the 4 real workers may hit concurrently. HttpServer.stop() does not touch a
+            // caller-supplied executor, so we keep a handle and shut it down in @AfterAll (otherwise
+            // its non-daemon threads linger past the test-worker drain timeout).
+            originExecutor = Executors.newCachedThreadPool()
+            server.executor = originExecutor
             server.createContext("/img.png") { exchange -> respondBytes(exchange, HTTP_OK, "image/png", pngBytes) }
             server.createContext("/private") { exchange -> respondStatus(exchange, HTTP_FORBIDDEN) }
             server.createContext("/missing") { exchange -> respondStatus(exchange, HTTP_NOT_FOUND) }
@@ -457,6 +462,7 @@ class ModeBImageHostingIntegrationTest : IntegrationTest() {
         fun stopOrigin() {
             gateLatch.countDown()
             server.stop(0)
+            originExecutor.shutdownNow()
         }
 
         private fun respondBytes(exchange: HttpExchange, status: Int, contentType: String, body: ByteArray) {
