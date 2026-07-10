@@ -37,35 +37,45 @@ import java.util.UUID.randomUUID
 class EbeanTaskQueue(
     private val database: Database,
 ) : TaskQueueInterface {
+    // Ambient-transaction-aware: when a TransactionRunner already opened a transaction on this thread,
+    // join it (so the enqueue commits atomically with the caller's other writes) instead of opening
+    // (and committing) our own. Only when there is no ambient transaction do we open our own, so the
+    // dedup check-then-insert still serializes atomically on the single-connection SQLite datasource.
     override fun enqueue(task: NewTask): Task =
-        database.beginTransaction().use { transaction ->
-            if (task.dedupKey != null) {
-                val existing =
-                    QTaskModel(database)
-                        .dedupKey.equalTo(task.dedupKey)
-                        .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
-                        .findOne()
-                if (existing != null) {
-                    transaction.commit()
-                    return@use existing.toDomain()
-                }
+        if (database.currentTransaction() != null) {
+            enqueueWithin(task)
+        } else {
+            database.beginTransaction().use { transaction ->
+                val result = enqueueWithin(task)
+                transaction.commit()
+                result
             }
-            val model =
-                TaskModel(
-                    id = randomUUID(),
-                    kind = task.kind,
-                    payload = task.payload,
-                    state = TaskState.PENDING.name,
-                    priority = task.priority,
-                    availableAt = task.availableAt,
-                    attempts = 0,
-                    maxAttempts = task.maxAttempts,
-                    dedupKey = task.dedupKey,
-                )
-            database.save(model)
-            transaction.commit()
-            model.toDomain()
         }
+
+    private fun enqueueWithin(task: NewTask): Task {
+        if (task.dedupKey != null) {
+            val existing =
+                QTaskModel(database)
+                    .dedupKey.equalTo(task.dedupKey)
+                    .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
+                    .findOne()
+            if (existing != null) return existing.toDomain()
+        }
+        val model =
+            TaskModel(
+                id = randomUUID(),
+                kind = task.kind,
+                payload = task.payload,
+                state = TaskState.PENDING.name,
+                priority = task.priority,
+                availableAt = task.availableAt,
+                attempts = 0,
+                maxAttempts = task.maxAttempts,
+                dedupKey = task.dedupKey,
+            )
+        database.save(model)
+        return model.toDomain()
+    }
 
     override fun findById(id: UUID): Task? = QTaskModel(database).id.equalTo(id).findOne()?.toDomain()
 
