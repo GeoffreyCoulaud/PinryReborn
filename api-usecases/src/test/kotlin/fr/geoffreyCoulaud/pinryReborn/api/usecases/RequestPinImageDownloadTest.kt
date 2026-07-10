@@ -73,6 +73,12 @@ class RequestPinImageDownloadTest {
     }
 
     @Test
+    fun `Given a malformed url, Then it throws ImageSourceUrlInvalidError`() {
+        every { pins.findPinById(pinId) } returns pin()
+        assertThrows(ImageSourceUrlInvalidError::class.java) { subject.request(pinId, owner, "http://exa mple/i.png") }
+    }
+
+    @Test
     fun `Given a plain http url, Then it enqueues pin download and upserts a PENDING row atomically`() {
         val taskId = randomUUID()
         every { pins.findPinById(pinId) } returns pin()
