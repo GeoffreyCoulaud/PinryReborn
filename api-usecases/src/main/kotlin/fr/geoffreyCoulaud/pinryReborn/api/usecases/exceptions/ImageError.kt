@@ -12,3 +12,6 @@ class ImageTooLargeError(cause: Throwable? = null) :
     ImageError("Image exceeds the maximum size", ErrorCode.IMAGE_TOO_LARGE, cause)
 
 class ImageInvalidError(message: String, cause: Throwable? = null) : ImageError(message, ErrorCode.IMAGE_INVALID, cause)
+
+class ImageSourceUrlInvalidError(cause: Throwable? = null) :
+    ImageError("Invalid source URL", ErrorCode.IMAGE_SOURCE_URL_INVALID, cause)
