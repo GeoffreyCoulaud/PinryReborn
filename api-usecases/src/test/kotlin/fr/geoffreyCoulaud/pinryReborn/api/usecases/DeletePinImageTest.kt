@@ -13,6 +13,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -64,6 +65,20 @@ class DeletePinImageTest : BaseTest() {
         val p = pin()
         every { pins.findPinById(p.id) } returns p
         every { images.findByPinId(p.id) } returns null
+        every { clearPinDownload.clear(p.id) } returns false
         assertThrows(ImageDoesNotExistError::class.java) { useCase.delete(p.id, owner) }
+    }
+
+    @Test fun `Given no image but a pending download, Then delete cancels it and does not throw`() {
+        val p = pin()
+        every { pins.findPinById(p.id) } returns p
+        every { images.findByPinId(p.id) } returns null
+        every { clearPinDownload.clear(p.id) } returns true
+
+        useCase.delete(p.id, owner)
+
+        verify { clearPinDownload.clear(p.id) }
+        verify(exactly = 0) { images.deleteByPinId(any()) }
+        verify(exactly = 0) { store.delete(any()) }
     }
 }

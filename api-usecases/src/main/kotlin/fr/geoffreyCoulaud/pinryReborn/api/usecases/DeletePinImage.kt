@@ -20,9 +20,15 @@ class DeletePinImage(
     fun delete(pinId: UUID, requester: User) {
         val pin = pinRepository.findPinById(pinId) ?: throw ImagePinDoesNotExistError()
         if (pin.author.id != requester.id) throw ImagePermissionError()
-        val image = imageRepository.findByPinId(pinId) ?: throw ImageDoesNotExistError()
-        imageRepository.deleteByPinId(pinId)
-        imageStore.delete(image.storageKey)
-        clearPinDownload.clear(pinId)
+        val image = imageRepository.findByPinId(pinId)
+        if (image != null) {
+            imageRepository.deleteByPinId(pinId)
+            imageStore.delete(image.storageKey)
+            clearPinDownload.clear(pinId)
+            return
+        }
+        // No image row: a DELETE during a fetch must still cancel the in-flight/failed download and
+        // leave nothing pending (spec section 7). Only when there is nothing at all to remove is this a 404.
+        if (!clearPinDownload.clear(pinId)) throw ImageDoesNotExistError()
     }
 }
