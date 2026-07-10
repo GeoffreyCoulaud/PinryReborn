@@ -36,8 +36,8 @@ the "bounce" case). Both are needed.
 - The `pin.download` `TaskHandler` (the first concrete handler on the queue) that performs the
   fetch, reusing 2a's `ImageStore` / `ImageProbe` / `ImageRepository`.
 - An `ImageDownload` sidecar entity + table tracking the in-flight / failed state of a mode-B
-  fetch, and the **observable image state machine** (NONE / PENDING / READY / FAILED) surfaced in
-  the pin representation for a diagnosable failure experience.
+  fetch, and the **observable image state machine** (NONE / PENDING / READY / FAILED) surfaced via a
+  dedicated status sub-resource for a diagnosable failure experience.
 - A new `ImageFetcher` port + `api-fetch-http` adapter (JDK HTTP client) with a **Standard SSRF
   guard** (scheme allowlist + private/loopback/link-local/reserved/metadata IP rejection, per
   redirect hop).
@@ -60,8 +60,8 @@ the "bounce" case). Both are needed.
 - **Object storage** backends (the `ImageStore` port already leaves this open).
 - **DNS-rebinding protection** (consciously accepted gap: the deployment infra is trusted, DNS is
   not attacker-controlled; §10).
-- **Server-push status** (SSE / websockets): the client **polls** the pin representation. Push is a
-  backward-compatible future addition.
+- **Server-push status** (SSE / websockets): the client **polls** the image status endpoint. Push is
+  a backward-compatible future addition.
 
 ## 3. Key decisions (rationale captured for the plan)
 
@@ -96,7 +96,7 @@ the "bounce" case). Both are needed.
   `DownloadPinImage` use case in `api-usecases` (orchestration over ports only). This mirrors how
   controllers adapt I/O formats and call pure use cases; it keeps a serialization dependency out of
   `api-usecases`.
-- **Polling, not push.** Single-node self-hosted; the client polls the pin until the image status
+- **Polling, not push.** Single-node self-hosted; the client polls the image status endpoint until it
   flips to READY or FAILED. Simple and robust.
 
 ## 4. Modules (dependency DAG preserved)
@@ -107,7 +107,7 @@ the "bounce" case). Both are needed.
 | `api-usecases` | `DownloadPinImage` (the fetch orchestration), `RequestPinImageDownload` (the mode-B PUT use case: atomic create-download + enqueue), image-state derivation; extended `TaskHandler` contract | `api-domain` |
 | `api-persistence-sqlite` | `ImageDownloadModel` + mapper + `EbeanImageDownloadRepository`; migration `1.5`; `TransactionRunner` impl; make `enqueue` + repos ambient-transaction-aware (outbox) | `api-domain`, `api-utilities` |
 | **`api-fetch-http`** (new) | implements `ImageFetcher` (JDK HTTP client, SSRF guard, redirect handling) | `api-domain` |
-| `api-presentation-quarkus` | the `pin.download` `TaskHandler` bean (JSON parse + delegate), PUT content-negotiation (multipart vs JSON), image-state block in `PinOutputDto`, download config; pass `TaskContext` from `TaskProcessor` | `api-usecases`, `api-domain` |
+| `api-presentation-quarkus` | the `pin.download` `TaskHandler` bean (JSON parse + delegate), PUT content-negotiation (multipart vs JSON), the `GET .../image/status` endpoint + `PinImageStateDto`, download config; pass `TaskContext` from `TaskProcessor` | `api-usecases`, `api-domain` |
 | `api-application` | composition root (`ImageFetcher` producer) + integration tests | all modules |
 
 `api-usecases` depends only on **ports**, never on `api-fetch-http`. `api-application` wires the
@@ -123,7 +123,7 @@ data class ImageDownload(
     val status: DownloadStatus,    // PENDING | FAILED (no COMPLETED: deleted on success)
     val reasonCode: DownloadReason?, // set iff status == FAILED
     val lastError: String?,        // truncated diagnostic from the last transient failure
-    val taskId: Long,              // the enqueued pin.download task id (for CancelTask on hard-delete)
+    val taskId: UUID,              // the enqueued pin.download task id (for CancelTask on hard-delete)
     val requestedAt: Instant,
     val updatedAt: Instant,
 )
@@ -210,7 +210,8 @@ Owner-only (`403` non-owner, `404` missing pin), as in 2a.
   - Validates the URL shape (non-blank, `http`/`https`). Malformed → `400`.
   - Atomically (one transaction): upsert the `ImageDownload` row to `PENDING` with the `sourceUrl`,
     enqueue a `pin.download` task, store the returned `taskId` on the row (§11).
-  - `202 Accepted` with the pin's image block (`status: PENDING`) and a `Location`/self link to poll.
+  - `202 Accepted` with the image status DTO (`status: PENDING`) and a `Location` header pointing at
+    the status sub-resource (below).
   - If the pin already has a READY image, this is a **replacement request**: the row is created
     PENDING alongside the existing image (§6); still `202`.
   - If a mode-B download is already PENDING for the pin, the request is **coalesced** (dedup by
@@ -221,24 +222,21 @@ Owner-only (`403` non-owner, `404` missing pin), as in 2a.
 ### `GET /api/v1/pins/{pinId}/image` — serve (unchanged from 2a)
 
 `200` streaming when a READY image exists (honouring `If-None-Match`/`ETag`/`304`); `404` otherwise
-(NONE / PENDING / FAILED). The byte endpoint stays representation-free; status lives in the pin
-representation.
+(NONE / PENDING / FAILED). The byte endpoint stays representation-free; status lives in the dedicated
+status sub-resource (below).
 
-### `GET /api/v1/pins/{pinId}` and the pin list — carry the image state
+### `GET /api/v1/pins/{pinId}/image/status` — the image state (poll target)
 
-`PinOutputDto` gains an `image` block:
+Owner-only. Returns a `PinImageStateDto` derived from the pin's `image` and `download` rows (§6).
+Fields: `status` (NONE / PENDING / READY / FAILED); when READY, the image `url` + `mimeType` +
+`width` + `height` + `byteSize`; when FAILED, the `reasonCode` + a human `message`; when READY with a
+mode-B replace in flight or failed, a `replacement` sub-object carrying `status` (PENDING / FAILED)
+plus `reasonCode` + `message` on failure.
 
-```json
-"image": {
-  "status": "NONE | PENDING | READY | FAILED",
-  "url": "…", "mimeType": "…", "width": 0, "height": 0, "byteSize": 0,   // when READY
-  "reasonCode": "…", "message": "…",                                     // when FAILED
-  "replacement": { "status": "PENDING | FAILED", "reasonCode": "…", "message": "…" } // when READY + a mode-B replace is in flight/failed
-}
-```
-
-The web UI polls `GET /pins/{id}` (or the list) after a `202` until `status`/`replacement.status`
-settles. Poll cadence is a client concern.
+`200` always (even for `NONE`); `403` non-owner; `404` missing pin. The web UI polls this after a
+`202` until `status`/`replacement.status` settles. `PinOutputDto` and the pin list are **unchanged**
+(no image block): the byte grid uses `GET .../image` directly, and only the mode-B diagnostic flow
+needs this endpoint. Poll cadence is a client concern.
 
 ### `DELETE /api/v1/pins/{pinId}/image` — remove (2a, extended)
 
@@ -365,7 +363,7 @@ New `image_download` table (migration `1.5`, generated via
 | `status` | TEXT NOT NULL | `PENDING` \| `FAILED` |
 | `reason_code` | TEXT NULL | set iff `status = 'FAILED'` |
 | `last_error` | TEXT NULL | truncated last transient diagnostic |
-| `task_id` | INTEGER NOT NULL | the enqueued `pin.download` task id |
+| `task_id` | TEXT NOT NULL | UUID; the enqueued `pin.download` task id |
 | `requested_at` | INTEGER NOT NULL | epoch ms |
 | `updated_at` | INTEGER NOT NULL | epoch ms |
 
