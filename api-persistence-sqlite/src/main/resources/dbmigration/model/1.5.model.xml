@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createTable name="image_download" identityType="external" pkName="pk_image_download">
+            <column name="pin_id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="source_url" type="varchar" notnull="true"/>
+            <column name="status" type="varchar" notnull="true"/>
+            <column name="reason_code" type="varchar"/>
+            <column name="last_error" type="varchar"/>
+            <column name="task_id" type="uuid" notnull="true"/>
+            <column name="requested_at" type="timestamp" notnull="true"/>
+            <column name="updated_at" type="timestamp" notnull="true"/>
+        </createTable>
+    </changeSet>
+</migration>
