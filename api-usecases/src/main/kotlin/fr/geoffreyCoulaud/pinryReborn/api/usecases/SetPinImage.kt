@@ -31,6 +31,7 @@ class SetPinImage(
     private val imageStore: ImageStore,
     private val imageProbe: ImageProbe,
     private val clock: Clock,
+    private val clearPinDownload: ClearPinDownload,
 ) {
     fun set(pinId: UUID, requester: User, upload: InputStream, maxBytes: Long, maxPixels: Long): SetPinImageResult {
         val pin = pinRepository.findPinById(pinId) ?: throw ImagePinDoesNotExistError()
@@ -80,6 +81,7 @@ class SetPinImage(
         // a failure here (old file already gone, transient I/O error, ...) must not turn a
         // successful upload into a 500.
         existing?.let { old -> runCatching { imageStore.delete(old.storageKey) } }
+        clearPinDownload.clear(pinId)
         return SetPinImageResult(image = saved, replaced = existing != null)
     }
 }

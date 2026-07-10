@@ -24,7 +24,8 @@ class DeletePinImageTest : BaseTest() {
     private val pins = mockk<PinRepositoryInterface>()
     private val images = mockk<ImageRepositoryInterface>(relaxed = true)
     private val store = mockk<ImageStore>(relaxed = true)
-    private val useCase = DeletePinImage(pins, images, store)
+    private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
+    private val useCase = DeletePinImage(pins, images, store, clearPinDownload)
 
     private val owner = User(randomUUID(), createRandomString())
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
@@ -44,6 +45,7 @@ class DeletePinImageTest : BaseTest() {
         verifyOrder {
             images.deleteByPinId(p.id)
             store.delete(img.storageKey)
+            clearPinDownload.clear(p.id)
         }
     }
 

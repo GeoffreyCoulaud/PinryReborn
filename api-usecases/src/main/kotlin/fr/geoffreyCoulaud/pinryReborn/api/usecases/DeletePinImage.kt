@@ -15,6 +15,7 @@ class DeletePinImage(
     private val pinRepository: PinRepositoryInterface,
     private val imageRepository: ImageRepositoryInterface,
     private val imageStore: ImageStore,
+    private val clearPinDownload: ClearPinDownload,
 ) {
     fun delete(pinId: UUID, requester: User) {
         val pin = pinRepository.findPinById(pinId) ?: throw ImagePinDoesNotExistError()
@@ -22,5 +23,6 @@ class DeletePinImage(
         val image = imageRepository.findByPinId(pinId) ?: throw ImageDoesNotExistError()
         imageRepository.deleteByPinId(pinId)
         imageStore.delete(image.storageKey)
+        clearPinDownload.clear(pinId)
     }
 }
