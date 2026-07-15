@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageDoesNotExistError
@@ -26,7 +27,10 @@ class DeletePinImageTest : BaseTest() {
     private val images = mockk<ImageRepositoryInterface>(relaxed = true)
     private val store = mockk<ImageStore>(relaxed = true)
     private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
-    private val useCase = DeletePinImage(pins, images, store, clearPinDownload)
+    private val renditionCache = mockk<RenditionCache>()
+    private val useCase = DeletePinImage(pins, images, store, clearPinDownload, renditionCache)
+
+    init { every { renditionCache.evictImage(any()) } returns Unit }
 
     private val owner = User(randomUUID(), createRandomString())
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
@@ -48,6 +52,7 @@ class DeletePinImageTest : BaseTest() {
             store.delete(img.storageKey)
             clearPinDownload.clear(p.id)
         }
+        verify { renditionCache.evictImage(img.id) }
     }
 
     @Test fun `Given a missing pin, Then delete throws ImagePinDoesNotExistError`() {
@@ -80,5 +85,6 @@ class DeletePinImageTest : BaseTest() {
         verify { clearPinDownload.clear(p.id) }
         verify(exactly = 0) { images.deleteByPinId(any()) }
         verify(exactly = 0) { store.delete(any()) }
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 }

@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPermissionError
@@ -26,12 +27,16 @@ class PinRecycleBinTest {
     private val imageRepository = mockk<ImageRepositoryInterface>(relaxed = true)
     private val imageStore = mockk<ImageStore>(relaxed = true)
     private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
+    private val renditionCache = mockk<RenditionCache>()
     private val useCase = PinRecycleBin(
         pinRepository = pinRepository,
         imageRepository = imageRepository,
         imageStore = imageStore,
         clearPinDownload = clearPinDownload,
+        renditionCache = renditionCache,
     )
+
+    init { every { renditionCache.evictImage(any()) } returns Unit }
 
     private fun createPin(author: User, softDeletedAt: Instant? = null) = Pin(
         id = randomUUID(),
@@ -169,6 +174,7 @@ class PinRecycleBinTest {
             pinRepository.permanentlyDeletePin(pin)
             imageStore.delete(image.storageKey)
         }
+        verify { renditionCache.evictImage(image.id) }
     }
 
     @Test
@@ -187,6 +193,7 @@ class PinRecycleBinTest {
         verify { imageRepository.deleteByPinId(pin.id) }
         verify { pinRepository.permanentlyDeletePin(pin) }
         verify(exactly = 0) { imageStore.delete(any()) }
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 
     @Test
@@ -235,6 +242,7 @@ class PinRecycleBinTest {
         verify { pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user) }
         verify(exactly = 0) { imageRepository.deleteByPinId(any()) }
         verify(exactly = 0) { imageStore.delete(any()) }
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 
     @Test
@@ -264,6 +272,8 @@ class PinRecycleBinTest {
             imageStore.delete(image.storageKey)
         }
         verify(exactly = 1) { imageStore.delete(any()) }
+        verify(exactly = 1) { renditionCache.evictImage(any()) }
+        verify { renditionCache.evictImage(image.id) }
     }
 
     @Test

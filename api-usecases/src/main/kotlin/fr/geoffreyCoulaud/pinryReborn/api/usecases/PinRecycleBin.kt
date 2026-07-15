@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPermissionError
@@ -18,6 +19,7 @@ class PinRecycleBin(
     private val imageRepository: ImageRepositoryInterface,
     private val imageStore: ImageStore,
     private val clearPinDownload: ClearPinDownload,
+    private val renditionCache: RenditionCache,
 ) {
     private fun findPinAndValidateOwnership(pinId: UUID, user: User): Pin {
         val pin = pinRepository.findPinById(id = pinId) ?: throw PinDeletionPinDoesNotExistError()
@@ -44,18 +46,24 @@ class PinRecycleBin(
         val image = imageRepository.findByPinId(pin.id)
         imageRepository.deleteByPinId(pin.id)
         pinRepository.permanentlyDeletePin(pin)
-        image?.let { imageStore.delete(it.storageKey) }
+        image?.let {
+            imageStore.delete(it.storageKey)
+            runCatching { renditionCache.evictImage(it.id) }
+        }
     }
 
     fun emptyRecycleBin(user: User) {
         val pins = pinRepository.findAllSoftDeletedPinsForUser(user)
-        val storageKeysToDelete = pins.mapNotNull { pin ->
+        val images = pins.mapNotNull { pin ->
             clearPinDownload.clear(pin.id)
             val image = imageRepository.findByPinId(pin.id)
             imageRepository.deleteByPinId(pin.id)
-            image?.storageKey
+            image
         }
         pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user)
-        storageKeysToDelete.forEach { imageStore.delete(it) }
+        images.forEach {
+            imageStore.delete(it.storageKey)
+            runCatching { renditionCache.evictImage(it.id) }
+        }
     }
 }
