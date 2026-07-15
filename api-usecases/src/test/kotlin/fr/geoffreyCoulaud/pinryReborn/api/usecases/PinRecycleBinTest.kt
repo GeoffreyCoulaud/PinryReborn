@@ -49,6 +49,7 @@ class PinRecycleBinTest {
         mimeType = "image/png",
         width = 1,
         height = 1,
+        animated = false,
         byteSize = 1,
         contentHash = "hash",
         storageKey = "originals/x/$pinId/i.png",

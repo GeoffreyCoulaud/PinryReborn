@@ -42,7 +42,7 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
     }
 
     private fun imageFor(pinId: UUID) = Image(
-        id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1,
+        id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1, animated = false,
         byteSize = 1, contentHash = "h", storageKey = "originals/x/$pinId/i.png", createdAt = now,
     )
 

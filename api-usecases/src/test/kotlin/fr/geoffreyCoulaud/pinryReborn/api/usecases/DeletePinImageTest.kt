@@ -31,7 +31,7 @@ class DeletePinImageTest : BaseTest() {
     private val owner = User(randomUUID(), createRandomString())
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
     private fun imageFor(pinId: UUID, hash: String = "h") = Image(
-        id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1,
+        id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1, animated = false,
         byteSize = 1, contentHash = hash, storageKey = "originals/x/$pinId/i.png",
         createdAt = Instant.parse("2026-07-08T00:00:00Z"),
     )

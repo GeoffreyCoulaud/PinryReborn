@@ -19,7 +19,8 @@ class PinImageStateMapperTest {
     private val baseUrl = "http://host"
 
     @Test fun `Given READY, Then the dto carries the serve url and dimensions`() {
-        val img = Image(randomUUID(), pinId, "image/png", 4, 5, 6, "h", "originals/x/$pinId/i.png", Instant.EPOCH)
+        val img =
+            Image(randomUUID(), pinId, "image/png", 4, 5, false, 6, "h", "originals/x/$pinId/i.png", Instant.EPOCH)
         val dto = PinImageState(PinImageStatus.READY, img, null, null).toDto(baseUrl, pinId)
         assertEquals("READY", dto.status)
         assertEquals("$baseUrl/api/v1/pins/$pinId/image", dto.url)
@@ -34,7 +35,8 @@ class PinImageStateMapperTest {
     }
 
     @Test fun `Given READY with a FAILED replacement, Then the replacement carries its reason`() {
-        val img = Image(randomUUID(), pinId, "image/png", 1, 1, 1, "h", "originals/x/$pinId/i.png", Instant.EPOCH)
+        val img =
+            Image(randomUUID(), pinId, "image/png", 1, 1, false, 1, "h", "originals/x/$pinId/i.png", Instant.EPOCH)
         val state =
             PinImageState(
                 PinImageStatus.READY,
@@ -61,7 +63,8 @@ class PinImageStateMapperTest {
     }
 
     @Test fun `Given READY with a successful replacement, Then the replacement has no reason or message`() {
-        val img = Image(randomUUID(), pinId, "image/png", 1, 1, 1, "h", "originals/x/$pinId/i.png", Instant.EPOCH)
+        val img =
+            Image(randomUUID(), pinId, "image/png", 1, 1, false, 1, "h", "originals/x/$pinId/i.png", Instant.EPOCH)
         val state =
             PinImageState(
                 PinImageStatus.READY,

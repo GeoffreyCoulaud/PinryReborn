@@ -9,6 +9,7 @@ data class Image(
     val mimeType: String,
     val width: Int,
     val height: Int,
+    val animated: Boolean,
     val byteSize: Long,
     val contentHash: String,
     val storageKey: String,

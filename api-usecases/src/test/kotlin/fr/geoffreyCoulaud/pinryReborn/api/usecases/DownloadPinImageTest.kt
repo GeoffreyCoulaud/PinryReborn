@@ -255,7 +255,7 @@ class DownloadPinImageTest {
         every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
         val supersededKey = "originals/x/$pinId/old.png"
         every { images.findByPinId(pinId) } returns
-            Image(randomUUID(), pinId, "image/png", 1, 1, 3, "oldhash", supersededKey, now)
+            Image(randomUUID(), pinId, "image/png", 1, 1, false, 3, "oldhash", supersededKey, now)
         every { downloads.deleteIfPending(pinId) } returns 1
         every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
         subject.download(pinId, ctx(), 100, 100)

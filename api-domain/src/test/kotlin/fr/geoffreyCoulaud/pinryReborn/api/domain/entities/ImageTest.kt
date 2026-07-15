@@ -15,7 +15,7 @@ class ImageTest {
         // When
         val image = Image(
             id = id, pinId = pinId, mimeType = "image/webp",
-            width = 800, height = 600, byteSize = 12_345L,
+            width = 800, height = 600, animated = false, byteSize = 12_345L,
             contentHash = "abc123", storageKey = "originals/u/p/$id.webp", createdAt = now,
         )
         // Then

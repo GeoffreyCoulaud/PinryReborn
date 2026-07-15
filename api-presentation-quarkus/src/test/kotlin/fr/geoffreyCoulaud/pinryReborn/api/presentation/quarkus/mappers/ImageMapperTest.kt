@@ -11,7 +11,8 @@ class ImageMapperTest {
     @Test
     fun `Given an image and base url, Then toDto builds the serve url`() {
         val pinId = randomUUID()
-        val image = Image(randomUUID(), pinId, "image/webp", 8, 6, 99, "h", "originals/x/y/z.webp", Instant.EPOCH)
+        val image =
+            Image(randomUUID(), pinId, "image/webp", 8, 6, false, 99, "h", "originals/x/y/z.webp", Instant.EPOCH)
         val dto = image.toDto("https://host")
         assertEquals("https://host/api/v1/pins/$pinId/image", dto.url)
         assertEquals("image/webp", dto.mimeType)
