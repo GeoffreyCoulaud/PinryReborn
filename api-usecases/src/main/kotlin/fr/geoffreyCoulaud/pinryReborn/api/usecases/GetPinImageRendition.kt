@@ -25,15 +25,25 @@ class GetPinImageRendition(
     fun get(pinId: UUID, requester: User, requestedPx: Int?, animated: Boolean): ServedImage {
         // Reuse 2a's load + owner/not-found guards verbatim (403/404 behaviour unchanged).
         val image = getPinImage.get(pinId, requester)
-        if (requestedPx == null) return ServedImage.Original(image)
+        val effectivePx = effectiveRenditionPx(image, requestedPx, animated)
+        return if (effectivePx == null) {
+            ServedImage.Original(image)
+        } else {
+            serveRendition(image, effectivePx, animated)
+        }
+    }
 
+    // The clamped shortest-side px for a rendition, or null when the original must be served as-is
+    // (no size requested, or the source needs neither downscaling nor flattening).
+    private fun effectiveRenditionPx(image: Image, requestedPx: Int?, animated: Boolean): Int? {
+        if (requestedPx == null) return null
         val srcShort = minOf(image.width, image.height)
         val needsDownscale = srcShort > requestedPx
         val needsFlatten = image.animated && !animated
-        // Never upscale, never re-encode: with no transformation required, serve the original as-is.
-        if (!needsDownscale && !needsFlatten) return ServedImage.Original(image)
+        return if (needsDownscale || needsFlatten) minOf(requestedPx, srcShort) else null
+    }
 
-        val effectivePx = minOf(requestedPx, srcShort)
+    private fun serveRendition(image: Image, effectivePx: Int, animated: Boolean): ServedImage.Rendition {
         val key = keyFor(effectivePx, animated)
         val cached = renditionCache.openStream(image.id, key)
         if (cached != null) {
