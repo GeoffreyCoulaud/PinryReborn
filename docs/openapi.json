@@ -751,6 +751,20 @@
             "$ref" : "#/components/schemas/UUID"
           }
         }, {
+          "name" : "animated",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "boolean", "null" ]
+          },
+          "required" : true
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "string", "null" ]
+          },
+          "required" : true
+        }, {
           "name" : "If-None-Match",
           "in" : "header",
           "schema" : {

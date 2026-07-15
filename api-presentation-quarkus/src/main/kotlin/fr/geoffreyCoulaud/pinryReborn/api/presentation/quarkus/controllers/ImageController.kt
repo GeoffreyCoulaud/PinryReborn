@@ -1,8 +1,11 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.controllers
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ApiConfig
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.RenditionsConfig
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinImageDownloadInputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ImageOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.PinImageStateDto
@@ -10,12 +13,15 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.ImageMapp
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinImageStateMapper.toDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.DeletePinImage
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.GetPinImage
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.GetPinImageRendition
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinImageState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinImageStatus
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.RequestPinImageDownload
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.ResolvePinImageState
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.ServedImage
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SetPinImage
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageDoesNotExistError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageRenditionSizeInvalidError
 import io.quarkus.security.Authenticated
 import io.quarkus.security.identity.SecurityIdentity
 import jakarta.validation.Valid
@@ -25,6 +31,7 @@ import jakarta.ws.rs.GET
 import jakarta.ws.rs.HeaderParam
 import jakarta.ws.rs.PUT
 import jakarta.ws.rs.Path
+import jakarta.ws.rs.QueryParam
 import jakarta.ws.rs.core.HttpHeaders
 import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.StreamingOutput
@@ -43,12 +50,14 @@ import java.util.UUID
 @Authenticated
 class ImageController(
     private val setPinImage: SetPinImage,
-    private val getPinImage: GetPinImage,
+    private val getPinImageRendition: GetPinImageRendition,
     private val deletePinImage: DeletePinImage,
     private val requestPinImageDownload: RequestPinImageDownload,
     private val resolvePinImageState: ResolvePinImageState,
     private val imageStore: ImageStore,
     private val imagesConfig: ImagesConfig,
+    private val renditionCache: RenditionCache,
+    private val renditionsConfig: RenditionsConfig,
     private val securityIdentity: SecurityIdentity,
     private val apiConfig: ApiConfig,
 ) {
@@ -94,14 +103,35 @@ class ImageController(
 
     @GET
     @Path("/{pinId}/image")
-    fun getImage(pinId: UUID, @HeaderParam("If-None-Match") ifNoneMatch: String?): RestResponse<StreamingOutput> {
+    fun getImage(
+        pinId: UUID,
+        @QueryParam("size") size: String?,
+        @QueryParam("animated") animated: Boolean?,
+        @HeaderParam("If-None-Match") ifNoneMatch: String?,
+    ): RestResponse<StreamingOutput> {
         val requester = securityIdentity.getUser()
-        val image = getPinImage.get(pinId = pinId, requester = requester)
+        val requestedPx = size?.let { resolveSizePx(it) }
+        val served = getPinImageRendition.get(pinId, requester, requestedPx, animated ?: true)
+        // Assigned per-branch rather than `return when (served) { ... }`: the latter is a `when`
+        // used as an expression, which Kotlin compiles with a defensive `else -> throw
+        // NoWhenBranchMatchedException()` even though the sealed `when` is already exhaustive.
+        // That synthetic branch is unreachable (no third `ServedImage` subtype exists) but still
+        // counts as an uncovered Kover branch. As a statement, `when` needs no such fallback.
+        val response: RestResponse<StreamingOutput>
+        when (served) {
+            is ServedImage.Original -> response = serveOriginal(served.image, ifNoneMatch)
+            is ServedImage.Rendition -> response = serveRendition(served, ifNoneMatch)
+        }
+        return response
+    }
+
+    private fun resolveSizePx(size: String): Int =
+        (RenditionSize.fromName(size) ?: throw ImageRenditionSizeInvalidError()).pxFrom(renditionsConfig)
+
+    private fun serveOriginal(image: Image, ifNoneMatch: String?): RestResponse<StreamingOutput> {
         // Kotlin's `==` is null-safe (delegates to `equals`), so a null `ifNoneMatch` simply
         // compares unequal to `image.contentHash` without a separate null check/branch.
-        if (ifNoneMatch == image.contentHash) {
-            return RestResponse.notModified()
-        }
+        if (ifNoneMatch == image.contentHash) return RestResponse.notModified()
         val streamingOutput = StreamingOutput { output ->
             imageStore.openStream(image.storageKey).use { it.copyTo(output) }
         }
@@ -112,6 +142,25 @@ class ImageController(
             .header("Content-Length", image.byteSize)
             .build()
     }
+
+    private fun serveRendition(rendition: ServedImage.Rendition, ifNoneMatch: String?): RestResponse<StreamingOutput> {
+        val etag = renditionEtag(rendition)
+        if (ifNoneMatch == etag) return RestResponse.notModified()
+        val streamingOutput = StreamingOutput { output ->
+            // The use case just confirmed/stored this entry; a null here means a concurrent evict
+            // removed it (rare race) -> treat as gone.
+            (renditionCache.openStream(rendition.imageId, rendition.key) ?: throw ImageDoesNotExistError())
+                .use { it.copyTo(output) }
+        }
+        return ResponseBuilder.ok(streamingOutput)
+            .header("Content-Type", "image/webp")
+            .header("ETag", etag)
+            .header("Cache-Control", "private, must-revalidate")
+            .build()
+    }
+
+    private fun renditionEtag(rendition: ServedImage.Rendition): String =
+        "$ENCODER_VERSION-${rendition.imageId}-${rendition.effectivePx}-${if (rendition.animated) "a" else "s"}"
 
     @DELETE
     @Path("/{pinId}/image")
@@ -160,5 +209,8 @@ class ImageController(
         // Operation. Keeping the summary in one place avoids the two annotations drifting apart.
         const val SET_IMAGE_OPERATION_SUMMARY =
             "Set the pin's canonical image (upload bytes, or request a server-side fetch)"
+
+        // Bumped whenever the rendition encoding changes, so previously cached ETags miss cleanly.
+        const val ENCODER_VERSION = "v1"
     }
 }
