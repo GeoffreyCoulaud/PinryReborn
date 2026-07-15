@@ -107,4 +107,9 @@ class BaseErrorMapperTest {
     fun `Given IMAGE_SOURCE_URL_INVALID, Then status is BAD_REQUEST`() {
         assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.IMAGE_SOURCE_URL_INVALID))
     }
+
+    @Test
+    fun `Given IMAGE_RENDITION_SIZE_INVALID, Then status is BAD_REQUEST`() {
+        assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.IMAGE_RENDITION_SIZE_INVALID))
+    }
 }
