@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.ImageModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.ImageModelMapper.toModel
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID.randomUUID
@@ -14,12 +15,25 @@ class ImageModelMapperTest {
         // Given
         val image = Image(
             id = randomUUID(), pinId = randomUUID(), mimeType = "image/png",
-            width = 4, height = 5, byteSize = 6, contentHash = "h",
+            width = 4, height = 5, animated = false, byteSize = 6, contentHash = "h",
             storageKey = "originals/a/b/c.png", createdAt = Instant.parse("2026-07-08T00:00:00Z"),
         )
         // When
         val roundTripped = image.toModel().toDomain()
         // Then
         assertEquals(image, roundTripped)
+    }
+
+    @Test
+    fun `Given an animated image, Then the flag round-trips through the model`() {
+        // Given
+        val image = Image(
+            randomUUID(), randomUUID(), "image/gif", 10, 10, animated = true,
+            byteSize = 1, contentHash = "h", storageKey = "originals/x/y/z.gif", createdAt = Instant.EPOCH,
+        )
+        // When
+        val back = image.toModel().toDomain()
+        // Then
+        assertTrue(back.animated)
     }
 }

@@ -57,8 +57,9 @@ class SetPinImage(
         val storageKey = "originals/${requester.id}/$pinId/$imageId.${probeResult.format.extension}"
         val image = Image(
             id = imageId, pinId = pinId, mimeType = probeResult.format.mimeType,
-            width = probeResult.width, height = probeResult.height, byteSize = staged.byteSize,
-            contentHash = staged.contentHash, storageKey = storageKey, createdAt = clock.now(),
+            width = probeResult.width, height = probeResult.height, animated = probeResult.animated,
+            byteSize = staged.byteSize, contentHash = staged.contentHash, storageKey = storageKey,
+            createdAt = clock.now(),
         )
         val existing = imageRepository.findByPinId(pinId)
         // Promote/save can fail for many reasons: an I/O failure during promote (disk full,

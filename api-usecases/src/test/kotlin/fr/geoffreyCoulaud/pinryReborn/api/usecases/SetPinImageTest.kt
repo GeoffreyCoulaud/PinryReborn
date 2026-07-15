@@ -71,7 +71,7 @@ class SetPinImageTest : BaseTest() {
 
     @Test fun `Given a replacement, Then the old file is deleted after commit`() {
         val p = pin()
-        val old = Image(randomUUID(), p.id, "image/png", 1, 1, 1, "old", "originals/o/old.png", Instant.EPOCH)
+        val old = Image(randomUUID(), p.id, "image/png", 1, 1, false, 1, "old", "originals/o/old.png", Instant.EPOCH)
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
         every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2, animated = false)
@@ -161,7 +161,7 @@ class SetPinImageTest : BaseTest() {
 
     @Test fun `Given the old file delete fails during replace, Then the request still succeeds`() {
         val p = pin()
-        val old = Image(randomUUID(), p.id, "image/png", 1, 1, 1, "old", "originals/o/old.png", Instant.EPOCH)
+        val old = Image(randomUUID(), p.id, "image/png", 1, 1, false, 1, "old", "originals/o/old.png", Instant.EPOCH)
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
         every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2, animated = false)

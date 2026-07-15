@@ -127,8 +127,8 @@ class DownloadPinImage(
         val storageKey = "originals/${pin.author.id}/$pinId/$imageId.${probe.format.extension}"
         return Image(
             id = imageId, pinId = pinId, mimeType = probe.format.mimeType, width = probe.width,
-            height = probe.height, byteSize = staged.byteSize, contentHash = staged.contentHash,
-            storageKey = storageKey, createdAt = clock.now(),
+            height = probe.height, animated = probe.animated, byteSize = staged.byteSize,
+            contentHash = staged.contentHash, storageKey = storageKey, createdAt = clock.now(),
         )
     }
 

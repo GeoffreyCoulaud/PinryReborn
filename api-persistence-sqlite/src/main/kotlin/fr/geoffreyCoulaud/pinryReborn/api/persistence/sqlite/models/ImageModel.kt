@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
+import io.ebean.annotation.DbDefault
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
@@ -15,6 +16,7 @@ class ImageModel(
     var mimeType: String,
     var width: Int,
     var height: Int,
+    @DbDefault("false") var animated: Boolean,
     var byteSize: Long,
     var contentHash: String,
     var storageKey: String,

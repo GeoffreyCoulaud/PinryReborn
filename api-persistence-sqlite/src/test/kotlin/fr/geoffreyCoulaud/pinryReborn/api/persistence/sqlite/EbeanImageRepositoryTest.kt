@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRe
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
@@ -26,8 +27,8 @@ class EbeanImageRepositoryTest : RepositoryTest() {
         )
     }
 
-    private fun imageFor(pinId: UUID, hash: String = "h") = Image(
-        id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1,
+    private fun imageFor(pinId: UUID, hash: String = "h", animated: Boolean = false) = Image(
+        id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1, animated = animated,
         byteSize = 1, contentHash = hash, storageKey = "originals/x/$pinId/i.png",
         createdAt = Instant.parse("2026-07-08T00:00:00Z"),
     )
@@ -37,6 +38,14 @@ class EbeanImageRepositoryTest : RepositoryTest() {
         val pin = savedPin()
         val saved = repository.save(imageFor(pin.id))
         assertEquals(saved, repository.findByPinId(pin.id))
+    }
+
+    @Test
+    fun `Given an animated image, Then save persists it and findByPinId reads back animated = true`() {
+        val pin = savedPin()
+        val saved = repository.save(imageFor(pin.id, animated = true))
+        assertTrue(saved.animated)
+        assertEquals(true, repository.findByPinId(pin.id)?.animated)
     }
 
     @Test

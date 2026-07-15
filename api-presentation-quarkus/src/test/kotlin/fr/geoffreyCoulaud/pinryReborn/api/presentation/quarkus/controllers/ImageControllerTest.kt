@@ -63,6 +63,7 @@ class ImageControllerTest {
         mimeType = "image/png",
         width = 8,
         height = 6,
+        animated = false,
         byteSize = 4,
         contentHash = createRandomString(),
         storageKey = "originals/x/$pinId/y.png",
