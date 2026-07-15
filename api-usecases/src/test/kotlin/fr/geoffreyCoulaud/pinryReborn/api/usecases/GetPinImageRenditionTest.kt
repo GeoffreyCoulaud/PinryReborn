@@ -64,7 +64,7 @@ class GetPinImageRenditionTest {
     }
 
     @Test
-    fun `Given a static image larger than the size and a cache miss, Then it renders, stores, and serves a rendition`() {
+    fun `Given a static image larger than the size and a cache miss, Then it renders, stores, and serves it`() {
         val pinId = randomUUID()
         val img = image(pinId, 100, 80, animated = false)
         every { getPinImage.get(pinId, requester) } returns img
