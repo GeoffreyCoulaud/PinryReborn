@@ -35,9 +35,14 @@ class VipsImageTransformer(private val quality: Int) : ImageTransformer {
         try {
             Files.newOutputStream(input).use { source.copyTo(it) }
             Arena.ofConfined().use { arena ->
-                // n = -1 loads every frame (animation preserved); n = 1 loads only the first frame.
-                val pages = if (spec.animated) -1 else 1
-                val image = VImage.newFromFile(arena, input.toString(), VipsOption.Int("n", pages))
+                // n = -1 loads every frame (animation preserved). For the static case we omit the
+                // option entirely: the loader default is already the first frame only, and loaders
+                // without an `n` property (PNG, JPEG) log a GObject CRITICAL when handed one.
+                val image = if (spec.animated) {
+                    VImage.newFromFile(arena, input.toString(), VipsOption.Int("n", -1))
+                } else {
+                    VImage.newFromFile(arena, input.toString())
+                }
                 // For a multi-page load, per-frame height is `page-height`; absent (null) on a
                 // single frame, where the frame height IS the image height.
                 val frameHeight = image.getInt("page-height") ?: image.height
