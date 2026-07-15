@@ -53,7 +53,7 @@ class SetPinImageTest : BaseTest() {
         val p = pin()
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
-        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5)
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5, animated = false)
         every { images.findByPinId(p.id) } returns null
         every { clock.now() } returns Instant.parse("2026-07-08T00:00:00Z")
         every { images.save(any()) } answers { firstArg() }
@@ -74,7 +74,7 @@ class SetPinImageTest : BaseTest() {
         val old = Image(randomUUID(), p.id, "image/png", 1, 1, 1, "old", "originals/o/old.png", Instant.EPOCH)
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
-        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2)
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2, animated = false)
         every { images.findByPinId(p.id) } returns old
         every { clock.now() } returns Instant.EPOCH
         every { images.save(any()) } answers { firstArg() }
@@ -116,7 +116,7 @@ class SetPinImageTest : BaseTest() {
         val p = pin()
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
-        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5)
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5, animated = false)
         every { images.findByPinId(p.id) } returns null
         every { clock.now() } returns Instant.EPOCH
         every { store.promote(any(), any()) } throws RuntimeException("disk full")
@@ -132,7 +132,7 @@ class SetPinImageTest : BaseTest() {
         val p = pin()
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
-        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5)
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5, animated = false)
         every { images.findByPinId(p.id) } returns null
         every { clock.now() } returns Instant.EPOCH
         every { store.promote(any(), any()) } throws IOException("disk full")
@@ -147,7 +147,7 @@ class SetPinImageTest : BaseTest() {
         val storageKeySlot = slot<String>()
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
-        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5)
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5, animated = false)
         every { images.findByPinId(p.id) } returns null
         every { clock.now() } returns Instant.EPOCH
         every { store.promote(staged, capture(storageKeySlot)) } just runs
@@ -164,7 +164,7 @@ class SetPinImageTest : BaseTest() {
         val old = Image(randomUUID(), p.id, "image/png", 1, 1, 1, "old", "originals/o/old.png", Instant.EPOCH)
         every { pins.findPinById(p.id) } returns p
         every { store.stage(any(), 30) } returns staged
-        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2)
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2, animated = false)
         every { images.findByPinId(p.id) } returns old
         every { clock.now() } returns Instant.EPOCH
         every { images.save(any()) } answers { firstArg() }

@@ -6,7 +6,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UnsupportedImageFormatException
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
 
@@ -63,5 +65,37 @@ class VipsImageProbeTest {
         assertThrows(UnsupportedImageFormatException::class.java) {
             probe.probe(staged("sample.tiff"), 1_000_000)
         }
+    }
+
+    @Test
+    fun `Given a static PNG, Then probe reports animated = false`() {
+        // Given / When
+        val result = probe.probe(staged("sample.png"), maxPixels = 1_000_000)
+        // Then
+        assertFalse(result.animated)
+    }
+
+    @Test
+    fun `Given an animated GIF, Then probe reports animated = true`() {
+        // Given / When
+        val result = probe.probe(staged("animated.gif"), maxPixels = 1_000_000)
+        // Then
+        assertTrue(result.animated)
+    }
+
+    @Test
+    fun `Given an animated WebP, Then probe reports animated = true`() {
+        // Given / When
+        val result = probe.probe(staged("animated.webp"), maxPixels = 1_000_000)
+        // Then
+        assertTrue(result.animated)
+    }
+
+    @Test
+    fun `Given a static WebP, Then probe reports animated = false`() {
+        // Given / When
+        val result = probe.probe(staged("sample.webp"), maxPixels = 1_000_000)
+        // Then
+        assertFalse(result.animated)
     }
 }

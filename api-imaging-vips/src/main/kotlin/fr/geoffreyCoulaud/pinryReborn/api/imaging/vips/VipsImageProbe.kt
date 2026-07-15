@@ -56,7 +56,10 @@ class VipsImageProbe : ImageProbe {
                     "Image at ${staged.path} has $width x $height pixels, exceeding the $maxPixels limit",
                 )
             }
-            ProbeResult(format, width, height)
+            // n-pages is the libvips header field set from the container; absent (null) for single-frame
+            // formats, > 1 for an animated GIF / animated WebP. getInt returns null when the field is absent.
+            val animated = (image.getInt("n-pages") ?: 1) > 1
+            ProbeResult(format, width, height, animated)
         }
     }
 

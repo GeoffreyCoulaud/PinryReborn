@@ -238,7 +238,7 @@ class DownloadPinImageTest {
     @Test
     fun `Given a successful fetch and a still-PENDING row, Then it promotes and swaps`() {
         stubUntilStage()
-        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1)
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
         every { images.findByPinId(pinId) } returns null
         every { downloads.deleteIfPending(pinId) } returns 1
         every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
@@ -252,7 +252,7 @@ class DownloadPinImageTest {
     @Test
     fun `Given a still-PENDING row over an existing image, Then it swaps and deletes the superseded file`() {
         stubUntilStage()
-        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1)
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
         val supersededKey = "originals/x/$pinId/old.png"
         every { images.findByPinId(pinId) } returns
             Image(randomUUID(), pinId, "image/png", 1, 1, 3, "oldhash", supersededKey, now)
@@ -268,7 +268,7 @@ class DownloadPinImageTest {
     @Test
     fun `Given the row was superseded before the swap, Then it deletes the promoted file and does not save`() {
         stubUntilStage()
-        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1)
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
         every { downloads.deleteIfPending(pinId) } returns 0
         every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
         subject.download(pinId, ctx(), 100, 100)
@@ -279,7 +279,7 @@ class DownloadPinImageTest {
     @Test
     fun `Given promote fails below the attempt limit, Then it cleans up and records a retryable INTERNAL_ERROR`() {
         stubUntilStage()
-        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1)
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
         every { store.promote(any(), any()) } throws RuntimeException()
         assertThrows(RuntimeException::class.java) { subject.download(pinId, ctx(attempt = 1, max = 3), 100, 100) }
         verify { store.discard(staged()) }
