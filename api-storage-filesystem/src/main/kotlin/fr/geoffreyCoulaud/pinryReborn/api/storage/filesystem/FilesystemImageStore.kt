@@ -5,10 +5,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.HexFormat
 
@@ -37,6 +35,7 @@ class FilesystemImageStore(private val dataDir: String) : ImageStore {
 
     private val root: Path get() = Path.of(dataDir)
     private val tmpDir: Path get() = root.resolve("tmp")
+    private val paths = DataDirPaths(dataDir)
 
     // Cleanup-on-failure genuinely has to catch everything: the ImageTooLargeException guard,
     // an IOException from a broken source stream, a write/fsync failure under disk pressure, or
@@ -60,15 +59,16 @@ class FilesystemImageStore(private val dataDir: String) : ImageStore {
     }
 
     override fun promote(staged: StagedFile, storageKey: String) {
-        val dest = resolveWithinRoot(storageKey)
+        val dest = paths.resolveWithinRoot(storageKey)
         Files.createDirectories(dest.parent)
-        move(Path.of(staged.path), dest)
+        paths.atomicMove(Path.of(staged.path), dest)
     }
 
-    override fun openStream(storageKey: String): InputStream = Files.newInputStream(resolveWithinRoot(storageKey))
+    override fun openStream(storageKey: String): InputStream =
+        Files.newInputStream(paths.resolveWithinRoot(storageKey))
 
     override fun delete(storageKey: String) {
-        Files.deleteIfExists(resolveWithinRoot(storageKey))
+        Files.deleteIfExists(paths.resolveWithinRoot(storageKey))
     }
 
     override fun discard(staged: StagedFile) {
@@ -100,43 +100,5 @@ class FilesystemImageStore(private val dataDir: String) : ImageStore {
             out.channel.force(true)
         }
         return byteSize to digest.digest()
-    }
-
-    /**
-     * Moves [source] to [dest], preferring an atomic move and falling back to a plain move if
-     * the filesystem cannot provide atomicity for this pair of paths. Correctness never
-     * depends on atomicity: [source] and [dest] are both resolved under the same data
-     * directory, so the atomic path is expected to always succeed in practice (single file
-     * store per deployment).
-     *
-     * Coverage note: the [AtomicMoveNotSupportedException] fallback line is not exercised by
-     * any test (source and dest always share a filesystem here) and shows as uncovered in the
-     * Kover *line* report. It does not need a dedicated test to satisfy the 100%-branch gate:
-     * a try/catch dispatches via the JVM exception table, not a conditional-jump instruction,
-     * so Kover's *branch* metric (the gated one) does not count the handler as a branch at
-     * all. Forcing this line with `mockkStatic(java.nio.file.Files::class)` was considered and
-     * rejected: static mocking of JDK classes is documented elsewhere in this codebase
-     * (`EbeanDatabaseProducerTest`) as deadlocking the test JVM.
-     */
-    private fun move(source: Path, dest: Path) {
-        try {
-            Files.move(source, dest, StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: AtomicMoveNotSupportedException) {
-            Files.move(source, dest)
-        }
-    }
-
-    /**
-     * Resolves [storageKey] under [root], rejecting anything that escapes the data directory as
-     * defence in depth. Normalising then checking containment covers both `..` traversal and an
-     * absolute [storageKey] (which `Path.resolve` would otherwise return verbatim, outside the
-     * root). Storage keys are server-generated (never taken verbatim from user input), so this
-     * guard is a backstop rather than the primary safety mechanism.
-     */
-    private fun resolveWithinRoot(storageKey: String): Path {
-        val normalizedRoot = root.normalize()
-        val resolved = normalizedRoot.resolve(storageKey).normalize()
-        require(resolved.startsWith(normalizedRoot)) { "Illegal storage key: $storageKey" }
-        return resolved
     }
 }
