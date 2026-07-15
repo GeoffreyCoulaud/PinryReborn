@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbe
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
@@ -32,6 +33,7 @@ class SetPinImage(
     private val imageProbe: ImageProbe,
     private val clock: Clock,
     private val clearPinDownload: ClearPinDownload,
+    private val renditionCache: RenditionCache,
 ) {
     fun set(pinId: UUID, requester: User, upload: InputStream, maxBytes: Long, maxPixels: Long): SetPinImageResult {
         val pin = pinRepository.findPinById(pinId) ?: throw ImagePinDoesNotExistError()
@@ -78,10 +80,13 @@ class SetPinImage(
             imageStore.delete(storageKey)
             throw e
         }
-        // Deleting the superseded file is best-effort only: the new row is already committed, so
-        // a failure here (old file already gone, transient I/O error, ...) must not turn a
-        // successful upload into a 500.
-        existing?.let { old -> runCatching { imageStore.delete(old.storageKey) } }
+        // Deleting the superseded file (and evicting its cached renditions) is best-effort only:
+        // the new row is already committed, so a failure here (old file already gone, transient
+        // I/O error, ...) must not turn a successful upload into a 500.
+        existing?.let { old ->
+            runCatching { imageStore.delete(old.storageKey) }
+            runCatching { renditionCache.evictImage(old.id) }
+        }
         clearPinDownload.clear(pinId)
         return SetPinImageResult(image = saved, replaced = existing != null)
     }
