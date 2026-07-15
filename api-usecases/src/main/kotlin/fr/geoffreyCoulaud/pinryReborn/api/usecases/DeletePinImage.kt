@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageDoesNotExistError
@@ -16,6 +17,7 @@ class DeletePinImage(
     private val imageRepository: ImageRepositoryInterface,
     private val imageStore: ImageStore,
     private val clearPinDownload: ClearPinDownload,
+    private val renditionCache: RenditionCache,
 ) {
     fun delete(pinId: UUID, requester: User) {
         val pin = pinRepository.findPinById(pinId) ?: throw ImagePinDoesNotExistError()
@@ -24,6 +26,7 @@ class DeletePinImage(
         if (image != null) {
             imageRepository.deleteByPinId(pinId)
             imageStore.delete(image.storageKey)
+            runCatching { renditionCache.evictImage(image.id) }
             clearPinDownload.clear(pinId)
             return
         }
