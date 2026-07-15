@@ -28,7 +28,7 @@ class ImagePortsTest {
         }
         val probe = object : ImageProbe {
             override fun probe(staged: StagedFile, maxPixels: Long) =
-                ProbeResult(ImageFormat.PNG, 10, 20)
+                ProbeResult(ImageFormat.PNG, 10, 20, animated = false)
         }
         val staged = store.stage(ByteArrayInputStream(byteArrayOf(1, 2, 3)), 100)
         val result = probe.probe(staged, 1_000)
