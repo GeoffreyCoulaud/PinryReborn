@@ -18,6 +18,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.TooManyRedirectsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
@@ -49,13 +50,18 @@ class DownloadPinImageTest {
     private val fetcher: ImageFetcher = mockk()
     private val runner: TransactionRunner = mockk()
     private val clock: Clock = mockk()
+    private val renditionCache: RenditionCache = mockk()
     private val now = Instant.parse("2026-07-10T00:00:00Z")
     private val pinId = randomUUID()
     private val user = User(randomUUID(), "u")
 
-    private val subject = DownloadPinImage(pins, images, downloads, store, probe, fetcher, runner, clock)
+    private val subject =
+        DownloadPinImage(pins, images, downloads, store, probe, fetcher, runner, clock, renditionCache)
 
-    init { every { clock.now() } returns now }
+    init {
+        every { clock.now() } returns now
+        every { renditionCache.evictImage(any()) } returns Unit
+    }
 
     private fun pendingRow() = ImageDownload(
         pinId, "https://x/i.png", DownloadStatus.PENDING, null, null, randomUUID(), now, now,
@@ -247,6 +253,7 @@ class DownloadPinImageTest {
         verify { images.save(any()) }
         // First-time download: no superseded image, so nothing is deleted.
         verify(exactly = 0) { store.delete(any()) }
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 
     @Test
@@ -266,6 +273,19 @@ class DownloadPinImageTest {
     }
 
     @Test
+    fun `Given a still-PENDING row over an existing image, Then it evicts the superseded image's rendition cache`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
+        val supersededKey = "originals/x/$pinId/old.png"
+        val superseded = Image(randomUUID(), pinId, "image/png", 1, 1, false, 3, "oldhash", supersededKey, now)
+        every { images.findByPinId(pinId) } returns superseded
+        every { downloads.deleteIfPending(pinId) } returns 1
+        every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
+        subject.download(pinId, ctx(), 100, 100)
+        verify { renditionCache.evictImage(superseded.id) }
+    }
+
+    @Test
     fun `Given the row was superseded before the swap, Then it deletes the promoted file and does not save`() {
         stubUntilStage()
         every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
@@ -274,6 +294,8 @@ class DownloadPinImageTest {
         subject.download(pinId, ctx(), 100, 100)
         verify { store.delete(any()) }
         verify(exactly = 0) { images.save(any()) }
+        // A no-op swap keeps the old image; its rendition cache must not be touched.
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 
     @Test
@@ -286,5 +308,6 @@ class DownloadPinImageTest {
         verify { store.delete(any()) }
         verify { downloads.recordLastError(pinId, "INTERNAL_ERROR", now) }
         verify(exactly = 0) { images.save(any()) }
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 }

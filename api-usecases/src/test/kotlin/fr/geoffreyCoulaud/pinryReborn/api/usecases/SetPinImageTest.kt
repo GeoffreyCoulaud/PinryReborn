@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbe
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
@@ -42,12 +43,15 @@ class SetPinImageTest : BaseTest() {
     private val probe = mockk<ImageProbe>()
     private val clock = mockk<Clock>()
     private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
-    private val useCase = SetPinImage(pins, images, store, probe, clock, clearPinDownload)
+    private val renditionCache = mockk<RenditionCache>()
+    private val useCase = SetPinImage(pins, images, store, probe, clock, clearPinDownload, renditionCache)
 
     private val owner = User(randomUUID(), createRandomString())
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
     private fun upload() = ByteArrayInputStream(byteArrayOf(1, 2, 3))
     private val staged = StagedFile("/tmp/s", 3, "hash")
+
+    init { every { renditionCache.evictImage(any()) } returns Unit }
 
     @Test fun `Given a valid upload by the owner, Then it stores and persists a new image`() {
         val p = pin()
@@ -67,6 +71,8 @@ class SetPinImageTest : BaseTest() {
         verify { store.promote(staged, result.image.storageKey) }
         verify { images.save(result.image) }
         verify { clearPinDownload.clear(p.id) }
+        // A first-time upload has no superseded image, so nothing is evicted.
+        verify(exactly = 0) { renditionCache.evictImage(any()) }
     }
 
     @Test fun `Given a replacement, Then the old file is deleted after commit`() {
@@ -83,6 +89,38 @@ class SetPinImageTest : BaseTest() {
 
         assertTrue(result.replaced)
         verify { store.delete("originals/o/old.png") }
+    }
+
+    @Test fun `Given a replaced image, Then the old image's rendition cache is evicted`() {
+        val p = pin()
+        val old = Image(randomUUID(), p.id, "image/png", 1, 1, false, 1, "old", "originals/o/old.png", Instant.EPOCH)
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2, animated = false)
+        every { images.findByPinId(p.id) } returns old
+        every { clock.now() } returns Instant.EPOCH
+        every { images.save(any()) } answers { firstArg() }
+
+        useCase.set(p.id, owner, upload(), 30, 50)
+
+        verify { renditionCache.evictImage(old.id) }
+    }
+
+    @Test fun `Given the rendition cache eviction fails during replace, Then the upload still succeeds`() {
+        val p = pin()
+        val old = Image(randomUUID(), p.id, "image/png", 1, 1, false, 1, "old", "originals/o/old.png", Instant.EPOCH)
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.WEBP, 2, 2, animated = false)
+        every { images.findByPinId(p.id) } returns old
+        every { clock.now() } returns Instant.EPOCH
+        every { images.save(any()) } answers { firstArg() }
+        every { renditionCache.evictImage(any()) } throws RuntimeException("io")
+
+        val result = useCase.set(p.id, owner, upload(), 30, 50)
+
+        assertTrue(result.replaced)
+        verify { images.save(result.image) }
     }
 
     @Test fun `Given a missing pin, Then it throws ImagePinDoesNotExistError`() {

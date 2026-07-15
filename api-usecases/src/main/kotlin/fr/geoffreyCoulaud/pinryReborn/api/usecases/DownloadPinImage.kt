@@ -17,6 +17,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.TooManyRedirectsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
@@ -43,6 +44,7 @@ class DownloadPinImage(
     private val imageFetcher: ImageFetcher,
     private val transactionRunner: TransactionRunner,
     private val clock: Clock,
+    private val renditionCache: RenditionCache,
 ) {
     fun download(pinId: UUID, context: TaskContext, maxBytes: Long, maxPixels: Long) {
         val downloadRow = imageDownloadRepository.findByPinId(pinId)
@@ -107,11 +109,15 @@ class DownloadPinImage(
                     }
                 }
             if (swapped) {
-                // Best-effort delete of the superseded file on a successful mode-B replace (spec
-                // section 8 step 7), mirroring the mode-A path: the new row is committed, so a
-                // failure here must not fail the task. Only after a real swap; a no-op swap kept
-                // the old image, which must not be touched.
-                superseded?.let { old -> runCatching { imageStore.delete(old.storageKey) } }
+                // Best-effort delete of the superseded file (and eviction of its cached
+                // renditions) on a successful mode-B replace (spec section 8 step 7), mirroring
+                // the mode-A path: the new row is committed, so a failure here must not fail the
+                // task. Only after a real swap; a no-op swap kept the old image, which must not
+                // be touched.
+                superseded?.let { old ->
+                    runCatching { imageStore.delete(old.storageKey) }
+                    runCatching { renditionCache.evictImage(old.id) }
+                }
             } else {
                 imageStore.delete(image.storageKey)
             }
