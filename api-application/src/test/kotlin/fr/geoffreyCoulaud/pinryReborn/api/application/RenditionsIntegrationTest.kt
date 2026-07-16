@@ -16,6 +16,7 @@ import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -40,7 +41,8 @@ class RenditionsTestProfile : QuarkusTestProfile {
  * End-to-end coverage of rendition serving through the fully wired app with real libvips + real
  * filesystem cache: WebP renditions at the correct shortest side, animated vs flattened output,
  * original-as-is when the requested size is not smaller than the source, a 400 on an unknown
- * size, and cache eviction on delete. This is where the animated `page-height` correctness (spec
+ * size, and cache eviction on both delete and replace. This is where the animated `page-height`
+ * correctness (spec
  * section 13) is validated end-to-end against a real 3-frame GIF, by re-probing the response
  * bytes with the real `VipsImageProbe`.
  */
@@ -74,13 +76,20 @@ class RenditionsIntegrationTest : IntegrationTest() {
         return pin.id
     }
 
-    private fun upload(username: String, password: String, pinId: UUID, fixtureName: String, contentType: String) {
+    private fun upload(
+        username: String,
+        password: String,
+        pinId: UUID,
+        fixtureName: String,
+        contentType: String,
+        expectedStatus: Int = 201, // a first upload creates (201); replacing an existing image is a 200
+    ) {
         given()
             .auth().preemptive().basic(username, password)
             .multiPart("file", fixture(fixtureName), contentType)
             .`when`().put("/api/v1/pins/$pinId/image")
             .then()
-            .statusCode(201)
+            .statusCode(expectedStatus)
     }
 
     private fun probeBytes(bytes: ByteArray): ProbeResult {
@@ -229,5 +238,40 @@ class RenditionsIntegrationTest : IntegrationTest() {
 
         // Then: the cache subtree is gone
         assertFalse(Files.exists(cacheDir), "rendition cache subtree should be evicted on delete")
+    }
+
+    @Test
+    fun `Given a cached rendition, Then replacing the image evicts it and a second GET regenerates`() {
+        // Given: a pin whose first rendition has been generated and cached
+        val pinId = createUserAndPin("rreplace", "password123")
+        upload("rreplace", "password123", pinId, "sample.png", "image/png")
+        val oldImageId = requireNotNull(imageRepository.findByPinId(pinId)).id
+        given()
+            .auth().preemptive().basic("rreplace", "password123")
+            .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
+            .then()
+            .statusCode(200)
+        val oldCacheDir: Path = Path.of(imagesConfig.dataDir()).resolve("cache/$oldImageId")
+        assertTrue(Files.exists(oldCacheDir), "rendition cache subtree should exist after the first GET")
+
+        // When: the canonical image is replaced (mode A)
+        upload("rreplace", "password123", pinId, "animated.gif", "image/gif", expectedStatus = 200)
+
+        // Then: the replaced image's cache subtree is evicted
+        assertFalse(Files.exists(oldCacheDir), "rendition cache subtree should be evicted on replace")
+
+        // Then: a second GET regenerates a rendition under the new image id
+        val newImageId = requireNotNull(imageRepository.findByPinId(pinId)).id
+        assertNotEquals(oldImageId, newImageId, "replacing should mint a new canonical image")
+        given()
+            .auth().preemptive().basic("rreplace", "password123")
+            .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
+            .then()
+            .statusCode(200)
+            .contentType("image/webp")
+        assertTrue(
+            Files.exists(Path.of(imagesConfig.dataDir()).resolve("cache/$newImageId")),
+            "the rendition should be regenerated under the new image id",
+        )
     }
 }

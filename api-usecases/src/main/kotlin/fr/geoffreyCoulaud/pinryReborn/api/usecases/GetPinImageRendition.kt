@@ -25,11 +25,16 @@ class GetPinImageRendition(
     fun get(pinId: UUID, requester: User, requestedPx: Int?, animated: Boolean): ServedImage {
         // Reuse 2a's load + owner/not-found guards verbatim (403/404 behaviour unchanged).
         val image = getPinImage.get(pinId, requester)
+        // The requested flag is a no-op on a non-animated source (spec section 3), so intersect it
+        // with the source before it reaches the key, the spec, or the descriptor. Without this a
+        // static original renders under an "-a" key: identical bytes cached twice and served under
+        // two ETags, and the transformer is told to decode frames from a source that has none.
+        val effectiveAnimated = animated && image.animated
         val effectivePx = effectiveRenditionPx(image, requestedPx, animated)
         return if (effectivePx == null) {
             ServedImage.Original(image)
         } else {
-            serveRendition(image, effectivePx, animated)
+            serveRendition(image, effectivePx, effectiveAnimated)
         }
     }
 
@@ -58,5 +63,19 @@ class GetPinImageRendition(
     }
 
     private fun keyFor(effectivePx: Int, animated: Boolean): String =
-        "$effectivePx-${if (animated) "a" else "s"}.webp"
+        "$ENCODER_VERSION-$effectivePx-${if (animated) "a" else "s"}.webp"
+
+    companion object {
+        /**
+         * Bumped whenever the rendition encoding changes, to invalidate previously generated
+         * renditions cleanly (spec section 9).
+         *
+         * It is deliberately part of BOTH the cache key (here) and the ETag the controller derives
+         * from this same constant, so one bump orphans every cached file AND mints fresh
+         * validators. Versioning only the ETag would be worse than not versioning it at all: the
+         * client would refetch, hit the old bytes under the unchanged key, and get them stamped
+         * with the new ETag, pinning the staleness permanently.
+         */
+        const val ENCODER_VERSION = "v1"
+    }
 }

@@ -14,6 +14,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinImageS
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.DeletePinImage
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.GetPinImageRendition
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.GetPinImageRendition.Companion.ENCODER_VERSION
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinImageState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinImageStatus
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.RequestPinImageDownload
@@ -159,6 +160,8 @@ class ImageController(
             .build()
     }
 
+    // The encoder version is imported from the use case that builds the cache key rather than
+    // duplicated here, so a bump invalidates the cached bytes and their validator together.
     private fun renditionEtag(rendition: ServedImage.Rendition): String =
         "$ENCODER_VERSION-${rendition.imageId}-${rendition.effectivePx}-${if (rendition.animated) "a" else "s"}"
 
@@ -209,8 +212,5 @@ class ImageController(
         // Operation. Keeping the summary in one place avoids the two annotations drifting apart.
         const val SET_IMAGE_OPERATION_SUMMARY =
             "Set the pin's canonical image (upload bytes, or request a server-side fetch)"
-
-        // Bumped whenever the rendition encoding changes, so previously cached ETags miss cleanly.
-        const val ENCODER_VERSION = "v1"
     }
 }
