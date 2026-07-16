@@ -195,8 +195,8 @@ class ImageControllerTest {
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { renditionsConfig.small() } returns 240
         every { getPinImageRendition.get(pinId, user, 240, true) } returns
-            ServedImage.Rendition(imageId, "240-a.webp", 240, animated = true)
-        every { renditionCache.openStream(imageId, "240-a.webp") } returns ByteArrayInputStream(byteArrayOf(7, 7))
+            ServedImage.Rendition(imageId, "v1-240-a.webp", 240, animated = true)
+        every { renditionCache.openStream(imageId, "v1-240-a.webp") } returns ByteArrayInputStream(byteArrayOf(7, 7))
 
         // When
         val response = controller.getImage(pinId, size = "small", animated = null, ifNoneMatch = null)
@@ -221,8 +221,8 @@ class ImageControllerTest {
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { renditionsConfig.small() } returns 240
         every { getPinImageRendition.get(pinId, user, 240, false) } returns
-            ServedImage.Rendition(imageId, "240-s.webp", 240, animated = false)
-        every { renditionCache.openStream(imageId, "240-s.webp") } returns ByteArrayInputStream(byteArrayOf(4))
+            ServedImage.Rendition(imageId, "v1-240-s.webp", 240, animated = false)
+        every { renditionCache.openStream(imageId, "v1-240-s.webp") } returns ByteArrayInputStream(byteArrayOf(4))
 
         // When
         val response = controller.getImage(pinId, size = "small", animated = false, ifNoneMatch = null)
@@ -241,8 +241,8 @@ class ImageControllerTest {
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { renditionsConfig.small() } returns 240
         every { getPinImageRendition.get(pinId, user, 240, true) } returns
-            ServedImage.Rendition(imageId, "240-s.webp", 240, animated = false)
-        every { renditionCache.openStream(imageId, "240-s.webp") } returns ByteArrayInputStream(byteArrayOf(3))
+            ServedImage.Rendition(imageId, "v1-240-s.webp", 240, animated = false)
+        every { renditionCache.openStream(imageId, "v1-240-s.webp") } returns ByteArrayInputStream(byteArrayOf(3))
 
         // When
         val response = controller.getImage(pinId, size = "small", animated = null, ifNoneMatch = null)
@@ -265,7 +265,7 @@ class ImageControllerTest {
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { renditionsConfig.small() } returns 240
         every { getPinImageRendition.get(pinId, user, 240, true) } returns
-            ServedImage.Rendition(imageId, "240-a.webp", 240, animated = true)
+            ServedImage.Rendition(imageId, "v1-240-a.webp", 240, animated = true)
 
         // When
         val response = controller.getImage(
@@ -302,8 +302,8 @@ class ImageControllerTest {
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { renditionsConfig.small() } returns 240
         every { getPinImageRendition.get(pinId, user, 240, true) } returns
-            ServedImage.Rendition(imageId, "240-a.webp", 240, animated = true)
-        every { renditionCache.openStream(imageId, "240-a.webp") } returns null
+            ServedImage.Rendition(imageId, "v1-240-a.webp", 240, animated = true)
+        every { renditionCache.openStream(imageId, "v1-240-a.webp") } returns null
 
         // When
         val response = controller.getImage(pinId, size = "small", animated = null, ifNoneMatch = null)

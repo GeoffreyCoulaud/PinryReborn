@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
@@ -25,24 +26,37 @@ class FilesystemRenditionCacheTest {
     @Test
     fun `Given a stored rendition, Then openStream reads it back`() {
         val id = UUID.randomUUID()
-        cache().store(id, "4-a.webp", staged(byteArrayOf(1, 2, 3)))
-        val read = cache().openStream(id, "4-a.webp")!!.use { it.readBytes() }
+        cache().store(id, "v1-4-a.webp", staged(byteArrayOf(1, 2, 3)))
+        val read = cache().openStream(id, "v1-4-a.webp")!!.use { it.readBytes() }
         assertArrayEquals(byteArrayOf(1, 2, 3), read)
     }
 
     @Test
     fun `Given no rendition, Then openStream returns null`() {
-        assertNull(cache().openStream(UUID.randomUUID(), "4-a.webp"))
+        assertNull(cache().openStream(UUID.randomUUID(), "v1-4-a.webp"))
+    }
+
+    @Test
+    fun `Given the cache write fails, Then the staged temp file is cleaned up`() {
+        // Given: a regular FILE occupying the image's cache subtree path, so createDirectories fails
+        val id = UUID.randomUUID()
+        Files.createDirectories(dataDir.resolve("cache"))
+        Files.write(dataDir.resolve("cache/$id"), byteArrayOf(0))
+        val staged = staged(byteArrayOf(1, 2, 3))
+
+        // When / Then: the error surfaces, but store still owns and releases the temp
+        assertThrows(IOException::class.java) { cache().store(id, "v1-4-a.webp", staged) }
+        assertFalse(Files.exists(Path.of(staged.path)), "the staged temp must not leak")
     }
 
     @Test
     fun `Given cached renditions for an image, Then evictImage removes the whole subtree`() {
         val id = UUID.randomUUID()
-        cache().store(id, "4-a.webp", staged(byteArrayOf(1)))
-        cache().store(id, "8-s.webp", staged(byteArrayOf(2)))
+        cache().store(id, "v1-4-a.webp", staged(byteArrayOf(1)))
+        cache().store(id, "v1-8-s.webp", staged(byteArrayOf(2)))
         cache().evictImage(id)
         assertFalse(Files.exists(dataDir.resolve("cache/$id")))
-        assertNull(cache().openStream(id, "4-a.webp"))
+        assertNull(cache().openStream(id, "v1-4-a.webp"))
     }
 
     @Test
