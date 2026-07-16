@@ -220,14 +220,15 @@ happen at the edge, §11).
 3. needsDownscale = min(image.width, image.height) > requestedPx
    needsFlatten   = image.animated && !animated
    if !needsDownscale && !needsFlatten → return Original(image)  // never upscale, no re-encode
-4. effectivePx = min(requestedPx, min(image.width, image.height))
-   key = "$effectivePx-${if (animated) "a" else "s"}.webp"
+4. effectiveAnimated = animated && image.animated    // §3: the flag is a no-op on a static source
+   effectivePx = min(requestedPx, min(image.width, image.height))
+   key = "$encoderVersion-$effectivePx-${if (effectiveAnimated) "a" else "s"}.webp"
    cached = renditionCache.openStream(image.id, key)
-   if cached != null → return Rendition(image.id, key, effectivePx, animated)   // hit
+   if cached != null → return Rendition(image.id, key, effectivePx, effectiveAnimated)   // hit
 5. staged = imageTransformer.render(imageStore.openStream(image.storageKey),
-                                    RenditionSpec(effectivePx, animated))
+                                    RenditionSpec(effectivePx, effectiveAnimated))
    renditionCache.store(image.id, key, staged)                                   // atomic move
-   return Rendition(image.id, key, effectivePx, animated)                        // miss → generated
+   return Rendition(image.id, key, effectivePx, effectiveAnimated)               // miss → generated
 ```
 
 `Original(image)` and `Rendition(imageId, key, effectivePx, animated)` are the two arms of the
@@ -235,24 +236,40 @@ returned descriptor (a sealed `ServedImage` type). The controller maps `Original
 streaming path, and `Rendition` to `renditionCache.openStream(imageId, key)` + the WebP/ETag
 headers of §7.
 
+Note: `effectiveAnimated` intersects the requested flag with the source's real animation, which
+is what makes §3's "no-op on a non-animated source" literal rather than approximate. A static
+source therefore yields exactly one cache entry and one ETag whatever `?animated=` says, and the
+transformer is never asked to load a single-frame file with the multi-page option (libvips logs a
+CRITICAL when a loader has no `n` property). `needsFlatten` deliberately keeps using the RAW
+flag: flattening is what an animated source plus `animated=false` asks for.
+
 Note: step 1 **delegates to the existing `GetPinImage.get`** for the load + owner/not-found
 guards, so the no-size path is byte-identical to 2a and the guards are not duplicated. The
 controller routes every `GET …/image` (with or without `size`) through `GetPinImageRendition`.
 
 ## 9. Cache layout, key, ETag
 
-- **Layout**: `<data_dir>/cache/<imageId>/<effectivePx>-<a|s>.webp`. The per-image subtree is
-  the eviction unit.
-- **Key** (`<effectivePx>-<a|s>.webp`): derived from the effective pixel value (not the size
-  name) and the animation flag. Config changes orphan old keys (benign); sizes clamping to the
-  same native dimension dedup to one file.
-- **ETag**: `"<encoderVersion>-<imageId>-<effectivePx>-<a|s>"`, a stable synthetic validator.
-  A rendition's bytes are fully determined by these inputs (libvips encoding is
+- **Layout**: `<data_dir>/cache/<imageId>/<encoderVersion>-<effectivePx>-<a|s>.webp`. The
+  per-image subtree is the eviction unit.
+- **Key** (`<encoderVersion>-<effectivePx>-<a|s>.webp`): derived from the encoder version, the
+  effective pixel value (not the size name), and the *effective* animation flag (§8). Config
+  changes orphan old keys (benign); sizes clamping to the same native dimension dedup to one
+  file. The version belongs in the KEY, not only in the ETag: a version living solely in the
+  ETag would invalidate the client's validator while the server kept hitting the old key, so it
+  would serve stale bytes stamped with the new validator, permanently. In the key, a bump
+  misses and regenerates.
+- **ETag**: `"<encoderVersion>-<imageId>-<effectivePx>-<a|s>"`, a stable synthetic validator,
+  built from the same `encoderVersion` constant as the key (one definition, owned where the key
+  is built). A rendition's bytes are fully determined by these inputs (libvips encoding is
   deterministic), so the ETag survives regeneration. `encoderVersion` is a bumpable constant
   to invalidate cleanly if encoding parameters ever change. The original keeps its
   `contentHash` ETag.
-- **Concurrency**: `RenditionCache.store` writes via temp + atomic move. Two concurrent misses
-  are benign (identical bytes; last move wins). No single-flight lock.
+- **Concurrency**: `RenditionCache.store` writes via temp + move, and takes ownership of the
+  staged temp (moved on success, discarded on failure, so a failing store cannot orphan temps).
+  Two concurrent misses are benign (identical bytes; last move wins). This holds on BOTH move
+  paths: the atomic one replaces via rename semantics, and the non-atomic fallback passes
+  `REPLACE_EXISTING` to match. The fallback is not exotic here - renditions stage in
+  `java.io.tmpdir`, often a different filesystem from the data dir. No single-flight lock.
 
 ## 10. Lifecycle cascade (eviction)
 
