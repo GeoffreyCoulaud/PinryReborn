@@ -65,6 +65,20 @@ class FilesystemRenditionCacheTest {
     }
 
     @Test
+    fun `Given a rendition already cached under a key, Then storing it again wins instead of failing`() {
+        // Given a rendition already stored under the key
+        val id = UUID.randomUUID()
+        cache().store(id, "v1-4-a.webp", staged(byteArrayOf(1)))
+
+        // When a second store targets the same key (a concurrent-miss re-render)
+        cache().store(id, "v1-4-a.webp", staged(byteArrayOf(2)))
+
+        // Then it replaced the entry rather than throwing
+        val read = cache().openStream(id, "v1-4-a.webp")!!.use { it.readBytes() }
+        assertArrayEquals(byteArrayOf(2), read)
+    }
+
+    @Test
     fun `Given a traversal key, Then it is rejected`() {
         // Given / When / Then: a key that escapes the data dir root is rejected.
         // Enough `..` to climb past the temp-dir depth to the filesystem root, so the
