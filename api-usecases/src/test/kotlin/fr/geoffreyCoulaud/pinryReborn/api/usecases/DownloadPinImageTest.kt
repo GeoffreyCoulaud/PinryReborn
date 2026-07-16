@@ -286,6 +286,20 @@ class DownloadPinImageTest {
     }
 
     @Test
+    fun `Given the rendition cache eviction fails during a real swap, Then the download still succeeds`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
+        val supersededKey = "originals/x/$pinId/old.png"
+        val superseded = Image(randomUUID(), pinId, "image/png", 1, 1, false, 3, "oldhash", supersededKey, now)
+        every { images.findByPinId(pinId) } returns superseded
+        every { downloads.deleteIfPending(pinId) } returns 1
+        every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
+        every { renditionCache.evictImage(any()) } throws RuntimeException("io")
+        subject.download(pinId, ctx(), 100, 100)
+        verify { images.save(any()) }
+    }
+
+    @Test
     fun `Given the row was superseded before the swap, Then it deletes the promoted file and does not save`() {
         stubUntilStage()
         every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
