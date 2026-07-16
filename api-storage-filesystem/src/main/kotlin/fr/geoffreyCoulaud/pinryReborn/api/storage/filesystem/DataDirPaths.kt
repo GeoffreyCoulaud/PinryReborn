@@ -23,7 +23,10 @@ internal class DataDirPaths(dataDir: String) {
     /**
      * Moves [source] to [dest], preferring an atomic move and falling back to a plain move when
      * the filesystem cannot provide atomicity. The fallback is a try/catch (JVM exception table,
-     * not a conditional jump), so Kover's branch metric does not count it.
+     * not a conditional jump), so Kover's branch metric does not count it. Forcing this line with
+     * `mockkStatic(java.nio.file.Files::class)` was considered and rejected: static mocking of JDK
+     * classes is documented elsewhere in this codebase (`EbeanDatabaseProducerTest`) as deadlocking
+     * the test JVM.
      */
     fun atomicMove(source: Path, dest: Path) {
         try {

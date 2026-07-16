@@ -13,6 +13,7 @@ import io.quarkus.test.junit.QuarkusTestProfile
 import io.quarkus.test.junit.TestProfile
 import io.restassured.RestAssured.given
 import jakarta.inject.Inject
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -120,13 +121,18 @@ class RenditionsIntegrationTest : IntegrationTest() {
         val pinId = createUserAndPin("rorig", "password123")
         upload("rorig", "password123", pinId, "sample.png", "image/png")
 
-        // When / Then
-        given()
+        // When
+        val bytes = given()
             .auth().preemptive().basic("rorig", "password123")
             .`when`().get("/api/v1/pins/$pinId/image")
             .then()
             .statusCode(200)
             .contentType("image/png")
+            .extract()
+            .asByteArray()
+
+        // Then
+        assertArrayEquals(Files.readAllBytes(fixture("sample.png").toPath()), bytes)
     }
 
     @Test
