@@ -21,6 +21,7 @@ class PinMapperTest {
             sourceMediaUrl = "https://example.com/img.jpg",
             description = createRandomString(),
             tags = emptyList(),
+            boards = emptyList(),
         )
 
     @Test

@@ -112,4 +112,29 @@ class BaseErrorMapperTest {
     fun `Given IMAGE_RENDITION_SIZE_INVALID, Then status is BAD_REQUEST`() {
         assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.IMAGE_RENDITION_SIZE_INVALID))
     }
+
+    @Test
+    fun `Given BOARD_DOES_NOT_EXIST, Then status is NOT_FOUND`() {
+        assertEquals(Response.Status.NOT_FOUND, statusFor(ErrorCode.BOARD_DOES_NOT_EXIST))
+    }
+
+    @Test
+    fun `Given BOARD_INSUFFICIENT_PERMISSIONS, Then status is FORBIDDEN`() {
+        assertEquals(Response.Status.FORBIDDEN, statusFor(ErrorCode.BOARD_INSUFFICIENT_PERMISSIONS))
+    }
+
+    @Test
+    fun `Given BOARD_NOT_SOFT_DELETED, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.BOARD_NOT_SOFT_DELETED))
+    }
+
+    @Test
+    fun `Given BOARD_ALREADY_SOFT_DELETED, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.BOARD_ALREADY_SOFT_DELETED))
+    }
+
+    @Test
+    fun `Given BOARD_INVALID_MEMBERSHIP, Then status is BAD_REQUEST`() {
+        assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.BOARD_INVALID_MEMBERSHIP))
+    }
 }
