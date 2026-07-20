@@ -69,7 +69,7 @@ class DownloadPinImageTest {
     private fun failedRow() = ImageDownload(
         pinId, "https://x/i.png", DownloadStatus.FAILED, DownloadReason.NOT_FOUND, null, randomUUID(), now, now,
     )
-    private fun pin() = Pin(pinId, user, "https://ctx", "https://x/i.png", "d", emptyList())
+    private fun pin() = Pin(pinId, user, "https://ctx", "https://x/i.png", "d", emptyList(), emptyList())
     private fun ctx(attempt: Int = 1, max: Int = 3) = TaskContext(attempt, max)
     private fun staged() = StagedFile("tmp/x", 3, "hash")
 

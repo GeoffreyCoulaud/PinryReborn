@@ -31,7 +31,8 @@ class PinTaggerTest {
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
-            tags = listOf(existingTag)
+            tags = listOf(existingTag),
+            boards = emptyList()
         )
         val newTagNames = listOf("newtag1", "newtag2")
         val newTag1 = Tag(id = randomUUID(), name = "newtag1", author = user)
@@ -60,7 +61,8 @@ class PinTaggerTest {
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
-            tags = listOf(existingTag)
+            tags = listOf(existingTag),
+            boards = emptyList()
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -84,7 +86,8 @@ class PinTaggerTest {
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
-            tags = listOf(existingTag)
+            tags = listOf(existingTag),
+            boards = emptyList()
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -123,7 +126,8 @@ class PinTaggerTest {
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
-            tags = emptyList()
+            tags = emptyList(),
+            boards = emptyList()
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -145,6 +149,7 @@ class PinTaggerTest {
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
             tags = emptyList(),
+            boards = emptyList(),
             softDeletedAt = Instant.now(),
         )
 

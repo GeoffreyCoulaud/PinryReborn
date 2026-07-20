@@ -33,7 +33,7 @@ class DeletePinImageTest : BaseTest() {
     init { every { renditionCache.evictImage(any()) } returns Unit }
 
     private val owner = User(randomUUID(), createRandomString())
-    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
+    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList())
     private fun imageFor(pinId: UUID, hash: String = "h") = Image(
         id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1, animated = false,
         byteSize = 1, contentHash = hash, storageKey = "originals/x/$pinId/i.png",

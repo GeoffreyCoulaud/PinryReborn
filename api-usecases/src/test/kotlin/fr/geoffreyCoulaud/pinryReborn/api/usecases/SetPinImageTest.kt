@@ -47,7 +47,7 @@ class SetPinImageTest : BaseTest() {
     private val useCase = SetPinImage(pins, images, store, probe, clock, clearPinDownload, renditionCache)
 
     private val owner = User(randomUUID(), createRandomString())
-    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList())
+    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList())
     private fun upload() = ByteArrayInputStream(byteArrayOf(1, 2, 3))
     private val staged = StagedFile("/tmp/s", 3, "hash")
 

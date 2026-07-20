@@ -27,6 +27,7 @@ class PinCreator(
             sourceMediaUrl = sourceMediaUrl,
             description = description,
             tags = tags,
+            boards = emptyList(),
         )
         return pinRepository.savePin(pin)
     }

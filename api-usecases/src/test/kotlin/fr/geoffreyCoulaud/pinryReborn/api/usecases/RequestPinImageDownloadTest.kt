@@ -42,7 +42,7 @@ class RequestPinImageDownloadTest {
         every { runner.inTransaction<ImageDownload>(any()) } answers { firstArg<() -> ImageDownload>().invoke() }
     }
 
-    private fun pin(author: User = owner) = Pin(pinId, author, "https://ctx", null, "d", emptyList())
+    private fun pin(author: User = owner) = Pin(pinId, author, "https://ctx", null, "d", emptyList(), emptyList())
     private fun aTask(id: java.util.UUID) = Task(
         id, PinDownloadTask.KIND, pinId.toString(), TaskState.PENDING, 0, now, 0, 5, null, null, false,
         "${PinDownloadTask.KIND}:$pinId", null,

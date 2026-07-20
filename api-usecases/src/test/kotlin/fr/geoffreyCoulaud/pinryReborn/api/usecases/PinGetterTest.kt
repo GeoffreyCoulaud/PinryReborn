@@ -46,6 +46,7 @@ class PinGetterTest {
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
             tags = emptyList(),
+            boards = emptyList(),
         )
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -66,6 +67,7 @@ class PinGetterTest {
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
             tags = emptyList(),
+            boards = emptyList(),
         )
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -113,6 +115,7 @@ class PinGetterTest {
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
             tags = emptyList(),
+            boards = emptyList(),
         )
         val cursor = Cursor(pivotId = pin.id, direction = CursorDirection.FORWARD)
         val expectedPage = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)

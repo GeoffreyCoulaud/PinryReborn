@@ -45,6 +45,7 @@ class PinRecycleBinTest {
         sourceMediaUrl = "https://example.com/img.jpg",
         description = "A pin",
         tags = emptyList(),
+        boards = emptyList(),
         softDeletedAt = softDeletedAt,
     )
 

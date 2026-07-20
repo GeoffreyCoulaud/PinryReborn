@@ -24,7 +24,8 @@ class PinSearcherTest {
         sourceContextUrl = "https://example.com/page",
         sourceMediaUrl = "https://example.com/image.jpg",
         description = description,
-        tags = emptyList()
+        tags = emptyList(),
+        boards = emptyList()
     )
 
     @Test
