@@ -10,5 +10,6 @@ data class PinOutputDto(
     val sourceMediaUrl: String?,
     val description: String,
     val tags: List<TagOutputDto>,
+    val boards: List<BoardRefDto>,
     val softDeletedAt: Instant? = null,
 )

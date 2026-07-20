@@ -44,6 +44,11 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.IMAGE_INVALID -> UNPROCESSABLE_ENTITY_STATUS_CODE
             ErrorCode.IMAGE_SOURCE_URL_INVALID -> Response.Status.BAD_REQUEST.statusCode
             ErrorCode.IMAGE_RENDITION_SIZE_INVALID -> Response.Status.BAD_REQUEST.statusCode
+            ErrorCode.BOARD_DOES_NOT_EXIST -> Response.Status.NOT_FOUND.statusCode
+            ErrorCode.BOARD_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
+            ErrorCode.BOARD_NOT_SOFT_DELETED -> Response.Status.CONFLICT.statusCode
+            ErrorCode.BOARD_ALREADY_SOFT_DELETED -> Response.Status.CONFLICT.statusCode
+            ErrorCode.BOARD_INVALID_MEMBERSHIP -> Response.Status.BAD_REQUEST.statusCode
         }
 
     private companion object {
