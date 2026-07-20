@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.controllers
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ApiConfig
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.common.CursorDto
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinBoardsInputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinCreationInputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinSortStrategyInputEnum
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinTagsInputDto
@@ -13,6 +14,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinMapper
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinSortStrategyMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security.getUser
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.serialization.Base64Json
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinBoardSetter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinGetter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinRecycleBin
@@ -37,6 +39,7 @@ class PinController(
     private val pinGetter: PinGetter,
     private val pinTagger: PinTagger,
     private val pinRecycleBin: PinRecycleBin,
+    private val pinBoardSetter: PinBoardSetter,
     private val securityIdentity: SecurityIdentity,
     private val apiConfig: ApiConfig,
 ) {
@@ -102,6 +105,17 @@ class PinController(
         val user = securityIdentity.getUser()
         return pinTagger
             .setTags(pinId = pinId, tagNames = tagsDto.tags, user = user)
+            .toDto()
+            .let { RestResponse.ok(it) }
+    }
+
+    @PUT
+    @Authenticated
+    @Path("/{pinId}/boards")
+    fun setBoards(pinId: UUID, @Valid boardsDto: PinBoardsInputDto): RestResponse<PinOutputDto> {
+        val user = securityIdentity.getUser()
+        return pinBoardSetter
+            .setBoards(pinId = pinId, boardIds = boardsDto.boardIds, user = user)
             .toDto()
             .let { RestResponse.ok(it) }
     }
