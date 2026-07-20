@@ -20,8 +20,8 @@ Last reviewed: 2026-07-20.
 
 ## Shipped (baseline)
 
-Four sub-projects merged (`v0.1.0-task-queue` → `v0.4.0-image-hosting-3`). CI green, 100% branch coverage,
-hexagonal layering, generated OpenAPI.
+Four sub-projects merged (`v0.1.0-task-queue` → `v0.4.0-image-hosting-3`), plus **boards** implemented and
+merge-ready on `feat/boards` (pending CI). CI green, 100% branch coverage, hexagonal layering, generated OpenAPI.
 
 - **Users**: registration (`POST /api/v1/users`, public) + HTTP Basic auth (Quarkus Security).
 - **Pins**: list (cursor pagination + sort strategy), get, create, update, soft-delete, tag.
@@ -30,19 +30,20 @@ hexagonal layering, generated OpenAPI.
 - **Images**: direct upload (multipart, mode-A), download-from-URL (mode-B, async via the task queue), serve
   original, delete, status, and disposable **renditions/thumbnails** (lazy WebP, on-disk cache, `?size` + `?animated`).
   See `docs/handoffs/2026-07-16 - handoff - image-hosting-3-renditions.md`.
+- **Boards**: named owner-scoped collections; a pin belongs to 0..N boards (set-based membership via
+  `PUT /pins/{id}/boards`, mirroring tags); board CRUD, cursor-paginated board pins, `PinOutputDto.boards`
+  + board `pinCount`, and a recycle bin mirroring `PinRecycleBin`. Merge-ready on `feat/boards`.
+  See `docs/handoffs/2026-07-20 - handoff - boards.md`.
 - **Infrastructure**: generic task queue (enqueue/cancel/reap), Ebean migrations, git hooks, CI gate.
 
 ---
 
 ## Open items
 
-### P0 — Boards / collections (current top priority)
+### P0 — (none open)
 
-**Decided 2026-07-20:** yes, Reborn has boards, and a pin belongs to **0..N boards** (optional, many-to-many).
-
-A full sub-project: board entity + CRUD, the pin↔board membership relation, board-scoped pin listing, and the
-DTOs/endpoints. Owner-scoped like the rest (no public/shared boards while visibility is parked). Drives the whole
-UI navigation. Next: brainstorm → spec → plan.
+**Boards shipped 2026-07-20** (moved to Shipped above; merge-ready on `feat/boards`). The former top priority
+is done; the next priorities are the P1 client-ergonomics items below, needed before serious UI/extension work.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
