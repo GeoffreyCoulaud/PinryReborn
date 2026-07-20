@@ -67,6 +67,12 @@ class PinRepositoryTest : RepositoryTest() {
         database.save(model)
     }
 
+    private fun restoreBoardModel(board: Board) {
+        val model = database.find(BoardModel::class.java, board.id)!!
+        model.softDeletedAt = null
+        database.save(model)
+    }
+
     private fun createPin(): Pin =
         Pin(
             id = randomUUID(),
@@ -207,6 +213,27 @@ class PinRepositoryTest : RepositoryTest() {
         // Then
         assertNotNull(loaded)
         assertEquals(listOf(active.id), loaded!!.boards.map { it.id })
+    }
+
+    @Test
+    fun `Given a recycled-board membership, When the pin is re-saved, Then the join row is preserved`() {
+        // Given
+        val user = createAndSaveUser()
+        val active = createAndSaveBoard(name = "Active", user = user)
+        val recycled = createAndSaveBoard(name = "Recycled", user = user)
+        val pin = createPinWithBoards(active, recycled)
+        repository.savePin(pin)
+        softDeleteBoardModel(recycled)
+        // The reloaded pin only exposes the active board (mirrors getBoardsForPin's active-only load).
+        val reloaded = repository.findPinById(pin.id)!!
+
+        // When - re-saving the pin (as PinTagger.setTags does) must not touch the recycled join row
+        repository.savePin(reloaded)
+
+        // Then - restoring the board shows the pin is still joined to it
+        restoreBoardModel(recycled)
+        val afterRestore = repository.findPinById(pin.id)!!
+        assertEquals(setOf(active.id, recycled.id), afterRestore.boards.map { it.id }.toSet())
     }
 
     @Test

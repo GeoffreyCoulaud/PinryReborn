@@ -267,6 +267,51 @@ class BoardRecycleBinIntegrationTest : IntegrationTest() {
     }
 
     @Test
+    fun `Given a pin in a soft-deleted board, Then re-saving the pin and restoring the board keeps the membership`() {
+        // Given
+        val username = "recycleresave"
+        val password = "password123"
+        val user = userCreator.createUserWithPassword(username, password)
+        val board = boardCreator.create(author = user, name = "Trip", description = "")
+        val pin = pinCreator.createPin(
+            author = user,
+            sourceContextUrl = "https://example.com",
+            sourceMediaUrl = "https://example.com/img.jpg",
+            description = "Pin",
+            tags = emptyList(),
+        )
+        given()
+            .auth().preemptive().basic(username, password)
+            .contentType(ContentType.JSON)
+            .body("""{"boardIds": ["${board.id}"]}""")
+            .put("/api/v1/pins/${pin.id}/boards")
+        given().auth().preemptive().basic(username, password).delete("/api/v1/boards/${board.id}")
+
+        // When - re-saving the pin (setting tags) must not drop the recycled board's join row
+        given()
+            .auth().preemptive().basic(username, password)
+            .contentType(ContentType.JSON)
+            .body("""{"tags": ["nature"]}""")
+            .`when`()
+            .put("/api/v1/pins/${pin.id}/tags")
+            .then()
+            .statusCode(200)
+        given()
+            .auth().preemptive().basic(username, password)
+            .post("/api/v1/boards/recycled/${board.id}/restore")
+
+        // Then - the pin is still listed under the restored board
+        given()
+            .auth().preemptive().basic(username, password)
+            .`when`()
+            .get("/api/v1/boards/${board.id}/pins")
+            .then()
+            .statusCode(200)
+            .body("pins", hasSize<Any>(1))
+            .body("pins[0].id", equalTo(pin.id.toString()))
+    }
+
+    @Test
     fun `Given a pin in two boards, Then soft-deleting one board drops it from the pin's boards but keeps the other`() {
         // Given
         val username = "recycleonebrd"

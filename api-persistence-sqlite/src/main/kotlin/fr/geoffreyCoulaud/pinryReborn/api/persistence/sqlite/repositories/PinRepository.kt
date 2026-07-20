@@ -109,10 +109,14 @@ class PinRepository(
     ) {
         // Get the new board IDs
         val updatedBoardIds = boards.map { it.id }.toSet()
+        // Only diff against ACTIVE memberships: a recycled board's join row is kept (getBoardsForPin
+        // never exposes it, so `boards` can't contain it), and re-saving the pin must not remove it.
         val existingBoardIds =
             QPinBoardModel()
                 .pin.id
                 .equalTo(pinModel.id)
+                .board.softDeletedAt
+                .isNull
                 .findList()
                 .map { it.board.id }
                 .toSet()
