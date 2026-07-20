@@ -2,6 +2,64 @@
   "openapi" : "3.1.0",
   "components" : {
     "schemas" : {
+      "BoardInputDto" : {
+        "type" : "object",
+        "required" : [ "name", "description" ],
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "pattern" : "\\S",
+            "maxLength" : 200
+          },
+          "description" : {
+            "type" : "string",
+            "maxLength" : 2000
+          }
+        }
+      },
+      "BoardListOutputDto" : {
+        "type" : "object",
+        "required" : [ "boards" ],
+        "properties" : {
+          "boards" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BoardOutputDto"
+            }
+          }
+        }
+      },
+      "BoardOutputDto" : {
+        "type" : "object",
+        "required" : [ "id", "name", "description", "pinCount" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "pinCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "BoardRefDto" : {
+        "type" : "object",
+        "required" : [ "id", "name" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
       "CursorDirectionDto" : {
         "type" : "string",
         "enum" : [ "FORWARD", "BACKWARD" ]
@@ -70,6 +128,20 @@
             }, {
               "type" : "null"
             } ]
+          }
+        }
+      },
+      "PinBoardsInputDto" : {
+        "type" : "object",
+        "required" : [ "boardIds" ],
+        "properties" : {
+          "boardIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid",
+              "pattern" : "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
+            }
           }
         }
       },
@@ -158,7 +230,7 @@
       },
       "PinOutputDto" : {
         "type" : "object",
-        "required" : [ "id", "authorId", "sourceContextUrl", "sourceMediaUrl", "description", "tags" ],
+        "required" : [ "id", "authorId", "sourceContextUrl", "sourceMediaUrl", "description", "tags", "boards" ],
         "properties" : {
           "id" : {
             "$ref" : "#/components/schemas/UUID"
@@ -179,6 +251,12 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/TagOutputDto"
+            }
+          },
+          "boards" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BoardRefDto"
             }
           },
           "softDeletedAt" : {
@@ -231,6 +309,33 @@
             "type" : "array",
             "items" : {
               "type" : "string"
+            }
+          }
+        }
+      },
+      "RecycledBoardDto" : {
+        "type" : "object",
+        "required" : [ "id", "name", "description" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RecycledBoardListOutputDto" : {
+        "type" : "object",
+        "required" : [ "boards" ],
+        "properties" : {
+          "boards" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecycledBoardDto"
             }
           }
         }
@@ -332,6 +437,348 @@
     }
   },
   "paths" : {
+    "/api/v1/boards" : {
+      "get" : {
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoardListOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "List Boards",
+        "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "post" : {
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BoardInputDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoardOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          },
+          "400" : {
+            "description" : "Bad Request"
+          }
+        },
+        "summary" : "Create Board",
+        "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/boards/recycled" : {
+      "get" : {
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecycledBoardListOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "List Recycled Boards",
+        "tags" : [ "Board Recycle Bin Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "delete" : {
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Empty Recycle Bin",
+        "tags" : [ "Board Recycle Bin Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/boards/recycled/{boardId}" : {
+      "delete" : {
+        "parameters" : [ {
+          "name" : "boardId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Permanently Delete Board",
+        "tags" : [ "Board Recycle Bin Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/boards/recycled/{boardId}/restore" : {
+      "post" : {
+        "parameters" : [ {
+          "name" : "boardId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoardOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Restore Board",
+        "tags" : [ "Board Recycle Bin Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/boards/{boardId}" : {
+      "put" : {
+        "parameters" : [ {
+          "name" : "boardId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BoardInputDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoardOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          },
+          "400" : {
+            "description" : "Bad Request"
+          }
+        },
+        "summary" : "Update Board",
+        "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "delete" : {
+        "parameters" : [ {
+          "name" : "boardId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Soft Delete Board",
+        "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "get" : {
+        "parameters" : [ {
+          "name" : "boardId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BoardOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Get Board",
+        "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/boards/{boardId}/pins" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "boardId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "schema" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CursorDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          }
+        }, {
+          "name" : "sort",
+          "in" : "query",
+          "schema" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/PinSortStrategyInputEnum"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PinListOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "List Board Pins",
+        "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
     "/api/v1/pins" : {
       "get" : {
         "parameters" : [ {
@@ -660,6 +1107,54 @@
           }
         },
         "summary" : "Get Pin",
+        "tags" : [ "Pin Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/pins/{pinId}/boards" : {
+      "put" : {
+        "parameters" : [ {
+          "name" : "pinId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PinBoardsInputDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PinOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          },
+          "400" : {
+            "description" : "Bad Request"
+          }
+        },
+        "summary" : "Set Boards",
         "tags" : [ "Pin Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
