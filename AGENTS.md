@@ -71,6 +71,9 @@ Five phases, always in order. **Committing is cheap** — you're allowed to comm
 **Free-form text** discussion with the user. Use `brainstorm` or `pick-my-brain` skills if clarification is needed. *
 *No `AskUserQuestion` tool** — ask the question in the message directly. No code, no plan — just understanding.
 
+Start from **`docs/backlog.md`** — the living, priority-ordered backlog of shipped work and open items. It is the
+source of truth for "what's left"; keep it current (see Wrap).
+
 ### 2. Spec
 
 Two forms, depending on complexity:
@@ -117,7 +120,8 @@ Once the gate is green and code reviewed:
 
 1. **Write the handoff** in `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was just built,
    learned pitfalls, suggested next step, what is NOT validated against real hardware. The handoff is committed before
-   continuing the wrap phase.
+   continuing the wrap phase. **Also refresh `docs/backlog.md`**: move merged items to Shipped, add any newly
+   discovered open items, and update "Last reviewed".
 2. **Integrate.** **Push the branch and open a PR** for any change touching code, config, tests, `deploy/`, or CI:
    `main`'s branch protection requires the `validate / gate` check, but `enforce_admins: false` means a local admin
    merge silently bypasses CI — don't. Wait for the gate green, then merge (linear history is required → **squash or
