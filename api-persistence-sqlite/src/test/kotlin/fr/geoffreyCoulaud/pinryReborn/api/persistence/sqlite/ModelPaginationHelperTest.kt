@@ -63,6 +63,7 @@ class ModelPaginationHelperTest : RepositoryTest() {
                     sourceMediaUrl = "https://example.com/image-$index.jpeg",
                     description = "Pin $index",
                     tags = emptyList(),
+                    boards = emptyList(),
                 )
             val model = pin.toModel()
             database.save(model)

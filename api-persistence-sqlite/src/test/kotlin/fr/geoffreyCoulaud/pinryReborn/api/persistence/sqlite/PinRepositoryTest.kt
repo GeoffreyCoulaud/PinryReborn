@@ -1,11 +1,14 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.BoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.TagRepository
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import java.util.UUID.randomUUID
 
 class PinRepositoryTest : RepositoryTest() {
@@ -43,6 +47,26 @@ class PinRepositoryTest : RepositoryTest() {
             ),
         )
 
+    private fun createAndSaveBoard(
+        name: String,
+        user: User,
+    ): Board {
+        val board = Board(
+            id = randomUUID(),
+            author = user,
+            name = name,
+            description = "",
+        )
+        database.save(board.toModel())
+        return board
+    }
+
+    private fun softDeleteBoardModel(board: Board) {
+        val model = database.find(BoardModel::class.java, board.id)!!
+        model.softDeletedAt = Instant.now()
+        database.save(model)
+    }
+
     private fun createPin(): Pin =
         Pin(
             id = randomUUID(),
@@ -51,11 +75,16 @@ class PinRepositoryTest : RepositoryTest() {
             sourceMediaUrl = "https://example.com/image.jpeg",
             description = "Something",
             tags = emptyList(),
+            boards = emptyList(),
         )
 
     private fun createPinWithTags(vararg tags: Tag): Pin =
         createPin()
             .copy(tags = tags.toList())
+
+    private fun createPinWithBoards(vararg boards: Board): Pin =
+        createPin()
+            .copy(boards = boards.toList())
 
     @Test
     fun `When saving a new pin, then should create it`() {
@@ -143,6 +172,63 @@ class PinRepositoryTest : RepositoryTest() {
         assertEquals(setOf(tag2, tag3), actual!!.tags.toSet())
     }
 
+    // --- Board membership tests ---
+
+    @Test
+    fun `Given a pin saved with two boards, Then findPinById returns both active boards`() {
+        // Given
+        val user = createAndSaveUser()
+        val board1 = createAndSaveBoard(name = "Travel", user = user)
+        val board2 = createAndSaveBoard(name = "Food", user = user)
+        val pin = createPinWithBoards(board1, board2)
+
+        // When
+        repository.savePin(pin)
+        val loaded = repository.findPinById(pin.id)
+
+        // Then
+        assertNotNull(loaded)
+        assertEquals(setOf(board1.id, board2.id), loaded!!.boards.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `Given a pin whose board is soft-deleted, Then that board is excluded from the pin's boards`() {
+        // Given
+        val user = createAndSaveUser()
+        val active = createAndSaveBoard(name = "Active", user = user)
+        val recycled = createAndSaveBoard(name = "Recycled", user = user)
+        val pin = createPinWithBoards(active, recycled)
+        repository.savePin(pin)
+        softDeleteBoardModel(recycled)
+
+        // When
+        val loaded = repository.findPinById(pin.id)
+
+        // Then
+        assertNotNull(loaded)
+        assertEquals(listOf(active.id), loaded!!.boards.map { it.id })
+    }
+
+    @Test
+    fun `When changing a pin's boards, then should properly update them`() {
+        // Given
+        val user = createAndSaveUser()
+        val board1 = createAndSaveBoard(name = "board1", user = user)
+        val board2 = createAndSaveBoard(name = "board2", user = user)
+        val board3 = createAndSaveBoard(name = "board3", user = user)
+        val pin = createPinWithBoards(board1, board2)
+        repository.savePin(pin)
+        val updatedPin = pin.copy(boards = listOf(board2, board3))
+
+        // When
+        repository.savePin(updatedPin)
+
+        // Then
+        val actual = repository.findPinById(pin.id)
+        assertNotNull(actual)
+        assertEquals(setOf(board2, board3), actual!!.boards.toSet())
+    }
+
     // --- Soft delete tests ---
 
     private fun createAndSavePin(author: User): Pin {
@@ -153,6 +239,7 @@ class PinRepositoryTest : RepositoryTest() {
             sourceMediaUrl = "https://example.com/image.jpeg",
             description = "Something",
             tags = emptyList(),
+            boards = emptyList(),
         )
         return repository.savePin(pin)
     }
@@ -301,6 +388,24 @@ class PinRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given soft-deleted pin, Then permanentlyDeletePin removes it and its board associations`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val pin = createPinWithBoards(board).copy(author = user)
+        repository.savePin(pin)
+        val softDeleted = repository.softDeletePin(pin)
+
+        // When
+        // If the pin_board_model row were not deleted first, this would fail with a foreign
+        // key constraint violation (pin_board_model.pin_id references pins on delete restrict).
+        repository.permanentlyDeletePin(softDeleted)
+
+        // Then
+        assertNull(repository.findPinById(pin.id))
+    }
+
+    @Test
     fun `Given multiple soft-deleted pins, Then permanentlyDeleteAllSoftDeletedPinsForUser removes all`() {
         // Given
         val user = createAndSaveUser()
@@ -317,6 +422,26 @@ class PinRepositoryTest : RepositoryTest() {
         assertNull(repository.findPinById(pin1.id))
         assertNull(repository.findPinById(pin2.id))
         assertNotNull(repository.findPinById(activePin.id))
+    }
+
+    @Test
+    fun `Given multiple soft-deleted pins with boards, Then permanentlyDeleteAllSoftDeletedPinsForUser removes them`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val pin1 = repository.savePin(createPinWithBoards(board).copy(author = user))
+        val pin2 = repository.savePin(createPinWithBoards(board).copy(author = user))
+        repository.softDeletePin(pin1)
+        repository.softDeletePin(pin2)
+
+        // When
+        // If the pin_board_model rows were not deleted first, this would fail with a foreign
+        // key constraint violation (pin_board_model.pin_id references pins on delete restrict).
+        repository.permanentlyDeleteAllSoftDeletedPinsForUser(user)
+
+        // Then
+        assertNull(repository.findPinById(pin1.id))
+        assertNull(repository.findPinById(pin2.id))
     }
 
     @Test
@@ -481,5 +606,138 @@ class PinRepositoryTest : RepositoryTest() {
         assertTrue(page.items.isEmpty())
         assertNull(page.nextCursor)
         assertNull(page.previousCursor)
+    }
+
+    // --- findActivePinsForBoard ---
+
+    @Test
+    fun `Given pins in and out of a board, Then findActivePinsForBoard returns only the board's pins`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val otherBoard = createAndSaveBoard(name = "board2", user = user)
+        val inBoard = repository.savePin(createPinWithBoards(board).copy(author = user))
+        repository.savePin(createPinWithBoards(otherBoard).copy(author = user))
+
+        // When
+        val page = repository.findActivePinsForBoard(
+            reader = user,
+            boardId = board.id,
+            cursor = null,
+            pageSize = 10,
+            sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+        )
+
+        // Then
+        assertEquals(listOf(inBoard.id), page.items.map { it.id })
+    }
+
+    @Test
+    fun `Given a soft-deleted pin in a board, Then findActivePinsForBoard excludes it`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val pin = repository.savePin(createPinWithBoards(board).copy(author = user))
+        repository.softDeletePin(pin)
+
+        // When
+        val page = repository.findActivePinsForBoard(
+            reader = user,
+            boardId = board.id,
+            cursor = null,
+            pageSize = 10,
+            sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+        )
+
+        // Then
+        assertTrue(page.items.isEmpty())
+    }
+
+    @Test
+    fun `Given another user's pin in the board, Then findActivePinsForBoard excludes it`() {
+        // Given
+        val owner = createAndSaveUser()
+        val otherUser = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = owner)
+        repository.savePin(createPinWithBoards(board).copy(author = owner))
+
+        // When
+        val page = repository.findActivePinsForBoard(
+            reader = otherUser,
+            boardId = board.id,
+            cursor = null,
+            pageSize = 10,
+            sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+        )
+
+        // Then
+        assertTrue(page.items.isEmpty())
+    }
+
+    @Test
+    fun `Given a cursor pointing to an existing pin in a board, Then findActivePinsForBoard resumes from it`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val firstPin = repository.savePin(createPinWithBoards(board).copy(author = user))
+        val secondPin = repository.savePin(createPinWithBoards(board).copy(author = user))
+        val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
+
+        // When
+        val page = repository.findActivePinsForBoard(
+            reader = user,
+            boardId = board.id,
+            cursor = cursor,
+            pageSize = 10,
+            sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+        )
+
+        // Then
+        assertTrue(page.items.none { it.id == firstPin.id })
+        assertNotNull(page.items.find { it.id == secondPin.id })
+    }
+
+    @Test
+    fun `Given a cursor pointing to a nonexistent pin, Then findActivePinsForBoard treats it as the first page`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val pin = repository.savePin(createPinWithBoards(board).copy(author = user))
+        val cursor = Cursor(pivotId = randomUUID(), direction = CursorDirection.FORWARD)
+
+        // When
+        val page = repository.findActivePinsForBoard(
+            reader = user,
+            boardId = board.id,
+            cursor = cursor,
+            pageSize = 10,
+            sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+        )
+
+        // Then
+        assertEquals(1, page.items.size)
+        assertEquals(pin.id, page.items[0].id)
+    }
+
+    @Test
+    fun `Given many pins in a board, Then findActivePinsForBoard exposes both cursors`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard(name = "board1", user = user)
+        repeat(3) { repository.savePin(createPinWithBoards(board).copy(author = user)) }
+
+        // When
+        val page = repository.findActivePinsForBoard(
+            reader = user,
+            boardId = board.id,
+            cursor = null,
+            pageSize = 2,
+            sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+        )
+
+        // Then
+        assertEquals(2, page.items.size)
+        assertNotNull(page.nextCursor)
+        assertNotNull(page.previousCursor)
     }
 }

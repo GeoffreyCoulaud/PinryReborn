@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
@@ -19,7 +20,10 @@ object PinModelMapper {
             softDeletedAt = softDeletedAt,
         )
 
-    fun PinModel.toDomain(tags: List<Tag>): Pin =
+    fun PinModel.toDomain(
+        tags: List<Tag>,
+        boards: List<Board>,
+    ): Pin =
         Pin(
             id = id,
             author = author.toDomain(),
@@ -27,6 +31,7 @@ object PinModelMapper {
             sourceMediaUrl = sourceMediaUrl,
             description = description,
             tags = tags,
+            boards = boards,
             softDeletedAt = softDeletedAt,
         )
 
