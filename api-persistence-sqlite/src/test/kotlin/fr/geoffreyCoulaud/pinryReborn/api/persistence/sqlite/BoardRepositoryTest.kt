@@ -155,8 +155,8 @@ class BoardRepositoryTest : RepositoryTest() {
         boardRepository.permanentlyDeleteAllRecycledBoardsForUser(user)
 
         // Then
-        assertNull(boardRepository.findRecycledBoardById(recycledBoard1.id))
-        assertNull(boardRepository.findRecycledBoardById(recycledBoard2.id))
+        assertNull(boardRepository.findBoardById(recycledBoard1.id))
+        assertNull(boardRepository.findBoardById(recycledBoard2.id))
         assertNotNull(boardRepository.findActiveBoardById(activeBoard.id))
         val reloadedPin = pinRepository.findPinById(pinInRecycledBoard.id)
         assertNotNull(reloadedPin)
@@ -204,14 +204,27 @@ class BoardRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `Given a recycled board, Then findRecycledBoardById returns it`() {
+    fun `Given an active board, Then findBoardById returns it`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("Board", user)
+
+        // When
+        val result = boardRepository.findBoardById(board.id)
+
+        // Then
+        assertEquals(board, result)
+    }
+
+    @Test
+    fun `Given a recycled board, Then findBoardById still returns it`() {
         // Given
         val user = createAndSaveUser()
         val board = createAndSaveBoard("Board", user)
         boardRepository.softDeleteBoard(board)
 
         // When
-        val result = boardRepository.findRecycledBoardById(board.id)
+        val result = boardRepository.findBoardById(board.id)
 
         // Then
         // softDeletedAt is not compared for exact equality: SQLite truncates Instant precision
@@ -222,13 +235,9 @@ class BoardRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `Given an active board, Then findRecycledBoardById returns null`() {
-        // Given
-        val user = createAndSaveUser()
-        val board = createAndSaveBoard("Board", user)
-
-        // When
-        val result = boardRepository.findRecycledBoardById(board.id)
+    fun `Given an unknown board id, Then findBoardById returns null`() {
+        // Given / When
+        val result = boardRepository.findBoardById(randomUUID())
 
         // Then
         assertNull(result)

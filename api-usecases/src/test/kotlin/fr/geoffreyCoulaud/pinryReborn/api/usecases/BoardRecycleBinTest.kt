@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionBoardAlreadySoftDeletedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionBoardDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionBoardNotSoftDeletedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionPermissionError
@@ -37,7 +38,7 @@ class BoardRecycleBinTest {
         val user = User(id = randomUUID(), name = createRandomString())
         val board = createBoard(author = user)
         val recycled = board.copy(softDeletedAt = Instant.now())
-        every { boardRepository.findActiveBoardById(board.id) } returns board
+        every { boardRepository.findBoardById(board.id) } returns board
         every { boardRepository.softDeleteBoard(board) } returns recycled
 
         // When
@@ -49,11 +50,24 @@ class BoardRecycleBinTest {
     }
 
     @Test
-    fun `Given a missing active board, Then softDelete throws BoardDeletionBoardDoesNotExistError`() {
+    fun `Given an already recycled board, Then softDelete throws BoardDeletionBoardAlreadySoftDeletedError`() {
+        // Given
+        val user = User(id = randomUUID(), name = createRandomString())
+        val board = createBoard(author = user, softDeletedAt = Instant.now())
+        every { boardRepository.findBoardById(board.id) } returns board
+
+        // When, Then
+        assertThrows<BoardDeletionBoardAlreadySoftDeletedError> {
+            useCase.softDelete(boardId = board.id, user = user)
+        }
+    }
+
+    @Test
+    fun `Given a missing board, Then softDelete throws BoardDeletionBoardDoesNotExistError`() {
         // Given
         val user = User(id = randomUUID(), name = createRandomString())
         val boardId = randomUUID()
-        every { boardRepository.findActiveBoardById(boardId) } returns null
+        every { boardRepository.findBoardById(boardId) } returns null
 
         // When, Then
         assertThrows<BoardDeletionBoardDoesNotExistError> {
@@ -62,12 +76,12 @@ class BoardRecycleBinTest {
     }
 
     @Test
-    fun `Given an active board owned by another user, Then softDelete throws BoardDeletionPermissionError`() {
+    fun `Given a board owned by another user, Then softDelete throws BoardDeletionPermissionError`() {
         // Given
         val owner = User(id = randomUUID(), name = createRandomString())
         val otherUser = User(id = randomUUID(), name = createRandomString())
         val board = createBoard(author = owner)
-        every { boardRepository.findActiveBoardById(board.id) } returns board
+        every { boardRepository.findBoardById(board.id) } returns board
 
         // When, Then
         assertThrows<BoardDeletionPermissionError> {
@@ -83,7 +97,7 @@ class BoardRecycleBinTest {
         val user = User(id = randomUUID(), name = createRandomString())
         val board = createBoard(author = user, softDeletedAt = Instant.now())
         val restored = board.copy(softDeletedAt = null)
-        every { boardRepository.findRecycledBoardById(board.id) } returns board
+        every { boardRepository.findBoardById(board.id) } returns board
         every { boardRepository.restoreBoard(board) } returns restored
 
         // When
@@ -98,22 +112,22 @@ class BoardRecycleBinTest {
     fun `Given a board that is not recycled, Then restore throws BoardDeletionBoardNotSoftDeletedError`() {
         // Given
         val user = User(id = randomUUID(), name = createRandomString())
-        val boardId = randomUUID()
-        every { boardRepository.findRecycledBoardById(boardId) } returns null
+        val board = createBoard(author = user)
+        every { boardRepository.findBoardById(board.id) } returns board
 
         // When, Then
         assertThrows<BoardDeletionBoardNotSoftDeletedError> {
-            useCase.restore(boardId = boardId, user = user)
+            useCase.restore(boardId = board.id, user = user)
         }
     }
 
     @Test
-    fun `Given a recycled board owned by another user, Then restore throws BoardDeletionPermissionError`() {
+    fun `Given a board owned by another user, Then restore throws BoardDeletionPermissionError`() {
         // Given
         val owner = User(id = randomUUID(), name = createRandomString())
         val otherUser = User(id = randomUUID(), name = createRandomString())
         val board = createBoard(author = owner, softDeletedAt = Instant.now())
-        every { boardRepository.findRecycledBoardById(board.id) } returns board
+        every { boardRepository.findBoardById(board.id) } returns board
 
         // When, Then
         assertThrows<BoardDeletionPermissionError> {
@@ -128,7 +142,7 @@ class BoardRecycleBinTest {
         // Given
         val user = User(id = randomUUID(), name = createRandomString())
         val board = createBoard(author = user, softDeletedAt = Instant.now())
-        every { boardRepository.findRecycledBoardById(board.id) } returns board
+        every { boardRepository.findBoardById(board.id) } returns board
         justRun { boardRepository.permanentlyDeleteBoard(board) }
 
         // When
@@ -142,22 +156,22 @@ class BoardRecycleBinTest {
     fun `Given a board that is not recycled, Then permanentlyDelete throws BoardDeletionBoardNotSoftDeletedError`() {
         // Given
         val user = User(id = randomUUID(), name = createRandomString())
-        val boardId = randomUUID()
-        every { boardRepository.findRecycledBoardById(boardId) } returns null
+        val board = createBoard(author = user)
+        every { boardRepository.findBoardById(board.id) } returns board
 
         // When, Then
         assertThrows<BoardDeletionBoardNotSoftDeletedError> {
-            useCase.permanentlyDelete(boardId = boardId, user = user)
+            useCase.permanentlyDelete(boardId = board.id, user = user)
         }
     }
 
     @Test
-    fun `Given a recycled board owned by another user, Then permanentlyDelete throws BoardDeletionPermissionError`() {
+    fun `Given a board owned by another user, Then permanentlyDelete throws BoardDeletionPermissionError`() {
         // Given
         val owner = User(id = randomUUID(), name = createRandomString())
         val otherUser = User(id = randomUUID(), name = createRandomString())
         val board = createBoard(author = owner, softDeletedAt = Instant.now())
-        every { boardRepository.findRecycledBoardById(board.id) } returns board
+        every { boardRepository.findBoardById(board.id) } returns board
 
         // When, Then
         assertThrows<BoardDeletionPermissionError> {
