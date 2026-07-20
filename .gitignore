@@ -16,3 +16,6 @@ docs/openapi.yaml
 !.idea/vcs.xml
 *.iml
 .claude
+
+# Superpowers SDD scratch workspace (task briefs, implementer reports, review packages, progress ledger)
+.superpowers/
