@@ -6,6 +6,7 @@
     <ID>MagicNumber:TrigramSimilarity.kt:TrigramSimilarity$3</ID>
     <ID>ThrowsCount:DeletePinImage.kt:DeletePinImage$fun delete</ID>
     <ID>ThrowsCount:GetPinImage.kt:GetPinImage$fun get: Image</ID>
+    <ID>ThrowsCount:PinBoardSetter.kt:PinBoardSetter$fun setBoards: Pin</ID>
     <ID>ThrowsCount:PinTagger.kt:PinTagger$fun setTags: Pin</ID>
     <ID>ThrowsCount:SetPinImage.kt:SetPinImage$fun set: SetPinImageResult</ID>
   </CurrentIssues>
