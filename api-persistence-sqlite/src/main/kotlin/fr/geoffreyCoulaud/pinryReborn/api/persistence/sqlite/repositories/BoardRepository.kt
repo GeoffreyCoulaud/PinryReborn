@@ -14,7 +14,7 @@ import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
-// BoardRepositoryInterface's surface (9 methods) plus the private sortedForListing helper trips
+// BoardRepositoryInterface's surface (10 methods) plus the private sortedForListing helper trips
 // detekt's default per-class threshold. Suppressed rather than split, since splitting would
 // fragment one cohesive adapter across artificial classes for no readability gain (mirrors
 // PinRepository's precedent for the same rule).
@@ -31,11 +31,11 @@ class BoardRepository(
 
     override fun saveBoard(board: Board): Board = sqlRepository.saveAndReturn(board.toModel()).toDomain()
 
+    override fun findBoardById(id: UUID): Board? =
+        QBoardModel().id.equalTo(id).findOne()?.toDomain()
+
     override fun findActiveBoardById(id: UUID): Board? =
         QBoardModel().id.equalTo(id).softDeletedAt.isNull.findOne()?.toDomain()
-
-    override fun findRecycledBoardById(id: UUID): Board? =
-        QBoardModel().id.equalTo(id).softDeletedAt.isNotNull.findOne()?.toDomain()
 
     override fun findActiveBoardsForUser(user: User): List<Board> =
         QBoardModel().author.id.equalTo(user.id).softDeletedAt.isNull

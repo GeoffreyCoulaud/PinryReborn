@@ -225,6 +225,47 @@ class BoardRecycleBinIntegrationTest : IntegrationTest() {
             .body("boards", emptyIterable<Any>())
     }
 
+    // --- Error semantics ---
+
+    @Test
+    fun `Given an already soft-deleted board, Then soft-deleting it again returns 409`() {
+        // Given
+        val username = "recycledoublesd"
+        val password = "password123"
+        val user = userCreator.createUserWithPassword(username, password)
+        val board = boardCreator.create(author = user, name = "Trip", description = "")
+        given()
+            .auth().preemptive().basic(username, password)
+            .delete("/api/v1/boards/${board.id}")
+            .then()
+            .statusCode(204)
+
+        // When / Then - a second soft-delete conflicts instead of 404-ing
+        given()
+            .auth().preemptive().basic(username, password)
+            .`when`()
+            .delete("/api/v1/boards/${board.id}")
+            .then()
+            .statusCode(409)
+    }
+
+    @Test
+    fun `Given another user's recycled board, Then permanently deleting it returns 403`() {
+        // Given
+        val owner = userCreator.createUserWithPassword("recycleowner", "password123")
+        userCreator.createUserWithPassword("recycleattacker", "password456")
+        val board = boardCreator.create(author = owner, name = "Private", description = "")
+        given().auth().preemptive().basic("recycleowner", "password123").delete("/api/v1/boards/${board.id}")
+
+        // When / Then - ownership is checked before state, so a non-owner gets 403 not 404
+        given()
+            .auth().preemptive().basic("recycleattacker", "password456")
+            .`when`()
+            .delete("/api/v1/boards/recycled/${board.id}")
+            .then()
+            .statusCode(403)
+    }
+
     // --- Pin recycle bin interactions ---
 
     @Test
