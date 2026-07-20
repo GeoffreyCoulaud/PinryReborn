@@ -36,15 +36,13 @@ hexagonal layering, generated OpenAPI.
 
 ## Open items
 
-### P0 — Product decisions (resolve first; they shape the data model and the UI)
+### P0 — Boards / collections (current top priority)
 
-- **Boards / collections.** Pinry's core organizing concept is absent: a pin belongs to nothing but its author.
-  Decide whether Reborn has boards and, if so, the multiplicity (a pin in one board, many, or zero/optional).
-  If yes, this is a full sub-project (entity, CRUD, pin↔board membership, board-scoped listing) and it drives
-  the whole UI navigation.
-- **Visibility (public / private).** Everything is `@Authenticated` and owner-scoped (non-owner → 403). No
-  anonymous browsing, no sharing. Decide the sharing model (public pins/boards, shareable links, or fully private
-  per user for now). Gates the public gallery and any share feature in the UI and extension.
+**Decided 2026-07-20:** yes, Reborn has boards, and a pin belongs to **0..N boards** (optional, many-to-many).
+
+A full sub-project: board entity + CRUD, the pin↔board membership relation, board-scoped pin listing, and the
+DTOs/endpoints. Owner-scoped like the rest (no public/shared boards while visibility is parked). Drives the whole
+UI navigation. Next: brainstorm → spec → plan.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -63,3 +61,12 @@ hexagonal layering, generated OpenAPI.
 - **Cache GC sweep** for orphaned rendition subtrees. Eviction is best-effort; a failed eviction or a crash
   mid-write leaves a subtree forever. Spec §14 of the renditions sub-project.
 - **Perceptual `ImageHash`** for pin deduplication (deliberately YAGNI'd in sub-project 2b).
+
+---
+
+## Parked (explicitly out of scope for now)
+
+- **Visibility / sharing (public / private).** *(Parked 2026-07-20.)* Everything stays `@Authenticated` and
+  owner-scoped (non-owner → 403); no anonymous browsing, no public gallery, no shareable links. Revisit when a
+  sharing model is actually wanted; it will interact with boards (public boards, shared boards) and with the P1
+  profile/auth items.
