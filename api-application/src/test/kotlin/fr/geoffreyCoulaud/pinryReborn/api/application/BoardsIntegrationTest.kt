@@ -77,18 +77,21 @@ class BoardsIntegrationTest : IntegrationTest() {
         val username = "boardlister"
         val password = "password123"
         val user = userCreator.createUserWithPassword(username, password)
-        boardCreator.create(author = user, name = "banana", description = "")
-        boardCreator.create(author = user, name = "Apple", description = "")
+        boardCreator.create(author = user, name = "Banana", description = "")
+        boardCreator.create(author = user, name = "apple", description = "")
         boardCreator.create(author = user, name = "cherry", description = "")
 
         // When / Then
+        // Naive case-sensitive ASCII order would be "Banana", "apple", "cherry" (B=66 < a=97 < c=99).
+        // The correct case-insensitive order is "apple", "Banana", "cherry", so this data discriminates
+        // a correct implementation from a regression to case-sensitive sorting.
         given()
             .auth().preemptive().basic(username, password)
             .`when`()
             .get("/api/v1/boards")
             .then()
             .statusCode(200)
-            .body("boards.name", contains("Apple", "banana", "cherry"))
+            .body("boards.name", contains("apple", "Banana", "cherry"))
     }
 
     // --- Update ---
