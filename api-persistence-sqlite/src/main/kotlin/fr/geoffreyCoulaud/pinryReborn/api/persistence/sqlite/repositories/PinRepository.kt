@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Page
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
@@ -7,12 +8,16 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toDomain
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.PinModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.PinModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TagModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TagModelMapper.toModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinBoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinTagModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinBoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinTagModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
@@ -24,10 +29,11 @@ import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
-// PinRepositoryInterface's surface (10 methods) plus this adapter's two private query helpers
-// (getTagsForPin, savePinTags) trips detekt's default per-class threshold. Suppressed rather than
-// split, since splitting would fragment one cohesive adapter across artificial classes for no
-// readability gain (mirrors EbeanTaskQueue's precedent for the same rule).
+// PinRepositoryInterface's surface (11 methods) plus this adapter's four private query helpers
+// (getTagsForPin, savePinTags, getBoardsForPin, savePinBoards) trips detekt's default per-class
+// threshold. Suppressed rather than split, since splitting would fragment one cohesive adapter
+// across artificial classes for no readability gain (mirrors EbeanTaskQueue's precedent for the
+// same rule).
 @Suppress("TooManyFunctions")
 class PinRepository(
     private val database: Database,
@@ -47,10 +53,23 @@ class PinRepository(
             .findList()
             .map { it.tag.toDomain() }
 
+    // Only active (non soft-deleted) boards are exposed on a pin: a recycled board must never
+    // appear in a pin's boards even though the join row is kept (mirrors softDeleteBoard's contract).
+    private fun getBoardsForPin(pinId: UUID): List<Board> =
+        QPinBoardModel()
+            .pin.id
+            .equalTo(pinId)
+            .board.softDeletedAt
+            .isNull
+            .fetch("board")
+            .findList()
+            .map { it.board.toDomain() }
+
     override fun savePin(pin: Pin): Pin {
         val pinModel = sqlRepository.saveAndReturn(pin.toModel())
         savePinTags(pinModel, pin.tags)
-        return pinModel.toDomain(getTagsForPin(pinModel.id))
+        savePinBoards(pinModel, pin.boards)
+        return pinModel.toDomain(getTagsForPin(pinModel.id), getBoardsForPin(pinModel.id))
     }
 
     private fun savePinTags(
@@ -84,13 +103,44 @@ class PinRepository(
             .forEach { database.save(it) }
     }
 
+    private fun savePinBoards(
+        pinModel: PinModel,
+        boards: List<Board>,
+    ) {
+        // Get the new board IDs
+        val updatedBoardIds = boards.map { it.id }.toSet()
+        val existingBoardIds =
+            QPinBoardModel()
+                .pin.id
+                .equalTo(pinModel.id)
+                .findList()
+                .map { it.board.id }
+                .toSet()
+
+        // Remove the appropriate ones
+        val removedBoardIds = existingBoardIds.minus(updatedBoardIds)
+        QPinBoardModel()
+            .pin.id
+            .equalTo(pinModel.id)
+            .board.id
+            .isIn(removedBoardIds)
+            .delete()
+
+        // Persist the new boards
+        val newBoardIds = updatedBoardIds.minus(existingBoardIds)
+        boards
+            .filter { newBoardIds.contains(it.id) }
+            .map { board -> PinBoardModel(pin = pinModel, board = board.toModel()) }
+            .forEach { database.save(it) }
+    }
+
     override fun findPinById(id: UUID): Pin? {
         val pin =
             QPinModel()
                 .id
                 .equalTo(id)
                 .findOne() ?: return null
-        return pin.toDomain(getTagsForPin(pin.id))
+        return pin.toDomain(getTagsForPin(pin.id), getBoardsForPin(pin.id))
     }
 
     override fun findPinsForUser(
@@ -111,7 +161,7 @@ class PinRepository(
                 sortStrategy = PinModelSortStrategy.fromDomain(sortStrategy),
             )
         return Page(
-            items = modelPage.items.map { it.toDomain(getTagsForPin(it.id)) },
+            items = modelPage.items.map { it.toDomain(getTagsForPin(it.id), getBoardsForPin(it.id)) },
             nextCursor = modelPage.nextCursor?.toDomain(),
             previousCursor = modelPage.previousCursor?.toDomain(),
         )
@@ -123,24 +173,25 @@ class PinRepository(
             .equalTo(user.id)
             .softDeletedAt.isNull
             .findList()
-            .map { it.toDomain(getTagsForPin(it.id)) }
+            .map { it.toDomain(getTagsForPin(it.id), getBoardsForPin(it.id)) }
 
     override fun softDeletePin(pin: Pin): Pin {
         val model = QPinModel().id.equalTo(pin.id).findOne()!!
         model.softDeletedAt = Instant.now()
         database.save(model)
-        return model.toDomain(getTagsForPin(model.id))
+        return model.toDomain(getTagsForPin(model.id), getBoardsForPin(model.id))
     }
 
     override fun restorePin(pin: Pin): Pin {
         val model = QPinModel().id.equalTo(pin.id).findOne()!!
         model.softDeletedAt = null
         database.save(model)
-        return model.toDomain(getTagsForPin(model.id))
+        return model.toDomain(getTagsForPin(model.id), getBoardsForPin(model.id))
     }
 
     override fun permanentlyDeletePin(pin: Pin) {
         QPinTagModel().pin.id.equalTo(pin.id).delete()
+        QPinBoardModel().pin.id.equalTo(pin.id).delete()
         QPinModel().id.equalTo(pin.id).delete()
     }
 
@@ -152,6 +203,7 @@ class PinRepository(
             .map { it.id }
         if (softDeletedPinIds.isEmpty()) return
         QPinTagModel().pin.id.isIn(softDeletedPinIds).delete()
+        QPinBoardModel().pin.id.isIn(softDeletedPinIds).delete()
         QPinModel().id.isIn(softDeletedPinIds).delete()
     }
 
@@ -161,7 +213,7 @@ class PinRepository(
             .equalTo(user.id)
             .softDeletedAt.isNotNull
             .findList()
-            .map { it.toDomain(getTagsForPin(it.id)) }
+            .map { it.toDomain(getTagsForPin(it.id), getBoardsForPin(it.id)) }
 
     override fun findSoftDeletedPinsForUser(
         reader: User,
@@ -181,7 +233,39 @@ class PinRepository(
                 sortStrategy = PinModelSortStrategy.fromDomain(sortStrategy),
             )
         return Page(
-            items = modelPage.items.map { it.toDomain(getTagsForPin(it.id)) },
+            items = modelPage.items.map { it.toDomain(getTagsForPin(it.id), getBoardsForPin(it.id)) },
+            nextCursor = modelPage.nextCursor?.toDomain(),
+            previousCursor = modelPage.previousCursor?.toDomain(),
+        )
+    }
+
+    override fun findActivePinsForBoard(
+        reader: User,
+        boardId: UUID,
+        cursor: Cursor?,
+        pageSize: Int,
+        sortStrategy: PinSortStrategy,
+    ): Page<Pin> {
+        // Loads the board's pin ids up front; acceptable for v1, called out in spec §11 as a
+        // scaling risk (large boards mean a large IN clause).
+        val pinIdsInBoard =
+            QPinBoardModel().board.id.equalTo(boardId).findList().map { it.pin.id }
+        val modelCursor =
+            cursor
+                ?.let { QPinModel().id.equalTo(it.pivotId).findOne() }
+                ?.let { ModelCursor(pivot = it, direction = cursor.direction) }
+        val modelPage =
+            pinModelPaginationHelper.getPage(
+                cursor = modelCursor,
+                pageSize = pageSize,
+                baseQuery = QPinModel()
+                    .author.id.equalTo(reader.id)
+                    .softDeletedAt.isNull
+                    .id.isIn(pinIdsInBoard),
+                sortStrategy = PinModelSortStrategy.fromDomain(sortStrategy),
+            )
+        return Page(
+            items = modelPage.items.map { it.toDomain(getTagsForPin(it.id), getBoardsForPin(it.id)) },
             nextCursor = modelPage.nextCursor?.toDomain(),
             previousCursor = modelPage.previousCursor?.toDomain(),
         )

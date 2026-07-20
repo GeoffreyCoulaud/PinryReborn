@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createTable name="boards" identityType="external" pkName="pk_boards">
+            <column name="id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="author_id" type="uuid" notnull="true" references="users.id" foreignKeyName="fk_boards_author_id" foreignKeyIndex="ix_boards_author_id"/>
+            <column name="name" type="varchar" notnull="true"/>
+            <column name="description" type="varchar" notnull="true"/>
+            <column name="soft_deleted_at" type="timestamp"/>
+            <column name="when_created" type="timestamp" notnull="true"/>
+            <column name="when_modified" type="timestamp" notnull="true"/>
+        </createTable>
+        <createTable name="pin_board_model" pkName="pk_pin_board_model">
+            <column name="pin_id" type="uuid" notnull="true" references="pins.id" foreignKeyName="fk_pin_board_model_pin_id" foreignKeyIndex="ix_pin_board_model_pin_id"/>
+            <column name="board_id" type="uuid" notnull="true" references="boards.id" foreignKeyName="fk_pin_board_model_board_id" foreignKeyIndex="ix_pin_board_model_board_id"/>
+        </createTable>
+    </changeSet>
+</migration>
