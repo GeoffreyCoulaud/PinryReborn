@@ -112,6 +112,7 @@ class PinRecycleBinGetterTest {
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "A pin",
             tags = emptyList(),
+            boards = emptyList(),
             softDeletedAt = Instant.now(),
         )
         val cursor = Cursor(pivotId = pin.id, direction = CursorDirection.FORWARD)

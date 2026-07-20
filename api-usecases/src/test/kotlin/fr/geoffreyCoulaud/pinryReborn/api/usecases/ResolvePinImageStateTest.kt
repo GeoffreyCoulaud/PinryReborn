@@ -28,12 +28,13 @@ class ResolvePinImageStateTest {
     }
 
     @Test fun `Given a non-owner, Then it throws ImagePermissionError`() {
-        every { pins.findPinById(pinId) } returns Pin(pinId, User(randomUUID(), "x"), "c", null, "d", emptyList())
+        val otherUser = User(randomUUID(), "x")
+        every { pins.findPinById(pinId) } returns Pin(pinId, otherUser, "c", null, "d", emptyList(), emptyList())
         assertThrows(ImagePermissionError::class.java) { subject.resolve(pinId, owner) }
     }
 
     @Test fun `Given an owner with no image and no download, Then NONE`() {
-        every { pins.findPinById(pinId) } returns Pin(pinId, owner, "c", null, "d", emptyList())
+        every { pins.findPinById(pinId) } returns Pin(pinId, owner, "c", null, "d", emptyList(), emptyList())
         every { images.findByPinId(pinId) } returns null
         every { downloads.findByPinId(pinId) } returns null
         assertEquals(PinImageStatus.NONE, subject.resolve(pinId, owner).status)
