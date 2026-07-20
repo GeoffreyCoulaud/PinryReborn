@@ -71,4 +71,16 @@ interface PinRepositoryInterface {
      * Find all soft-deleted pins for a user (unpaginated)
      */
     fun findAllSoftDeletedPinsForUser(user: User): List<Pin>
+
+    /**
+     * Find active pins belonging to a board, with pagination support.
+     * Excludes soft-deleted pins. The board's own existence/ownership is checked by the caller.
+     */
+    fun findActivePinsForBoard(
+        reader: User,
+        boardId: UUID,
+        cursor: Cursor?,
+        pageSize: Int,
+        sortStrategy: PinSortStrategy,
+    ): Page<Pin>
 }
