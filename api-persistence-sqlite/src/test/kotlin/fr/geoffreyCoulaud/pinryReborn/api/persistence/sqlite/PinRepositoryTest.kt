@@ -519,6 +519,20 @@ class PinRepositoryTest : RepositoryTest() {
         assertEquals(emptyList<Pin>(), repository.findAllSoftDeletedPinsForUser(user))
     }
 
+    @Test
+    fun `Given active and soft-deleted pins, Then findAllPinIdsForUser returns all their ids`() {
+        // Given
+        val user = createAndSaveUser()
+        val activePin = createAndSavePin(user)
+        val softDeletedPin = repository.softDeletePin(createAndSavePin(user))
+
+        // When
+        val pinIds = repository.findAllPinIdsForUser(user)
+
+        // Then
+        assertEquals(setOf(activePin.id, softDeletedPin.id), pinIds.toSet())
+    }
+
     // --- Pagination cursor resolution ---
 
     @Test

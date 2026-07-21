@@ -35,11 +35,11 @@ class AccountDeletionCleaner(
         val user = userRepository.findUserByIdIncludingDeleted(userId) ?: return
         val toEvict = mutableListOf<Pair<String, UUID>>() // storageKey to imageId
         transactionRunner.inTransaction {
-            val pins = pinRepository.findAllPinsForUser(user) + pinRepository.findAllSoftDeletedPinsForUser(user)
-            for (pin in pins) {
-                imageRepository.findByPinId(pin.id)?.let { toEvict += it.storageKey to it.id }
-                clearPinDownload.clear(pin.id)
-                imageRepository.deleteByPinId(pin.id)
+            val pinIds = pinRepository.findAllPinIdsForUser(user)
+            for (pinId in pinIds) {
+                imageRepository.findByPinId(pinId)?.let { toEvict += it.storageKey to it.id }
+                clearPinDownload.clear(pinId)
+                imageRepository.deleteByPinId(pinId)
             }
             pinRepository.permanentlyDeleteAllPinsForUser(user)
             boardRepository.permanentlyDeleteAllBoardsForUser(user)

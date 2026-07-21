@@ -43,6 +43,12 @@ interface PinRepositoryInterface {
     fun findAllPinsForUser(user: User): List<Pin>
 
     /**
+     * All pin ids for the author (active and soft-deleted), without mapping the author - safe
+     * when the author is itself soft-deleted (deletion cleaner).
+     */
+    fun findAllPinIdsForUser(user: User): List<UUID>
+
+    /**
      * Soft-delete a pin by setting its softDeletedAt timestamp
      */
     fun softDeletePin(pin: Pin): Pin
