@@ -136,9 +136,9 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 
 | Method | Path | Auth | Body | Result |
 |---|---|---|---|---|
-| POST | `/sessions` | `@PermitAll` | `{name, password, rememberMe?}` | `SessionOutputDto`, **201** |
-| POST | `/sessions/renew` | Bearer | — | `SessionOutputDto`, 200 |
-| GET | `/sessions/current` | Bearer | — | `CurrentSessionOutputDto`, 200 |
+| POST | `/sessions` | `@PermitAll` | `{name, password, rememberMe?}` | `CreatedSessionOutputDto`, **201** |
+| POST | `/sessions/renew` | Bearer | — | `CreatedSessionOutputDto`, 200 |
+| GET | `/sessions/current` | Bearer | — | `ExistingSessionOutputDto`, 200 |
 | DELETE | `/sessions/current` | Bearer | — | 204 (revoke the current token) |
 | DELETE | `/sessions` | Bearer | — | 204 (revoke **all** the user's tokens) |
 | GET | `/me` | Bearer | — | `UserOutputDto` (`{id, name}`), 200 |
@@ -162,9 +162,9 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   `@NotBlank` on `name` and `password`; it deliberately does **not** re-apply registration's size /
   pattern constraints, so a badly-shaped credential returns 401 (auth failure), never 400
   (validation), avoiding a login/registration information gap.
-- `SessionOutputDto = {token, expiresAt, renewAfter}` — `token` is the plaintext bearer string;
+- `CreatedSessionOutputDto = {token, expiresAt, renewAfter}` — `token` is the plaintext bearer string;
   `expiresAt` and `renewAfter` are ISO-8601 instants in UTC (`2026-08-19T12:34:56Z`).
-- `CurrentSessionOutputDto = {expiresAt, renewAfter, persistent}` — the current session's state, no
+- `ExistingSessionOutputDto = {expiresAt, renewAfter, persistent}` — the current session's state, no
   token (the client already holds it; re-emitting it would risk leaking it into logs).
 - `GET /me` reuses `UserOutputDto = {id, name}`.
 
@@ -213,7 +213,7 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 - **api-presentation-quarkus**:
   - `SessionController` (`POST /sessions`, `POST /sessions/renew`, `GET /sessions/current`,
     `DELETE /sessions/current`, `DELETE /sessions`) and `MeController` (`GET /me`); input/output
-    DTOs (incl. `CurrentSessionOutputDto`) + mapper. `GET /sessions/current` reads the identity's
+    DTOs (incl. `ExistingSessionOutputDto`) + mapper. `GET /sessions/current` reads the identity's
     `SessionToken` and calls the injected `SessionExpiryPolicy` to fill `renewAfter`.
   - `BearerAuthenticationMechanism`: a custom `HttpAuthenticationMechanism` parsing
     `Authorization: Bearer <token>` into a Quarkus `TokenAuthenticationRequest` (Quarkus has no
