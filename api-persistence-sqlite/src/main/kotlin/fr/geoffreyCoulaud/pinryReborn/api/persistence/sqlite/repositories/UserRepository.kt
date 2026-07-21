@@ -12,7 +12,7 @@ import java.util.UUID
 
 @ApplicationScoped
 class UserRepository(
-    database: Database,
+    private val database: Database,
 ) : UserRepositoryInterface {
     /**
      * When possible, avoid using the SQL repository directly.
@@ -36,12 +36,40 @@ class UserRepository(
             .findOne()
             ?.toDomain()
 
-    override fun saveUser(user: User): User = sqlRepository.saveAndReturn(user.toModel()).toDomain()
+    override fun findUserByNameIncludingDeleted(name: String): User? =
+        QUserModel()
+            .name
+            .ieq(name)
+            .setIncludeSoftDeletes()
+            .findOne()
+            ?.toDomain()
 
-    override fun deleteUser(user: User) {
+    override fun findUserByIdIncludingDeleted(id: UUID): User? =
         QUserModel()
             .id
-            .equalTo(user.id)
-            .delete()
+            .equalTo(id)
+            .setIncludeSoftDeletes()
+            .findOne()
+            ?.toDomain()
+
+    override fun saveUser(user: User): User = sqlRepository.saveAndReturn(user.toModel()).toDomain()
+
+    override fun markPendingDeletion(user: User) {
+        val model =
+            QUserModel()
+                .id
+                .equalTo(user.id)
+                .findOne() ?: return
+        database.delete(model)
+    }
+
+    override fun permanentlyDeleteUser(user: User) {
+        val model =
+            QUserModel()
+                .id
+                .equalTo(user.id)
+                .setIncludeSoftDeletes()
+                .findOne() ?: return
+        database.deletePermanent(model)
     }
 }
