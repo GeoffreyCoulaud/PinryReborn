@@ -36,6 +36,18 @@ class BearerAuthenticationMechanismTest {
     }
 
     @Test
+    fun `Given a lowercase bearer header, Then it authenticates the extracted token`() {
+        val identity = mockk<SecurityIdentity>()
+        val captured = slot<TokenAuthenticationRequest>()
+        every { idpManager.authenticate(capture(captured)) } returns Uni.createFrom().item(identity)
+
+        val result = mechanism.authenticate(contextWithHeader("bearer abc.def"), idpManager).await().indefinitely()
+
+        assertEquals(identity, result)
+        assertEquals("abc.def", captured.captured.token.token)
+    }
+
+    @Test
     fun `Given no Authorization header, Then it returns a null identity (anonymous)`() {
         assertNull(mechanism.authenticate(contextWithHeader(null), idpManager).await().indefinitely())
     }
