@@ -56,9 +56,12 @@ class BearerTokenIdentityProviderTest {
     }
 
     @Test
-    fun `Given an expired token, Then it throws SessionExpiredException`() {
+    fun `Given an expired token, Then it throws AuthenticationFailedException`() {
+        // Spec §12 fallback: SESSION_EXPIRED could not be routed through a JAX-RS mapper at runtime
+        // (verified in Task 9), so the provider collapses expired and invalid tokens to the same
+        // AuthenticationFailedException. The distinction still lives in SessionTokenAuthenticator.
         every { authenticator.authenticate("old") } throws SessionTokenExpiredError()
-        assertThrows<SessionExpiredException> {
+        assertThrows<AuthenticationFailedException> {
             provider.authenticate(request("old"), context).await().indefinitely()
         }
     }

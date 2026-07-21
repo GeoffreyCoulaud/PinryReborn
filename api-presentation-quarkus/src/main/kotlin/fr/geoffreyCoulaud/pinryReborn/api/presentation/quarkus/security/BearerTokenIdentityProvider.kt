@@ -33,7 +33,13 @@ class BearerTokenIdentityProvider(
                     .addAttribute("sessionToken", session)
                     .build()
             } catch (e: SessionTokenExpiredError) {
-                throw SessionExpiredException("Session token expired", e)
+                // Spec §12 fallback: a dedicated SessionExpiredException/SESSION_EXPIRED code was tried
+                // (Task 9) but Quarkus never routes an AuthenticationCompletionException subtype through
+                // the JAX-RS exception-mapper chain at runtime (it short-circuits with a bodyless 401
+                // before RESTEasy Reactive sees it). Collapsing to the same AuthenticationFailedException
+                // as an invalid token keeps the HTTP contract honest; the distinction still lives one
+                // layer down in SessionTokenAuthenticator/SessionAuthenticationError.
+                throw AuthenticationFailedException("Session token expired", e)
             } catch (e: SessionTokenInvalidError) {
                 throw AuthenticationFailedException("Invalid session token", e)
             }
