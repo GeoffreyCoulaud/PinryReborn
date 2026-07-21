@@ -8,53 +8,48 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserPa
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
 
 class UserPasswordHashRepositoryTest : RepositoryTest() {
-    private val repository = UserPasswordHashRepository(database)
-    private val userRepository = UserRepository(database)
+    private val users = UserRepository(database = database)
+    private val repository = UserPasswordHashRepository(database = database)
 
-    private fun createAndSaveUser(): User =
-        userRepository.saveUser(
-            User(id = randomUUID(), name = createRandomString()),
-        )
+    private fun user() = users.saveUser(User(id = randomUUID(), name = createRandomString()))
+
+    private fun hash(h: String) = HashedPassword(hash = h, algorithm = PasswordHashAlgorithm.BCRYPT)
 
     @Test
-    fun `Given a saved password hash, Then findUserPasswordHash returns it`() {
+    fun `Given two saved hashes, Then current is the latest and all returns both`() {
         // Given
-        val user = createAndSaveUser()
-        val hashedPassword = HashedPassword(hash = "hash", algorithm = PasswordHashAlgorithm.BCRYPT)
-        repository.saveUserPasswordHash(user, hashedPassword)
-
-        // When
-        val found = repository.findUserPasswordHash(user)
-
-        // Then
-        assertNotNull(found)
-        assertEquals(hashedPassword, found)
+        val user = user()
+        repository.saveUserPasswordHash(user, hash("old"))
+        Thread.sleep(2) // ensure a distinct when_created for deterministic ordering
+        repository.saveUserPasswordHash(user, hash("new"))
+        // When / Then
+        assertEquals("new", repository.findCurrentPasswordHash(user)?.hash)
+        assertEquals(setOf("old", "new"), repository.findAllPasswordHashesForUser(user).map { it.hash }.toSet())
     }
 
     @Test
-    fun `Given no password hash for the user, Then findUserPasswordHash returns null`() {
+    fun `Given saved hashes, Then deleteForUser removes them all`() {
         // Given
-        val user = createAndSaveUser()
-
+        val user = user()
+        repository.saveUserPasswordHash(user, hash("a"))
         // When
-        val found = repository.findUserPasswordHash(user)
-
+        repository.deleteForUser(user)
         // Then
-        assertNull(found)
+        assertNull(repository.findCurrentPasswordHash(user))
+        assertEquals(emptyList<HashedPassword>(), repository.findAllPasswordHashesForUser(user))
     }
 
     @Test
     fun `Given a nonexistent user, Then saveUserPasswordHash throws UserModelDoesNotExistError`() {
         // Given
         val nonexistentUser = User(id = randomUUID(), name = createRandomString())
-        val hashedPassword = HashedPassword(hash = "hash", algorithm = PasswordHashAlgorithm.BCRYPT)
+        val hashedPassword = hash("hash")
 
         // When, Then
         assertThrows(UserModelDoesNotExistError::class.java) {
