@@ -51,6 +51,7 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.BOARD_INVALID_MEMBERSHIP -> Response.Status.BAD_REQUEST.statusCode
             ErrorCode.REAUTHENTICATION_FAILED -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.PASSWORD_PREVIOUSLY_USED -> UNPROCESSABLE_ENTITY_STATUS_CODE
+            ErrorCode.UNSUPPORTED_REAUTHENTICATION_FACTOR -> Response.Status.BAD_REQUEST.statusCode
         }
 
     private companion object {

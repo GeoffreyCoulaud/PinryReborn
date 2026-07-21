@@ -153,4 +153,9 @@ class BaseErrorMapperTest {
         assertEquals(422, body.status)
         assertEquals("PASSWORD_PREVIOUSLY_USED", body.code)
     }
+
+    @Test
+    fun `Given UNSUPPORTED_REAUTHENTICATION_FACTOR, Then status is BAD_REQUEST`() {
+        assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.UNSUPPORTED_REAUTHENTICATION_FACTOR))
+    }
 }
