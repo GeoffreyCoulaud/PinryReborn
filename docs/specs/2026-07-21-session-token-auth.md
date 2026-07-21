@@ -230,9 +230,24 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   - Remove `BasicAuthIdentityProvider`; change the `WWW-Authenticate` challenge from `Basic` to
     `Bearer` in `ProblemResponses`; a `SecurityIdentity.getSessionToken()` extension alongside the
     existing `getUser()`/`getUserId()`.
-  - A JAX-RS exception mapper for the domain `UserAuthenticationError` escaping the `POST /sessions`
-    call → 401 `AUTHENTICATION_FAILED` (today that error is swallowed inside
-    `BasicAuthIdentityProvider`; body-login lets it reach JAX-RS).
+  - On `POST /sessions`, `SessionController.createSession` catches the domain `UserAuthenticationError`
+    and rethrows Quarkus `AuthenticationFailedException`, which the existing
+    `AuthenticationFailedExceptionMapper` renders as 401 `AUTHENTICATION_FAILED` (collapsing the
+    user-does-not-exist vs invalid-password subtypes, so no enumeration oracle).
+
+> **As-built amendment (2026-07-21).** The distinct `SESSION_EXPIRED` code is **not** carried by a
+> `SessionExpiredException` subtype + dedicated mapper as first designed: `AuthenticationFailedException`
+> is `final` in the resolved Quarkus, and a subtype extending `AuthenticationCompletionException` was
+> found (empirically, in the Task 9 integration test) **not** to route through the JAX-RS mapper chain
+> at runtime (bodyless 401). The shipped design instead reuses the proven `AuthenticationFailedException`
+> path: `BearerTokenIdentityProvider` throws `AuthenticationFailedException(message, cause = e)` where
+> `e` is the caught `SessionTokenExpiredError` (expired) or `SessionTokenInvalidError` (invalid), and the
+> shared `AuthenticationFailedExceptionMapper` **inspects the cause** — `cause is SessionTokenExpiredError`
+> → 401 `SESSION_EXPIRED`, else 401 `AUTHENTICATION_FAILED`. The login path's cause is a
+> `UserAuthenticationError`, so it correctly stays `AUTHENTICATION_FAILED`. The provider→mapper coupling is
+> by-convention (test-guarded at three levels: mapper unit, provider unit, and end-to-end), not
+> compiler-enforced. Token-bearing responses (`POST /sessions`, `POST /sessions/current/renew`) also carry
+> `Cache-Control: no-store`, and the Bearer scheme match is case-insensitive (RFC 7235).
 - **api-application**: remove `quarkus.http.auth.basic=true`; add the `auth.*` properties; wire the
   new repository; integration tests; the reusable test-auth helper; regenerate `docs/openapi.json`.
 
@@ -314,11 +329,11 @@ Both sides of every conditional, in particular:
 
 ## 12. Risks / open points
 
-- **Distinct `SESSION_EXPIRED` from the auth layer.** Surfacing a specific 401 code from inside a
-  Quarkus authentication failure (vs the generic challenge) needs the identity provider to
-  distinguish expired from invalid and the mapper to honour it. The plan must nail the exact
-  exception plumbing; if it proves disproportionate, falling back to a single `AUTHENTICATION_FAILED`
-  is acceptable and should be flagged, not done silently.
+- **Distinct `SESSION_EXPIRED` from the auth layer.** *(Resolved as-built, see the §7 amendment.)* The
+  risk materialised: a subtype of the (final) `AuthenticationFailedException` does not route to the
+  JAX-RS mapper at runtime. Shipped via cause-inspection in the shared `AuthenticationFailedExceptionMapper`,
+  reusing the proven `AuthenticationFailedException` path; verified end-to-end (aged-token integration test
+  returns `SESSION_EXPIRED`). The provider→mapper cause coupling is by-convention, test-guarded.
 - **Lost renew response.** As in §3: rotation means a dropped renew response can strand the client
   on a dead token → re-login. No grace window in v1.
 - **Client without stored expiry.** Resolved: a client that persisted only the token string can
