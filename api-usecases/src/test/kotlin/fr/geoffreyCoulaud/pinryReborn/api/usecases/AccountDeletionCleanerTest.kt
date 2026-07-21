@@ -60,8 +60,7 @@ class AccountDeletionCleanerTest : BaseTest() {
         every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
         every { users.findUserByIdIncludingDeleted(userId) } returns user
         val pin = buildPin()
-        every { pins.findAllPinsForUser(user) } returns listOf(pin)
-        every { pins.findAllSoftDeletedPinsForUser(user) } returns emptyList()
+        every { pins.findAllPinIdsForUser(user) } returns listOf(pin.id)
         val image = buildImage(pin.id)
         every { images.findByPinId(pin.id) } returns image
 
@@ -102,8 +101,7 @@ class AccountDeletionCleanerTest : BaseTest() {
         every { users.findUserByIdIncludingDeleted(userId) } returns user
         val pin = buildPin()
         val image = buildImage(pin.id)
-        every { pins.findAllPinsForUser(user) } returns listOf(pin)
-        every { pins.findAllSoftDeletedPinsForUser(user) } returns emptyList()
+        every { pins.findAllPinIdsForUser(user) } returns listOf(pin.id)
         every { images.findByPinId(pin.id) } returns image
         every { renditions.evictImage(image.id) } throws RuntimeException("disk")
 
@@ -117,8 +115,7 @@ class AccountDeletionCleanerTest : BaseTest() {
         every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
         every { users.findUserByIdIncludingDeleted(userId) } returns user
         val pin = buildPin()
-        every { pins.findAllPinsForUser(user) } returns listOf(pin)
-        every { pins.findAllSoftDeletedPinsForUser(user) } returns emptyList()
+        every { pins.findAllPinIdsForUser(user) } returns listOf(pin.id)
         every { images.findByPinId(pin.id) } returns null
 
         // When

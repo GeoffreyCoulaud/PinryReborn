@@ -179,6 +179,9 @@ class PinRepository(
             .findList()
             .map { it.toDomain(getTagsForPin(it.id), getBoardsForPin(it.id)) }
 
+    override fun findAllPinIdsForUser(user: User): List<UUID> =
+        QPinModel().author.id.equalTo(user.id).findList().map { it.id }
+
     override fun softDeletePin(pin: Pin): Pin {
         val model = QPinModel().id.equalTo(pin.id).findOne()!!
         model.softDeletedAt = Instant.now()
