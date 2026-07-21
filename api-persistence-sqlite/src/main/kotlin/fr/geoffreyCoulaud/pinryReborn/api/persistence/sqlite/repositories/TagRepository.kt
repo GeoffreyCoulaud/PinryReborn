@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInter
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TagModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TagModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TagModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinTagModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QTagModel
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
@@ -38,6 +39,12 @@ class TagRepository(
             .map { it.toDomain() }
 
     override fun deleteAllTagsForUser(user: User) {
-        QTagModel().author.id.equalTo(user.id).delete()
+        val tagIds = QTagModel().author.id.equalTo(user.id).findList().map { it.id }
+        if (tagIds.isEmpty()) return
+        // Remove pin_tag junction rows first (FK order), mirroring PinRepository's
+        // permanentlyDeleteAllPinsForUser / permanentlyDeleteAllBoardsForUser defensive style,
+        // so this method is self-sufficient regardless of call order.
+        QPinTagModel().tag.id.isIn(tagIds).delete()
+        QTagModel().id.isIn(tagIds).delete()
     }
 }
