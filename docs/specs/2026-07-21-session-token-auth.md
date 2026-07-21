@@ -137,8 +137,8 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 | Method | Path | Auth | Body | Result |
 |---|---|---|---|---|
 | POST | `/sessions` | `@PermitAll` | `{name, password, rememberMe?}` | `CreatedSessionOutputDto`, **201** |
-| POST | `/sessions/renew` | Bearer | — | `CreatedSessionOutputDto`, 200 |
 | GET | `/sessions/current` | Bearer | — | `ExistingSessionOutputDto`, 200 |
+| POST | `/sessions/current/renew` | Bearer | — | `CreatedSessionOutputDto`, 200 |
 | DELETE | `/sessions/current` | Bearer | — | 204 (revoke the current token) |
 | DELETE | `/sessions` | Bearer | — | 204 (revoke **all** the user's tokens) |
 | GET | `/me` | Bearer | — | `UserOutputDto` (`{id, name}`), 200 |
@@ -146,7 +146,7 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 - `POST /sessions` is login **and** the credential check: bad credentials → 401
   (`AUTHENTICATION_FAILED`). `rememberMe` defaults to `false` (the conservative short session) when
   absent.
-- `POST /sessions/renew` issues a fresh token with the **same** `persistent` value, and deletes the
+- `POST /sessions/current/renew` issues a fresh token with the **same** `persistent` value, and deletes the
   presented token (rotation). Delete-old + create-new is **atomic** (see §6).
 - `GET /sessions/current` returns the presented session's metadata (`expiresAt`, `renewAfter`,
   `persistent`) **without** the token, so a client that persisted only the token string can recover
@@ -211,7 +211,7 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 - **api-persistence-sqlite**: `SessionTokenModel` (`@Table("session_tokens")`) + mapper;
   `SessionTokenRepository`; migration **1.8** (additive).
 - **api-presentation-quarkus**:
-  - `SessionController` (`POST /sessions`, `POST /sessions/renew`, `GET /sessions/current`,
+  - `SessionController` (`POST /sessions`, `GET /sessions/current`, `POST /sessions/current/renew`,
     `DELETE /sessions/current`, `DELETE /sessions`) and `MeController` (`GET /me`); input/output
     DTOs (incl. `ExistingSessionOutputDto`) + mapper. `GET /sessions/current` reads the identity's
     `SessionToken` and calls the injected `SessionExpiryPolicy` to fill `renewAfter`.
