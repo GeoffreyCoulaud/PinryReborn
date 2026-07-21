@@ -21,5 +21,5 @@ class UnauthorizedExceptionMapper : ExceptionMapper<UnauthorizedException> {
             detail = "Authentication required",
             code = "AUTHENTICATION_REQUIRED",
             uriInfo = uriInfo,
-        ).header("WWW-Authenticate", WWW_AUTHENTICATE_BASIC).build()
+        ).header("WWW-Authenticate", WWW_AUTHENTICATE_BEARER).build()
 }

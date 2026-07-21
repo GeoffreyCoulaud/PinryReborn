@@ -4,8 +4,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.Probl
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.UriInfo
 
-/** RFC 7807 challenge value shared by the auth mappers. */
-const val WWW_AUTHENTICATE_BASIC = "Basic realm=\"Quarkus\""
+/** RFC 7807 challenge value: opaque bearer token, no realm. */
+const val WWW_AUTHENTICATE_BEARER = "Bearer"
 
 /** Build an RFC 7807 problem+json response builder. Callers may add headers before build(). */
 fun problemResponse(
