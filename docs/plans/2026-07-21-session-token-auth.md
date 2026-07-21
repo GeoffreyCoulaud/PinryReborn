@@ -293,8 +293,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.RepositoryTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -360,7 +360,7 @@ class SessionTokenRepositoryTest : RepositoryTest() {
         repository.saveSessionToken(sessionToken(userB), tokenHash = "hb")
         repository.deleteAllForUser(userA.id)
         assertNull(repository.findByTokenHash("ha"))
-        assertEquals("hb", repository.findByTokenHash("hb")?.let { "hb" })
+        assertNotNull(repository.findByTokenHash("hb"))
     }
 }
 ```
