@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createTable name="session_tokens" identityType="external" pkName="pk_session_tokens">
+            <column name="id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="user_id" type="uuid" notnull="true" references="users.id" foreignKeyName="fk_session_tokens_user_id" foreignKeyIndex="ix_session_tokens_user_id"/>
+            <column name="token_hash" type="varchar" notnull="true" unique="uq_session_tokens_token_hash"/>
+            <column name="expires_at" type="timestamp" notnull="true"/>
+            <column name="persistent" type="boolean" defaultValue="false" notnull="true"/>
+            <column name="when_created" type="timestamp" notnull="true"/>
+            <column name="when_modified" type="timestamp" notnull="true"/>
+        </createTable>
+    </changeSet>
+</migration>
