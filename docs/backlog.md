@@ -4,7 +4,7 @@
 Keep it alive: update it at the end of every sub-project (Wrap phase), and whenever a scope decision is made.
 It is written in English (project language), like the specs, plans, and handoffs.
 
-Last reviewed: 2026-07-21.
+Last reviewed: 2026-07-22.
 
 ## How to use this file
 
@@ -45,6 +45,16 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   `API_CORS_ORIGINS`); methods `GET,POST,PUT,DELETE`, request headers `Authorization,Content-Type`,
   `Location` exposed, credentials off (Bearer only), 24 h preflight cache. On `main`.
   See `docs/handoffs/2026-07-21 - handoff - cors.md`.
+- **Profile management**: self-service `PUT /me/password` (verify current password, reject any
+  previously-used password against the full history, revoke all sessions incl. the caller's, 204) and
+  `DELETE /me` (step-up via `X-Reauthentication: password <base64url>`, then an async hard delete: a
+  one-way Ebean `@SoftDelete` tombstone mirrored on `User.softDeleted`, revoke-all, enqueue
+  `account.delete`; the worker erases rows in FK order + on-disk image bytes and frees the username,
+  202). Password hashing inverted behind a `PasswordHasher` port (BCrypt adapter in `api-application`);
+  all writes on the `TransactionRunner` port; `UserCreator` migrated off `@Transactional`. Migration
+  1.9. Validated end-to-end (a real pin+image is seeded, the account deleted, and the username becomes
+  re-registerable only after the worker completes). On `main`.
+  See `docs/handoffs/2026-07-21 - handoff - profile-management.md`.
 - **Infrastructure**: generic task queue (enqueue/cancel/reap), Ebean migrations, git hooks, CI gate.
 
 ---
@@ -54,22 +64,12 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 ### P0 — (none open)
 
 **Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
-(merged to `main`, in Shipped above). **Profile management** is now in progress
-(spec `docs/specs/2026-07-21-profile-management.md`). Scheduled **right after it**: an architecture
-correction — extracting the task worker runtime out of the presentation module (see P2).
+(merged to `main`, in Shipped above). **Profile management shipped 2026-07-21** (change password +
+async account deletion, in Shipped above). Scheduled next: an architecture correction, extracting the
+task worker runtime out of the presentation module (see P2).
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
-- **Profile management.** *In progress — spec `docs/specs/2026-07-21-profile-management.md`.* Two capabilities,
-  both guarded by a **step-up re-authentication** (the current password today; a second factor later):
-  - **Change password** (`PUT /me/password`): verify current password, set the new one, then revoke **all**
-    sessions (the current one included, by decision — a stolen current token must not survive).
-  - **Delete account** (`DELETE /me`): an **async hard delete**. Step-up, then mark the account with a
-    transient Ebean `@SoftDelete` tombstone (a one-way state, not a reactivatable "deactivation"; invisible to
-    auth), revoke all sessions, and enqueue an `AccountDeletion` task. The task erases the user's rows and
-    on-disk image bytes in FK order, then physically deletes the user (freeing the username).
-
-  **Public profiles are excluded** here (gated on audience; see the sequenced roadmap below).
 - **Browser-extension CORS origin.** Deferred from the CORS sub-project (decision B1): the extension
   does not exist yet and has no stable ID, so no origin is wired for it. When it ships, add its
   `chrome-extension://<id>` / `moz-extension://<id>` origin to `api.cors.origins`. See
@@ -124,9 +124,22 @@ correction — extracting the task worker runtime out of the presentation module
   original animated bytes instead of flattening. See the renditions handoff, "NOT validated" section.
 - **Cache GC sweep** for orphaned rendition subtrees. Eviction is best-effort; a failed eviction or a crash
   mid-write leaves a subtree forever. Spec §14 of the renditions sub-project.
-- **Deleted-account residue GC.** If the `AccountDeletion` task (profile management) fails partially or totally,
+- **Deleted-account residue GC.** If the `account.delete` task (profile management) fails partially or totally,
   an account can stay stuck in its Ebean soft-delete tombstone with orphaned child rows and on-disk files. A
-  sweep should reclaim such tombstoned accounts and their residue. New 2026-07-21.
+  sweep should reclaim such tombstoned accounts and their residue. Note: the cleaner's disk loop wraps only
+  `renditionCache.evictImage` in `runCatching`, not `imageStore.delete`, so a failed `imageStore.delete`
+  propagates after the DB commit (the task then retries and no-ops, since the user is already gone), leaving
+  byte residue; making the whole per-image cleanup best-effort would reduce this. New 2026-07-21.
+- **Task worker observability: surface DEAD/failed tasks.** `TaskProcessor` swallows a throwing `TaskHandler`
+  into a retryable outcome with no logging, so a task that exhausts its attempts and is marked DEAD is
+  invisible to operators. A user who deleted their account gets a 202 but would silently stay tombstoned
+  forever if the cleaner failed. Add logging/metrics on handler failure and on DEAD transitions. Exposed by
+  profile management's end-to-end test. New 2026-07-22.
+- **`findCurrentPasswordHash` tie-breaker.** "Current password" is the latest `user_passwords` row by
+  `when_created` (an `@WhenCreated Instant`), with no secondary ordering key. Two hashes written in the same
+  clock tick make the current-password determination nondeterministic. Practically unreachable for the human
+  register-then-change flow, but a latent fragility on a security-critical read; a monotonic sequence column
+  would remove it. New 2026-07-22.
 - **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
   Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
 
