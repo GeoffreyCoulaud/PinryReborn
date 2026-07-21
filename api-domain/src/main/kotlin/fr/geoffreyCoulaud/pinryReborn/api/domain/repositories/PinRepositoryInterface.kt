@@ -7,6 +7,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import java.util.UUID
 
+// 12 methods trips detekt's default per-interface threshold. Suppressed rather than split,
+// mirroring TaskQueueInterface's precedent for the same rule: it's one cohesive repository
+// surface, and splitting it would fragment it across artificial interfaces for no readability
+// gain.
+@Suppress("TooManyFunctions")
 interface PinRepositoryInterface {
     /**
      * Create or update a pin from the given domain data.
@@ -56,6 +61,11 @@ interface PinRepositoryInterface {
      * Permanently delete all soft-deleted pins for a user
      */
     fun permanentlyDeleteAllSoftDeletedPinsForUser(user: User)
+
+    /**
+     * Permanently delete all pins for a user regardless of state (active and soft-deleted).
+     */
+    fun permanentlyDeleteAllPinsForUser(user: User)
 
     /**
      * Find soft-deleted pins for a user with pagination support
