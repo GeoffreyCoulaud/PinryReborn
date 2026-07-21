@@ -13,108 +13,163 @@ Give an authenticated user control over their own account: **change their passwo
 account**. This is the remaining P1 "client ergonomics" item in `docs/backlog.md`, unblocked now that the
 client-auth model is fixed (Bearer session tokens).
 
-Both are **sensitive** operations, so both sit behind a **step-up re-authentication**: the user must
-re-present a credential (today the password; a second factor later) even though the request already
-carries a valid Bearer token. This protects the account against a hijacked session.
+Both are **sensitive** operations, so both require the user to **re-prove themselves** even though the
+request already carries a valid Bearer token, protecting the account against a hijacked session. The two
+do it differently, on purpose (§3): change-password needs the **actual current password** (intrinsic to
+changing it); delete-account takes a **generic step-up factor** (a header, extensible to a second factor).
 
-**Public profiles are out of scope** — they depend on an audience/visibility model that is deliberately
-sequenced after a user-segmented base (see the backlog's "Sequenced roadmap").
+**Public profiles are out of scope** — they depend on an audience/visibility model deliberately sequenced
+after a user-segmented base (see the backlog's "Sequenced roadmap").
 
 ## 2. Scope
 
 **In scope:**
 
-- **Change password** (`PUT /api/v1/me/password`): verify the current password (step-up), set a new one,
-  then revoke **all** of the user's sessions (the current one included).
-- **Delete account** (`DELETE /api/v1/me`): an **asynchronous hard delete**. Step-up, then tombstone the
-  account (a transient Ebean `@SoftDelete` state), revoke all sessions, and enqueue an `AccountDeletion`
-  task that erases the user's data (DB rows + on-disk image bytes) in FK order and finally deletes the
-  user row, freeing the username.
-- A reusable **step-up re-authentication** brick (`Reauthenticator`), structured so a second factor can
-  be added later without reworking each endpoint.
-- The `@SoftDelete` tombstone makes a pending-deletion account **invisible to authentication** (login
-  refused, token resolution refused) for free, via Ebean's automatic query filtering.
+- **Change password** (`PUT /api/v1/me/password`): verify the supplied current password, reject a new
+  password the user has **ever used before** (password history), store the new one, then revoke **all** of
+  the user's sessions (the current one included).
+- **Delete account** (`DELETE /api/v1/me`): an **asynchronous hard delete**. A generic **step-up factor**
+  (in a header) is verified, then the account is **tombstoned** (Ebean `@SoftDelete`, mirrored by a domain
+  `User.softDeleted` flag), all sessions are revoked, and an `AccountDeletion` task is enqueued to erase
+  the user's data (DB rows + on-disk image bytes) in FK order and finally delete the user row, freeing the
+  username.
+- A **step-up re-authentication** brick (`Reauthenticator`) plus a `factor-kind`-carrying request header,
+  structured so a second factor (TOTP/passkey) slots in later without reworking the endpoint.
+- **Password history**: every password a user has ever set is retained (hashed) and the reuse check runs
+  against all of it.
 
 **Out of scope (deferred):**
 
-- **Public profiles / any read of another user's profile.** Gated on audience (backlog).
+- **Public profiles / reading another user's profile.** Gated on audience (backlog).
 - **A "deactivate / reactivate account" feature.** The tombstone is a one-way, internal state toward
-  deletion, **not** a user-facing deactivation with a grace period or undo. See §3.
-- **A sudo-mode elevation token** (a short-lived re-auth token à la GitHub). v1 carries the step-up factor
-  **inline** in each sensitive request. The elevation token is a natural companion to 2FA, backlogged.
-- **2FA (TOTP / Passkey).** The step-up brick is shaped for it, but no second factor ships here. Backlog.
+  deletion, **not** a user-facing deactivation with a grace period or undo (§3).
+- **A sudo-mode elevation token** (a short-lived re-auth token). v1 carries the step-up factor **inline**
+  in the delete request. The elevation token is a companion to 2FA, backlogged.
+- **2FA (TOTP / Passkey).** The step-up header + brick are shaped for it, but no second factor ships here.
+  The domain `ReauthenticationFactor` sealed type is deferred until then (v1 only supports the password
+  kind, validated at the edge).
 - **User data export / import.** Separate backlog item (portability).
 - **Deleted-account residue GC.** If the `AccountDeletion` task fails partially/totally, orphans remain; a
-  sweep is a P2 backlog item, not built here (see §8, §14).
+  sweep is a P2 backlog item, not built here (§8, §14).
+- **Capping password history length.** Full history retained in v1 (§14).
 
 ## 3. Key decisions (rationale captured for the plan)
 
 - **Hard delete, not deactivation.** Everything is owner-scoped and nothing is shared, so a user owns only
-  their own data. A true erasure keeps the data model clean (no cross-cutting "disabled user" state) and
-  respects the user (no hostage data). Chosen over soft deactivation.
-- **…but performed asynchronously, via a transient tombstone.** A hard delete enumerates the user's pins,
-  deletes rows across many tables (all FKs are `ON DELETE RESTRICT`, so no DB cascade helps) and cleans
-  on-disk bytes image-by-image — potentially slow. So `DELETE /me` does the minimum synchronously
-  (tombstone + revoke + enqueue, `202`) and a **task** does the erasure. The tombstone is a one-way state:
-  not reactivatable, no grace window, no undo. Async is for robustness/volume, not to give the user a
-  change-of-mind window.
-- **The tombstone is Ebean's native `@SoftDelete`, distinct from the Pin/Board soft-delete.** The project
-  already has a soft-delete: Pin/Board carry a **manual `softDeletedAt: Instant?`** timestamp, which is
-  domain-visible (the recycle bin shows *when* deleted) and filtered explicitly. The account tombstone is
-  the opposite need — it must be **invisible** to the domain and auto-excluded everywhere — so it uses the
-  **other** mechanism: Ebean `@SoftDelete` (a boolean flag Ebean auto-excludes from every query unless
-  `setIncludeSoftDeletes` is set; `.delete()` sets it, `.deletePermanent()` physically removes). Two
-  mechanisms for two genuinely different needs; this divergence is intentional and must be documented in
-  code so a reviewer is not surprised.
-- **Step-up re-authentication, not "compare the password".** The semantics are "require a re-auth factor
-  for a sensitive action", not "prove you know the password". v1's factor is the password, verified by
-  **reusing `UserAuthenticator`** (so the constant-time guard is reused). Modelled as a small
-  `Reauthenticator` brick so TOTP/Passkey can slot in later.
-- **Change-password revokes ALL sessions, current included.** The classic reason to change a password is
-  "my account may be compromised" — and the current session's token may itself be the stolen one. So no
-  exception: after a successful change, every token dies and the user re-logs in everywhere. Stricter than
-  the common "revoke others, keep current", by explicit choice.
-- **Step-up failure is `403`, not `401`.** The request is authenticated (valid Bearer); only the *extra*
-  factor failed. Returning `401` would make clients treat it as session expiry and log the user out; `403`
-  says "your identity is known, but this action needs a valid step-up you did not provide".
+  their own data. True erasure keeps the data model clean (no cross-cutting "disabled user" state) and
+  respects the user (no hostage data).
+- **…performed asynchronously, via a tombstone.** A hard delete enumerates the user's pins, deletes rows
+  across many tables (every FK is `ON DELETE RESTRICT`, so no DB cascade helps) and cleans on-disk bytes
+  image-by-image — potentially slow. So `DELETE /me` does the minimum synchronously (tombstone + revoke +
+  enqueue, `202`) and a **task** does the erasure. The tombstone is one-way: not reactivatable, no grace
+  window, no undo. Async is for robustness/volume, not a change-of-mind window.
+- **The account tombstone is Ebean `@SoftDelete`, *mirrored into the domain*.** Ebean's `@SoftDelete`
+  gives the mechanics for free: normal queries auto-exclude tombstoned rows (so auth-invisibility costs
+  nothing), `.delete()` sets the flag, `.deletePermanent()` removes, `setIncludeSoftDeletes` opts in. But a
+  soft-delete that only the persistence adapter knows about would make the async-deletion lifecycle a
+  **cross-adapter contract absent from the domain** — a Clean-Architecture red flag. So the state is also
+  **explicit in the domain**: `User` carries a `softDeleted: Boolean`, the mapper maps the Ebean flag onto
+  it, and the transition is a domain port method (`markPendingDeletion`). The mechanism stays Ebean's; the
+  *concept* lives in the domain.
+- **This is a different soft-delete mechanism than Pin/Board — deliberately.** Pin/Board use a **manual
+  `softDeletedAt: Instant?`** timestamp (domain-visible, filtered by hand, **reversible** via the recycle
+  bin). The account tombstone uses **Ebean `@SoftDelete`** (boolean, auto-filtered, **one-way**). Both are
+  now domain-visible; the mechanisms differ because the needs differ (a recycle bin that shows *when* vs an
+  auto-excluded one-way tombstone). Document this divergence in code so a reviewer is not surprised.
+- **Change-password requires the actual current password, in the body — not a generic factor.** Changing a
+  password inherently means proving you know the *old* one; a second factor (a TOTP code) could not stand
+  in for it. So `currentPassword` travels in the request body and is checked against the current hash. This
+  is distinct from the generic step-up.
+- **Delete-account uses a generic step-up factor, in a header, with its factor-kind.** A deletion has no
+  intrinsic "old value" to know — it just needs re-proof. So it takes a generic step-up factor whose
+  **kind** is explicit on the wire (`X-Reauthentication: <factor-kind> <value>`, kind = `password` in v1),
+  making 2FA a drop-in later. The value is **base64url-encoded**, mirroring `Authorization: Basic
+  base64(...)`, so an arbitrary-Unicode password survives the Latin-1 header charset.
+- **New password must never have been used before by this user (password history).** A simple, sound
+  security prerequisite. It also means storage is **append-only** (a new hash per change), which removes
+  any need for an upsert or a `unique(user_id)` on the hash table: the *current* password is just the
+  latest row.
+- **Change-password revokes ALL sessions, current included.** The classic reason to change a password is a
+  suspected compromise, and the current session's token may itself be the stolen one. No exception.
+- **A failed re-auth is `403`, not `401`.** The request is authenticated (valid Bearer); only the extra
+  proof failed. `401` would make clients treat it as session expiry and log the user out; `403` says
+  "identity known, but this action needs a valid proof you did not give".
 - **The account-deletion task handler is placed under `api-presentation-quarkus/.../tasks/` for now —
-  knowingly.** That is where the existing `PinDownloadTaskHandler` lives. This placement is a known
-  architecture smell (task workers are a *driving adapter*, not HTTP presentation); the whole task-worker
-  subsystem is scheduled to move into a dedicated `api-worker-quarkus` module as the **next** sub-project
-  (backlog P2). To keep this feature focused, the new handler follows the current convention and will move
-  with the rest. The heavy logic lives in a use case (`AccountDeletionCleaner`), so only a thin adapter is
-  "in the wrong place".
+  knowingly.** That is where `PinDownloadTaskHandler` lives. Task workers are a *driving adapter*, not HTTP
+  presentation; the whole subsystem is scheduled to move into a dedicated `api-worker-quarkus` module as
+  the **next** sub-project (backlog P2). To stay focused, the new handler follows the current convention
+  and moves with the rest. Its heavy logic lives in a use case (`AccountDeletionCleaner`), so only a thin
+  adapter is "misplaced".
 
 ## 4. Domain & ports
 
-The domain `User` entity is **unchanged** (`{ id, name }`). The tombstone flag is a persistence concern
-(Ebean `@SoftDelete` on `UserModel`) and never surfaces in the domain; the mapper keeps mapping `id` +
-`name` only.
+### `User` gains a domain-visible tombstone flag
 
-Repository interface changes (all pure, in `api-domain`):
+```
+data class User(
+    override val id: UUID,
+    val name: String,
+    val softDeleted: Boolean = false,   // NEW — mirrors the persistence @SoftDelete flag; one-way
+) : Identifiable
+```
 
-- **`UserRepositoryInterface`** — `findUserById` / `findUserByName` are unchanged in signature but now
-  **auto-exclude tombstoned users** (Ebean filtering; this is what buys auth-invisibility for free). Add:
-  - `markPendingDeletion(user: User)` — Ebean soft delete (sets the flag; row stays, children stay).
-  - `findByIdIncludingDeleted(id: UUID): User?` — the **only** lookup that sees a tombstoned user; used by
-    the deletion task. (`setIncludeSoftDeletes`.)
-  - `permanentlyDeleteUser(user: User)` — Ebean `deletePermanent` (physically removes the row).
-  - The currently-unused `deleteUser` is removed/replaced by the two explicit methods above.
-- **`UserPasswordHashRepositoryInterface`** — `saveUserPasswordHash` becomes an **upsert** (see §12: today
-  it always inserts, which would create a second hash on change-password). Add:
-  - `deleteForUser(user: User)` — for account deletion.
-- **`PinRepositoryInterface`** — add `permanentlyDeleteAllPinsForUser(user)` (all states; the existing
-  bulk delete only covers soft-deleted pins). Enumeration reuses `findAllPinsForUser` +
-  `findAllSoftDeletedPinsForUser` to collect images before the bulk delete.
-- **`BoardRepositoryInterface`** — add `permanentlyDeleteAllBoardsForUser(user)` (all states; existing bulk
-  covers recycled only).
-- **`TagRepositoryInterface`** — add `deleteAllTagsForUser(user)` (no delete method exists today).
-- **`SessionTokenRepositoryInterface.deleteAllForUser`**, **`ImageRepositoryInterface`**
-  (`findByPinId`/`deleteByPinId`), **`ImageDownloadRepositoryInterface.deleteByPinId`** — reused as-is.
-- **Ports reused by the task**: `ImageStore.delete(key)`, `RenditionCache.evictImage(imageId)`,
-  `TransactionRunner`, `Clock` (via `EnqueueTask`).
+`softDeleted` is `false` for every normally-loaded user (Ebean auto-excludes tombstoned rows); it reads
+`true` only when a user is loaded through an `…IncludingDeleted` lookup. It is never exposed to clients
+(`UserOutputDto` stays `{ id, name }`; the mapper ignores it). Every `User(...)` construction and the
+`UserModel` ↔ `User` mapper get the new field (default `false`).
 
-New task identity (pure constants object in `api-usecases/tasks`, mirroring `PinDownloadTask`):
+### `PasswordHasher` — shared brick (targeted improvement)
+
+The password-history reuse check needs to verify a candidate against arbitrary stored hashes, which today
+is private BCrypt logic inside `UserAuthenticator`. Extract a small brick (an object/class, no top-level
+function) reused by registration, auth, and change-password:
+
+```
+hash(raw: String): HashedPassword                      // BCrypt gensalt
+matches(raw: String, stored: HashedPassword): Boolean  // dispatch on stored.algorithm
+```
+
+`UserCreator` uses `hash`; `UserAuthenticator` uses `matches` (its constant-time dummy-hash guard stays);
+`PasswordChanger` uses both.
+
+### Repository interface changes (pure, in `api-domain`)
+
+**`UserRepositoryInterface`** — the normal finders auto-exclude tombstoned users (Ebean), which is exactly
+what auth wants; add the opt-in and lifecycle methods:
+
+- `findUserById(id): User?` / `findUserByName(name): User?` — **unchanged signatures**, now auto-exclude
+  tombstoned rows (auth / identity resolution get invisibility for free).
+- `findUserByNameIncludingDeleted(name): User?` — **for the registration uniqueness check** (remark 2): a
+  name held by a pending-deletion account stays reserved until GC frees it. (`setIncludeSoftDeletes`.)
+- `findUserByIdIncludingDeleted(id): User?` — the deletion task's loader (sees the tombstone).
+- `markPendingDeletion(user: User)` — Ebean `.delete()` (sets the flag; row + children stay). One-way.
+- `permanentlyDeleteUser(user: User)` — Ebean `.deletePermanent()` (physically removes the row).
+- The currently-unused `deleteUser` is removed in favour of the two explicit lifecycle methods.
+
+**`UserPasswordHashRepositoryInterface`** — password history (append-only):
+
+- `saveUserPasswordHash(user, hashed): HashedPassword` — **unchanged**: already inserts a fresh row, which
+  is exactly the append we want.
+- `findCurrentPasswordHash(user): HashedPassword?` — **replaces** the current `findUserPasswordHash`, which
+  does `findOne()` and would now break with multiple rows. Returns the **latest** by `when_created`.
+- `findAllPasswordHashesForUser(user): List<HashedPassword>` — the full history, for the reuse check.
+- `deleteForUser(user)` — for account deletion (drops all history rows).
+
+**`PinRepositoryInterface`** — add `permanentlyDeleteAllPinsForUser(user)` (all states; the existing bulk
+delete covers soft-deleted pins only). Enumeration reuses `findAllPinsForUser` +
+`findAllSoftDeletedPinsForUser` to collect images before the bulk delete.
+
+**`BoardRepositoryInterface`** — add `permanentlyDeleteAllBoardsForUser(user)` (all states).
+
+**`TagRepositoryInterface`** — add `deleteAllTagsForUser(user)` (no delete method exists today).
+
+**Reused as-is**: `SessionTokenRepositoryInterface.deleteAllForUser`, `ImageRepositoryInterface`
+(`findByPinId`/`deleteByPinId`), `ImageDownloadRepositoryInterface.deleteByPinId`, and the `ImageStore` /
+`RenditionCache` / `TransactionRunner` / `Clock` ports.
+
+### New task identity
+
+Pure constants object in `api-usecases/tasks`, mirroring `PinDownloadTask`:
 
 ```
 object AccountDeletionTask { const val KIND = "account.delete"; const val MAX_ATTEMPTS = 5 }
@@ -124,43 +179,57 @@ object AccountDeletionTask { const val KIND = "account.delete"; const val MAX_AT
 
 All under `/api/v1`, on `MeController` (cohesive with `GET /me`). Both require a valid Bearer token.
 
-| Method | Path | Auth | Body | Result |
-|---|---|---|---|---|
-| PUT | `/me/password` | Bearer | `{ currentPassword, newPassword }` | **204** (all sessions revoked) |
-| DELETE | `/me` | Bearer | `{ password }` | **202** (deletion enqueued) |
+| Method | Path | Auth | Re-auth | Body | Result |
+|---|---|---|---|---|---|
+| PUT | `/me/password` | Bearer | current password in body | `{ currentPassword, newPassword }` | **204** |
+| DELETE | `/me` | Bearer | `X-Reauthentication` header | — | **202** |
 
-- `PUT /me/password`: step-up on `currentPassword`; on success, replace the hash and revoke **all**
-  sessions. `204`, no body. The presented token is now dead → the next request 401s.
-- `DELETE /me`: step-up on `password`; on success, tombstone + revoke all + enqueue. `202`, no body.
-  A body on `DELETE` is used to carry the step-up factor; RESTEasy Reactive supports it.
+- `PUT /me/password`: verify `currentPassword` against the current hash; reject a `newPassword` already in
+  the user's history; store the new hash; revoke **all** sessions. `204`, no body. The presented token is
+  now dead → the next request 401s.
+- `DELETE /me`: verify the step-up header; tombstone + revoke all + enqueue. `202`, no body.
+
+### The step-up header (delete)
+
+```
+X-Reauthentication: <factor-kind> <base64url(factor-value)>      e.g.  X-Reauthentication: password <b64>
+```
+
+Parsed in presentation (split on the first space). v1 supports `factor-kind = password` only; the decoded
+value is the password. Header **absent** → 403 (re-auth required); **unparseable / unsupported kind** →
+400; present-but-**wrong** password → 403. The exact header name/encoding are finalizable in the plan; the
+base64url value mirrors HTTP Basic so a Unicode password survives the header charset. **Never log it.**
 
 ### DTOs (input)
 
-- `PasswordChangeInputDto = { currentPassword, newPassword }`. Validation: `currentPassword` →
-  `@NotBlank` only (a factor being *verified*, so a bad shape → 403 step-up, never 400); `newPassword` →
-  `@NotBlank @Size(min = 8, max = 72)` (a value being *created*, reusing registration's constraints; 72 =
-  the BCrypt byte ceiling).
-- `AccountDeletionInputDto = { password }`. `@NotBlank` only (a factor being verified).
-
-No new output DTOs. `GET /me` (`UserOutputDto`) is unchanged.
+- `PasswordChangeInputDto = { currentPassword, newPassword }`. Validation: `currentPassword` → `@NotBlank`
+  (a value being *verified*; blank → 400, present-but-wrong → 403); `newPassword` → `@NotBlank @Size(min =
+  8, max = 72)` (a value being *created*, reusing registration's constraints; 72 = the BCrypt byte ceiling).
+- `DELETE /me` has **no body**; the factor rides in the header. No new output DTO. `GET /me`
+  (`UserOutputDto`) is unchanged.
 
 ## 6. Change-password flow
 
 Use case `PasswordChanger.changePassword(user, currentPassword, newPassword)`, `@Transactional`:
 
-1. **Step-up:** `Reauthenticator.reauthenticate(user, currentPassword)` (§9). Failure → `403`.
-2. **Replace the hash:** `userPasswordRepository.saveUserPasswordHash(user, HashedPassword(BCrypt.hashpw(newPassword, gensalt()), BCRYPT))` — now upsert semantics (§12), so the single row for the user is updated in place.
-3. **Revoke all sessions:** `sessionRevoker.revokeAll(user)`.
+1. **Verify current password:** `passwordHasher.matches(currentPassword, findCurrentPasswordHash(user))`.
+   Absent hash or mismatch → `ReauthenticationError` (403).
+2. **Reject reuse:** if `findAllPasswordHashesForUser(user).any { passwordHasher.matches(newPassword, it) }`
+   → `PasswordPreviouslyUsedError` (422). (The current password is in the history, so "new == current" is
+   rejected too.)
+3. **Append the new hash:** `saveUserPasswordHash(user, passwordHasher.hash(newPassword))`.
+4. **Revoke all sessions:** `sessionRevoker.revokeAll(user)`.
 
-The hash-replace and the revoke-all commit together (`@Transactional`): a change must never leave the new
-password stored while old tokens survive, nor vice-versa. Returns `Unit` → controller emits `204`.
+Steps 3–4 commit together (`@Transactional`): never store the new password while old tokens survive, nor
+vice-versa. Returns `Unit` → controller emits `204`.
 
 ## 7. Delete-account request flow
 
-Use case `AccountDeleter.requestDeletion(user, password)`, `@Transactional`:
+Use case `AccountDeleter.requestDeletion(user, factor)`, `@Transactional` (`factor` = the step-up password
+parsed from the header):
 
-1. **Step-up:** `Reauthenticator.reauthenticate(user, password)`. Failure → `403`.
-2. **Tombstone:** `userRepository.markPendingDeletion(user)` (Ebean soft delete). The user is now invisible
+1. **Step-up:** `reauthenticator.reauthenticate(user, factor)` (§9). Failure → 403.
+2. **Tombstone:** `userRepository.markPendingDeletion(user)` (Ebean `.delete()`). The user is now invisible
    to `findUserById` / `findUserByName`.
 3. **Revoke all sessions:** `sessionRevoker.revokeAll(user)`.
 4. **Enqueue:** `enqueueTask.enqueue(kind = AccountDeletionTask.KIND, payload = user.id.toString(),
@@ -170,8 +239,8 @@ All four commit in one transaction (all-or-nothing: a failure leaves the account
 Returns `Unit` → controller emits `202`.
 
 **Re-entrancy is self-guarding.** After the first `DELETE /me`, all sessions are revoked, so a second call
-cannot authenticate (`401`); and even if a token survived, `findUserById` would now return null
-(auto-filtered), so the identity would not resolve. The `dedupKey` additionally prevents a duplicate task.
+cannot authenticate (`401`); even if a token survived, `findUserById` now returns null (auto-filtered), so
+the identity would not resolve. The `dedupKey` additionally prevents a duplicate task.
 
 ## 8. AccountDeletion task (worker path)
 
@@ -180,88 +249,90 @@ Thin adapter `AccountDeletionTaskHandler` (presentation, temporary — §3): `ki
 
 Use case `AccountDeletionCleaner.deleteAccountData(userId)` (in `api-usecases`; uses only domain ports):
 
-1. **Load including tombstoned:** `user = userRepository.findByIdIncludingDeleted(userId)`. If null → the
-   account was already fully deleted → **return (no-op success)**. This is the idempotency anchor.
-2. **DB erasure, in one `TransactionRunner` unit**, respecting the `ON DELETE RESTRICT` FKs (children
-   first):
+1. **Load including tombstoned:** `user = findUserByIdIncludingDeleted(userId)`. If null → already fully
+   deleted → **return (no-op success)**. This is the idempotency anchor.
+2. **DB erasure in one `TransactionRunner` unit**, respecting the `ON DELETE RESTRICT` FKs (children first):
    1. Enumerate the user's pins (`findAllPinsForUser` + `findAllSoftDeletedPinsForUser`). For each pin:
-      collect its image's `(storageKey, imageId)` (`imageRepository.findByPinId`) for later disk cleanup;
-      clear its download (cancel the queued/running task + delete the `image_download` row, via the
-      existing `ClearPinDownload`); delete the image row (`imageRepository.deleteByPinId`).
-   2. `pinRepository.permanentlyDeleteAllPinsForUser(user)` — deletes `pin_tag` + `pin_board` join rows and
-      the `pins` rows (all states).
-   3. `boardRepository.permanentlyDeleteAllBoardsForUser(user)` — deletes remaining `pin_board` rows and
-      the `boards` rows (all states).
-   4. `tagRepository.deleteAllTagsForUser(user)` (the `pin_tag` rows are already gone with the pins).
+      collect its image `(storageKey, imageId)` (`findByPinId`) for later disk cleanup; clear its download
+      (cancel the queued/running task + delete the `image_download` row, via the existing
+      `ClearPinDownload`); delete the image row (`deleteByPinId`).
+   2. `permanentlyDeleteAllPinsForUser(user)` — deletes `pin_tag` + `pin_board` join rows and the `pins`
+      rows (all states).
+   3. `permanentlyDeleteAllBoardsForUser(user)` — deletes any remaining `pin_board` rows and the `boards`
+      rows (all states).
+   4. `deleteAllTagsForUser(user)` (the `pin_tag` rows are already gone with the pins).
    5. `sessionTokenRepository.deleteAllForUser(user.id)` — defensive (already revoked at request time).
-   6. `userPasswordRepository.deleteForUser(user)`.
-   7. `userRepository.permanentlyDeleteUser(user)` — physically removes the row, freeing the username.
-3. **Disk cleanup, best-effort, after the transaction commits:** for each collected `(storageKey,
-   imageId)`: `imageStore.delete(storageKey)` then `runCatching { renditionCache.evictImage(imageId) }`.
-   Mirrors the recycle-bin pattern (DB rows first, disk after; disk failures do not fail the task).
+   6. `userPasswordRepository.deleteForUser(user)` (all history rows).
+   7. `permanentlyDeleteUser(user)` — Ebean `.deletePermanent()`, freeing the username.
+3. **Disk cleanup, best-effort, after commit:** for each collected `(storageKey, imageId)`:
+   `imageStore.delete(storageKey)` then `runCatching { renditionCache.evictImage(imageId) }`. Mirrors the
+   recycle-bin pattern (DB rows first, disk after; disk failures do not fail the task).
 
-**Idempotency / retry.** Any DB failure rolls back the transaction and propagates → `TaskProcessor` marks
-the task *Retryable* (backoff, up to `MAX_ATTEMPTS`, then dead). A re-run re-enumerates (some rows already
-gone; deletes are delete-if-exists) and continues; once the user row is gone, step 1 short-circuits to
-success. **A committed-DB-but-failed-disk** case leaves orphaned bytes that a re-run will *not* revisit
-(user already gone) — this is the residue the P2 "Deleted-account residue GC" sweep is for.
+**Idempotency / retry.** A DB failure rolls back the transaction and propagates → `TaskProcessor` marks it
+*Retryable* (backoff, up to `MAX_ATTEMPTS`, then dead). A re-run re-enumerates (some rows gone; deletes are
+delete-if-exists) and continues; once the user row is gone, step 1 short-circuits. A **committed-DB /
+failed-disk** case orphans bytes a re-run will not revisit — the residue the P2 GC sweep is for.
 
-## 9. Step-up re-authentication
+## 9. Re-authentication for sensitive actions
 
-`Reauthenticator.reauthenticate(user: User, factor: String)` in `api-usecases`:
+Two forms, on purpose (§3):
 
-- v1: `try { userAuthenticator.authenticate(BasicAuthLogin(user.name, factor)) } catch
-  (e: UserAuthenticationError) { throw ReauthenticationError() }`. Reuses the existing password check
-  (including its constant-time dummy-hash guard). Success is discarded (we already hold the identity).
-- Throws `ReauthenticationError` (a `BaseError`, `ErrorCode.REAUTHENTICATION_FAILED` → `403`) on any
-  failure, collapsing "wrong password" / "no hash" into one 403 (no oracle).
-- The name is deliberate: a later 2FA factor is a second `reauthenticate`-style check, without touching
-  the callers (`PasswordChanger`, `AccountDeleter`).
+- **Change-password — intrinsic.** The current password (body) is checked against the current hash inside
+  `PasswordChanger` (§6.1). Not the generic mechanism; a password change needs the *old password*, which a
+  second factor could not substitute.
+- **Delete-account — generic step-up.** `Reauthenticator.reauthenticate(user, factor)` in `api-usecases`:
+  v1 verifies the password factor via `passwordHasher.matches(factor, findCurrentPasswordHash(user))`;
+  failure → `ReauthenticationError` (403). The factor arrives in the `X-Reauthentication` header with its
+  kind (§5); presentation parses/validates the kind and passes the value. When 2FA lands, the kind grows a
+  domain `ReauthenticationFactor` sealed type and `Reauthenticator` dispatches — without touching
+  `AccountDeleter`.
 
 ## 10. Security wiring (hexagonal placement)
 
-- **api-domain**: repository-interface additions (§4). No new entity; `User` unchanged.
-- **api-usecases** (domain only): `Reauthenticator`, `PasswordChanger` (`@Transactional`), `AccountDeleter`
-  (`@Transactional`), `AccountDeletionCleaner`, `AccountDeletionTask` constants, `ReauthenticationError`
-  (+ `ErrorCode.REAUTHENTICATION_FAILED`). `UserAuthenticator`, `SessionRevoker` reused unchanged.
-- **api-persistence-sqlite**: `UserModel` gains an Ebean `@SoftDelete` boolean; `UserRepository` gains
-  `markPendingDeletion` (`.delete()`), `findByIdIncludingDeleted` (`setIncludeSoftDeletes`),
-  `permanentlyDeleteUser` (`.deletePermanent()`); `UserPasswordHashRepository.saveUserPasswordHash` becomes
-  upsert + `deleteForUser`; `Pin/Board/Tag` repositories gain the all-states bulk deletes; migration
-  **1.9** (see §12).
-- **api-presentation-quarkus**: `MeController` gains `PUT /me/password` and `DELETE /me` (+ the two input
-  DTOs); `AccountDeletionTaskHandler` under `.../tasks/` (temporary placement, §3); a `BaseErrorMapper`
-  entry (or `ErrorCode` mapping) for `REAUTHENTICATION_FAILED` → 403.
+- **api-domain**: `User.softDeleted` field; the repository-interface additions (§4). No new entity.
+- **api-usecases** (domain only): `PasswordHasher` (shared brick), `Reauthenticator`, `PasswordChanger`
+  (`@Transactional`), `AccountDeleter` (`@Transactional`), `AccountDeletionCleaner`, `AccountDeletionTask`
+  constants, `ReauthenticationError` + `PasswordPreviouslyUsedError` (+ their `ErrorCode`s).
+  `UserAuthenticator`/`UserCreator` switch to `PasswordHasher`; `UserAuthenticator` reads
+  `findCurrentPasswordHash`; `UserCreator` uses `findUserByNameIncludingDeleted` for uniqueness.
+  `SessionRevoker` reused unchanged.
+- **api-persistence-sqlite**: `UserModel` gains an Ebean `@SoftDelete` boolean; `UserRepository` gains the
+  `…IncludingDeleted` finders, `markPendingDeletion` (`.delete()`), `permanentlyDeleteUser`
+  (`.deletePermanent()`); `UserPasswordHashRepository` gains `findCurrentPasswordHash` /
+  `findAllPasswordHashesForUser` / `deleteForUser`; `Pin/Board/Tag` repositories gain the all-states bulk
+  deletes; migration **1.9** (§12). Mappers map `softDeleted`.
+- **api-presentation-quarkus**: `MeController` gains `PUT /me/password` (+ `PasswordChangeInputDto`) and
+  `DELETE /me` (+ the `X-Reauthentication` header parse); `AccountDeletionTaskHandler` under `.../tasks/`
+  (temporary placement, §3); `BaseErrorMapper` entries for the new `ErrorCode`s.
 - **api-application**: wire the new repository methods; integration tests; regenerate `docs/openapi.json`.
 
 ## 11. Errors
 
-Following the existing per-use-case `BaseError` / shared `ErrorCode` / `BaseErrorMapper` convention:
+Following the existing `BaseError` / `ErrorCode` / `BaseErrorMapper` convention:
 
-- `REAUTHENTICATION_FAILED` → **403**. Step-up factor missing/invalid on `PUT /me/password` or
-  `DELETE /me`. Distinct from the auth-layer 401s so clients do not confuse it with session expiry.
-- `newPassword` violating `@Size(8,72)` / `@NotBlank` → **400** (existing Bean-Validation mapper).
+- `REAUTHENTICATION_FAILED` → **403**. Wrong `currentPassword` (change-password) or a missing/wrong step-up
+  factor (delete). Distinct from the auth-layer 401s so clients do not confuse it with session expiry.
+- `UNSUPPORTED_REAUTHENTICATION_FACTOR` → **400**. The `X-Reauthentication` header is present but
+  unparseable or names a `factor-kind` the server does not support (protocol error, not a bad credential).
+- `PASSWORD_PREVIOUSLY_USED` → **422**. The `newPassword` matches one of the user's historical passwords.
+- Bean-Validation failures (`newPassword` size, blank `currentPassword`) → **400** (existing mapper).
 - No/invalid Bearer token → **401** (existing auth layer).
 
 All RFC-7807 problem+json, consistent with existing mappers.
 
 ## 12. Persistence & migration
 
-- **`users.deleted`** — Ebean `@SoftDelete` boolean on `UserModel`, default false/`0`, not null. Ebean
-  auto-excludes `deleted = true` from every query except those opting in. Migration adds the column;
-  existing rows default to not-deleted.
-- **`user_password_hashes` upsert + uniqueness.** Today `saveUserPasswordHash` mints a new
-  `UserPasswordHashModel` (fresh `id`) and inserts, and there is **no unique constraint on `user_id`** —
-  so a second save for the same user would insert a duplicate and break `findOne()`. Change:
-  - Make `saveUserPasswordHash` **upsert**: find the existing row by `user_id`; if present, mutate
-    `hash` + `algorithm` in place and save (same `id`); else insert. Registration (no existing row) still
-    inserts; change-password updates.
-  - Add a **`unique (user_id)`** constraint on `user_password_hashes` to enforce the one-hash-per-user
-    invariant at the DB level (no existing duplicates, so the migration is safe).
-- **Migration 1.9** (last shipped is 1.8, session tokens): additive — the `users.deleted` column and the
-  `user_password_hashes.user_id` unique index. No data backfill. Generated via
+- **`users` Ebean `@SoftDelete`** — a boolean flag column on `UserModel` (default `false`/`0`, not null).
+  Ebean auto-excludes flagged rows from every query except those calling `setIncludeSoftDeletes`; `.delete()`
+  sets it, `.deletePermanent()` removes. The mapper maps it onto `User.softDeleted`.
+- **`user_password_hashes` stays append-only** — **no** schema change: it already has its own `id` PK, a
+  `user_id` FK and **no** unique on `user_id`, so multiple rows per user (the history) are already legal.
+  Behaviour changes are code-only: `saveUserPasswordHash` keeps inserting (append); reads switch to
+  latest-by-`when_created` (`findCurrentPasswordHash`) and full-list (`findAllPasswordHashesForUser`).
+- **Migration 1.9** (last shipped is 1.8, session tokens): additive — only the `users` soft-delete boolean
+  column. No data backfill (existing rows default to not-deleted). Generated via
   `./gradlew :api-persistence-sqlite:generateDbMigration`.
-- The pin/board/tag bulk-delete additions are new repository queries, not schema changes.
+- The pin/board/tag bulk-delete additions are new queries, not schema changes.
 
 ## 13. Testing strategy
 
@@ -270,50 +341,57 @@ Strict TDD, 100% branch coverage per package, failing test first. Order per AGEN
 
 **Integration (`api-application`):**
 
-- **Change password:** success → `204`, and the pre-change token is now rejected (`401`) **and** every
-  other session the user had is dead, **and** login with the new password succeeds while the old password
-  fails; wrong `currentPassword` → `403` and password unchanged (old still logs in); short `newPassword`
-  → `400`; unauthenticated → `401`.
+- **Change password:** success → `204`, the pre-change token is rejected (`401`) **and** every other
+  session is dead, **and** login with the new password succeeds while the old one fails; wrong
+  `currentPassword` → `403`, password unchanged; **reusing any past password** (the current one, and an
+  earlier one after two changes) → `422`; short `newPassword` → `400`; unauthenticated → `401`.
 - **Delete account:** success → `202`; immediately after, the token is rejected and login is refused
-  (account invisible); after the enqueued task is processed, the user's pins/boards/tags/images rows and
-  on-disk bytes are gone and the **username is free to register again**; wrong `password` → `403` and the
-  account survives; unauthenticated → `401`. A second `DELETE /me` with the (now dead) token → `401`.
+  (account invisible); a new registration of the **same username is blocked while pending** and allowed
+  **after** the task completes; after processing, the user's pins/boards/tags/images rows and on-disk bytes
+  are gone; missing `X-Reauthentication` → `403`, unsupported kind → `400`, wrong factor → `403`;
+  unauthenticated → `401`; a second `DELETE /me` with the dead token → `401`.
 - **Deletion completeness:** seed a user with a pin that has an uploaded image (on-disk original + a
-  generated rendition) and a board membership and tags; after deletion, assert every row and both on-disk
+  generated rendition), a board membership, and tags; after deletion assert every row and both on-disk
   paths are gone.
 
 **Use-case unit (MockK):**
 
-- `Reauthenticator`: valid factor → passes; `UserAuthenticator` throwing → `ReauthenticationError`.
-- `PasswordChanger`: happy path calls upsert + `revokeAll`; step-up failure short-circuits (no hash write,
-  no revoke); the two writes are within one `@Transactional`.
+- `PasswordHasher`: `hash` then `matches` round-trips; `matches` false on a different password; algorithm
+  dispatch.
+- `Reauthenticator`: correct factor passes; wrong → `ReauthenticationError`.
+- `PasswordChanger`: happy path appends + `revokeAll`; wrong current → 403 short-circuit (no write, no
+  revoke); reused new → 422 short-circuit; append + revoke share one `@Transactional`.
 - `AccountDeleter`: happy path tombstones + revokes + enqueues with the right kind/payload/dedupKey; step-up
   failure short-circuits.
 - `AccountDeletionCleaner`: full order on a user with pins (active + soft-deleted), images, downloads,
-  boards, tags; the null-user short-circuit (idempotent re-run); disk cleanup runs after the DB unit and a
-  rendition-eviction failure is swallowed (best-effort).
+  boards, tags; null-user short-circuit (idempotent re-run); disk cleanup after the DB unit, with a
+  rendition-eviction failure swallowed.
 
 **Repository (`api-persistence-sqlite`):**
 
-- `@SoftDelete`: after `markPendingDeletion`, `findUserById`/`findUserByName` return null, but
-  `findByIdIncludingDeleted` returns the user; `permanentlyDeleteUser` then removes it entirely.
-- `saveUserPasswordHash` upsert: a second save updates in place (one row, new hash), `findUserPasswordHash`
-  returns the new value; `deleteForUser` removes it.
+- Ebean `@SoftDelete`: after `markPendingDeletion`, `findUserById`/`findUserByName` return null but
+  `findUserByIdIncludingDeleted` / `findUserByNameIncludingDeleted` return the user (with `softDeleted =
+  true`); `permanentlyDeleteUser` then removes it entirely.
+- Password history: two `saveUserPasswordHash` calls yield two rows; `findCurrentPasswordHash` returns the
+  latest; `findAllPasswordHashesForUser` returns both; `deleteForUser` removes all.
 - `permanentlyDeleteAllPinsForUser` / `…BoardsForUser` remove all states incl. join rows;
   `deleteAllTagsForUser` removes the user's tags.
 
 ## 14. Risks / open points
 
-- **Per-user enumeration vs the tombstone.** The deletion task enumerates pins/boards/tags **after** the
-  user is tombstoned. These queries key on the `author_id` / `user_id` FK **column** (no join to the
-  soft-deleted `users` row), so Ebean's soft-delete filter does not hide them. **Verify** this holds for
-  every reused finder; if any eagerly joins `UserModel`, the cleaner must `setIncludeSoftDeletes` on it.
-- **Committed-DB / failed-disk residue.** As in §8: a crash after the DB commit but before/within disk
-  cleanup orphans image bytes that no retry revisits. Accepted for v1; covered by the P2 residue-GC item.
+- **Per-user enumeration vs the Ebean tombstone.** The deletion task enumerates pins/boards/tags **after**
+  the user is tombstoned. Ebean applies a `@SoftDelete` predicate when a query joins/fetches the soft-delete
+  entity. The reused finders key on the `author_id` / `user_id` **FK column** (no join to the `users` row),
+  so they should not be filtered out — **verify** this for every reused finder; if any eagerly joins
+  `UserModel`, the cleaner must `setIncludeSoftDeletes` on it.
+- **Committed-DB / failed-disk residue.** A crash after the DB commit but before/within disk cleanup orphans
+  image bytes no retry revisits. Accepted for v1; covered by the P2 residue-GC item.
+- **Step-up factor in a header.** Base64url mirrors HTTP Basic and survives the header charset, but the
+  header carries a secret — it **must be excluded from access logs** (like `Authorization`). Noted for the
+  plan.
+- **Password history growth.** Unbounded rows per user over many changes. Fine for expected use; capping the
+  retained window (and the reuse check) is a possible later refinement (out of scope, §2).
 - **Large accounts.** The task loops per-pin for image collection and download clearing. Fine for expected
-  volumes; if accounts grow huge, batch the enumeration. Not optimised in v1.
-- **DELETE with a body.** Some proxies/clients dislike a `DELETE` request body. Acceptable here (the API is
-  consumed by our own SPA/extension); if it ever bites, the step-up factor can move to a header. Noted, not
-  pre-solved.
+  volumes; batch if accounts grow huge. Not optimised in v1.
 - **Handler placement is knowingly temporary** (§3); it moves with the scheduled `api-worker-quarkus`
-  extraction. No functional risk, just avoid entrenching more logic in the thin adapter.
+  extraction. No functional risk; avoid entrenching more logic in the thin adapter.
