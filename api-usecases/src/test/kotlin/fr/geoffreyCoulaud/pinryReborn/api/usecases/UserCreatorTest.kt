@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
@@ -13,6 +14,7 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
+import java.util.UUID.randomUUID
 
 class UserCreatorTest : BaseTest() {
     private val userRepository = mockk<UserRepositoryInterface>()
@@ -29,7 +31,7 @@ class UserCreatorTest : BaseTest() {
     fun `When creating a user, then should succeed`() {
         // Given
         val name = "John Doe"
-        every { userRepository.findUserByName(any()) } returns null
+        every { userRepository.findUserByNameIncludingDeleted(any()) } returns null
         every { userRepository.saveUser(any()) } answers { firstArg() }
 
         // When
@@ -43,7 +45,7 @@ class UserCreatorTest : BaseTest() {
     fun `When creating a user with an already used name, then should throw`() {
         // Given
         val name = "John Doe"
-        every { userRepository.findUserByName(name) } returns mockk(relaxed = true, name = name)
+        every { userRepository.findUserByNameIncludingDeleted(name) } returns mockk(relaxed = true, name = name)
 
         // When,Then
         assertThrows<UsernameAlreadyTakenError> {
@@ -52,9 +54,19 @@ class UserCreatorTest : BaseTest() {
     }
 
     @Test
+    fun `Given a name held by a tombstoned user, Then creation is rejected`() {
+        // Given
+        val name = createRandomString()
+        every { userRepository.findUserByNameIncludingDeleted(name) } returns
+            User(id = randomUUID(), name = name, softDeleted = true)
+        // When / Then
+        assertThrows<UsernameAlreadyTakenError> { useCase.createUser(name) }
+    }
+
+    @Test
     fun `When creating a user whose name differs only by case, then should throw`() {
         // Given
-        every { userRepository.findUserByName(any()) } returns mockk(relaxed = true)
+        every { userRepository.findUserByNameIncludingDeleted(any()) } returns mockk(relaxed = true)
 
         // When, Then
         assertThrows<UsernameAlreadyTakenError> {
@@ -67,7 +79,7 @@ class UserCreatorTest : BaseTest() {
         // Given
         val name = "John Doe"
         val password = createRandomString()
-        every { userRepository.findUserByName(any()) } returns null
+        every { userRepository.findUserByNameIncludingDeleted(any()) } returns null
         every { userRepository.saveUser(any()) } answers { firstArg() }
         every { passwordHasher.hash(any()) } returns HashedPassword("h", PasswordHashAlgorithm.BCRYPT)
         every { userPasswordRepository.saveUserPasswordHash(any(), any()) } answers { secondArg() }
