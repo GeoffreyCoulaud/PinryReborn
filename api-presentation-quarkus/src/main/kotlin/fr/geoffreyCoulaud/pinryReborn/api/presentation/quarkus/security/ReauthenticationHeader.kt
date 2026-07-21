@@ -21,6 +21,9 @@ object ReauthenticationHeader {
     }
 
     private fun decodeBase64Url(value: String): String =
-        runCatching { String(Base64.getUrlDecoder().decode(value), Charsets.UTF_8) }
-            .getOrElse { throw MalformedReauthenticationError() }
+        try {
+            String(Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
+        } catch (_: IllegalArgumentException) {
+            throw MalformedReauthenticationError()
+        }
 }
