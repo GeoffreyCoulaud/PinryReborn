@@ -30,7 +30,7 @@ class UserAuthenticator(
 
     private fun checkLogin(login: BasicAuthLogin): User {
         val user = userRepository.findUserByName(login.userName)
-        val hash = user?.let { userPasswordRepository.findUserPasswordHash(it) }
+        val hash = user?.let { userPasswordRepository.findCurrentPasswordHash(it) }
         if (user == null || hash == null) {
             // Constant cost even without a user/hash: the result is ignored.
             passwordHasher.matches(login.password, dummyHash)
