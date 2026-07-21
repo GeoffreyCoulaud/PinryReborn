@@ -122,10 +122,13 @@ Ports (pure interfaces in api-domain):
   `deleteById(id)`, `deleteAllForUser(userId)`.
 
 Plus a **concrete pure class** `SessionExpiryPolicy(persistentTtl, ephemeralTtl, renewThreshold)`
-with `expiryFrom(now, persistent): Instant` and `renewAfter(now, persistent): Instant`. It has no
-injected dependency (just config values), so it needs no interface; it is constructed by a
-presentation producer from `AuthConfig` and injected into the issue/renew use cases. Deterministic,
-so unit tests construct it directly with fixed durations.
+with `expiryFrom(now, persistent): Instant` (= `now + ttl(persistent)`) and
+`renewAfterFor(expiresAt, persistent): Instant` (= `expiresAt - ttl(persistent) × (1 - renewThreshold)`).
+Defining `renewAfter` from `expiresAt` (domain state on `SessionToken`) rather than from the issue
+instant lets it be recomputed for an already-stored token (see `GET /sessions/current`) without
+persisting an `issuedAt`. It has no injected dependency (just config values), so it needs no
+interface; it is constructed by a presentation producer from `AuthConfig` and injected into the
+issue/renew use cases. Deterministic, so unit tests construct it directly with fixed durations.
 
 ## 5. REST surface
 
@@ -135,6 +138,7 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 |---|---|---|---|---|
 | POST | `/sessions` | `@PermitAll` | `{name, password, rememberMe?}` | `SessionOutputDto`, **201** |
 | POST | `/sessions/renew` | Bearer | — | `SessionOutputDto`, 200 |
+| GET | `/sessions/current` | Bearer | — | `CurrentSessionOutputDto`, 200 |
 | DELETE | `/sessions/current` | Bearer | — | 204 (revoke the current token) |
 | DELETE | `/sessions` | Bearer | — | 204 (revoke **all** the user's tokens) |
 | GET | `/me` | Bearer | — | `UserOutputDto` (`{id, name}`), 200 |
@@ -143,7 +147,11 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   (`AUTHENTICATION_FAILED`). `rememberMe` defaults to `false` (the conservative short session) when
   absent.
 - `POST /sessions/renew` issues a fresh token with the **same** `persistent` value, and deletes the
-  presented token (rotation).
+  presented token (rotation). Delete-old + create-new is **atomic** (see §6).
+- `GET /sessions/current` returns the presented session's metadata (`expiresAt`, `renewAfter`,
+  `persistent`) **without** the token, so a client that persisted only the token string can recover
+  when to renew. Deliberately on the session resource, not `GET /me`: `/me` is identity, this is
+  session state.
 - `DELETE /sessions/current` revokes only the presented token; `DELETE /sessions` revokes every
   token of the caller (including the presented one). Deleting one vs the collection keeps the two
   unambiguous.
@@ -156,6 +164,8 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   (validation), avoiding a login/registration information gap.
 - `SessionOutputDto = {token, expiresAt, renewAfter}` — `token` is the plaintext bearer string;
   `expiresAt` and `renewAfter` are ISO-8601 instants in UTC (`2026-08-19T12:34:56Z`).
+- `CurrentSessionOutputDto = {expiresAt, renewAfter, persistent}` — the current session's state, no
+  token (the client already holds it; re-emitting it would risk leaking it into logs).
 - `GET /me` reuses `UserOutputDto = {id, name}`.
 
 `renewAfter` is computed at response time (`expiresAt - ttl × (1 - renewThreshold)`), not stored.
@@ -166,13 +176,21 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   On success: `token = tokenGenerator.generateToken()`; `hash = TokenHasher.sha256(token)`;
   `expiresAt = expiryPolicy.expiryFrom(clock.now(), persistent)`; persist
   `SessionToken(randomUUID(), user, expiresAt, persistent)` under `hash`; return
-  `IssuedSession(token, expiresAt, renewAfter)`.
+  `IssuedSession(token, expiresAt, expiryPolicy.renewAfterFor(expiresAt, persistent))`.
 - **Verify (every Bearer request).** `UserAuthenticator.authenticate(SessionTokenLogin(token))`:
   `hash = TokenHasher.sha256(token)`; `findByTokenHash(hash)`; if absent → invalid; if
   `expiresAt <= clock.now()` → expired; otherwise the token's `user` is the identity. The Quarkus
   identity carries `user`, `userId`, and the full `SessionToken` (so renew/revoke can act on it).
-- **Renew.** From the presented token's `SessionToken`: issue a new token with the same
-  `persistent`, persist it, delete the old row by id, return the new `IssuedSession`.
+- **Renew.** From the presented token's `SessionToken`, within a **single transaction**
+  (`@Transactional` on `SessionRenewer.renew`): persist a new token with the same `persistent`
+  **and** delete the old row by id, then return the new `IssuedSession`. The delete-old +
+  create-new pair is **atomic** — the request must never commit a half-rotation (old deleted but
+  new unsaved, leaving the caller with no valid token; or both persisted). This atomicity is a
+  server-side all-or-nothing guarantee; it is distinct from the network "lost renew response" edge
+  in §3, which it does not address.
+- **Read current session.** Return the presented token's `expiresAt`, its `persistent`, and
+  `renewAfter` recomputed via `expiryPolicy.renewAfterFor(expiresAt, persistent)`. No new token, no
+  mutation.
 - **Revoke current / all.** Delete the presented token's row, or all rows for `user.id`.
 - **Expiry.** Purely a `expiresAt` vs `clock.now()` check at verification; expired rows are inert
   until (optionally, later) swept.
@@ -184,15 +202,19 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 
 - **api-domain**: `SessionToken`, `SessionTokenLogin`, `IssuedSession`, `TokenGenerator`,
   `SessionExpiryPolicy` (concrete pure class), `SessionTokenRepositoryInterface`.
-- **api-usecases** (domain only): `SessionCreator` (authenticate + issue), `SessionRenewer`,
-  `SessionRevoker` (current + all); `UserAuthenticator` gains the `SessionTokenLogin` branch and two
-  new deps (`Clock`, `SessionTokenRepositoryInterface`); `TokenHasher` (an object, not a top-level
-  function — SHA-256); new exceptions (see §8).
+- **api-usecases** (domain only): `SessionCreator` (authenticate + issue), `SessionRenewer`
+  (`@Transactional`: atomic delete-old + save-new, §6), `SessionRevoker` (current + all);
+  `UserAuthenticator` gains the `SessionTokenLogin` branch and two new deps (`Clock`,
+  `SessionTokenRepositoryInterface`); `TokenHasher` (an object, not a top-level function — SHA-256);
+  new exceptions (see §8). `GET /sessions/current` needs no use case: it is a pure read of the
+  identity's `SessionToken` plus a `SessionExpiryPolicy.renewAfterFor` call, done in presentation.
 - **api-persistence-sqlite**: `SessionTokenModel` (`@Table("session_tokens")`) + mapper;
   `SessionTokenRepository`; migration **1.8** (additive).
 - **api-presentation-quarkus**:
-  - `SessionController` (`POST /sessions`, `POST /sessions/renew`, `DELETE /sessions/current`,
-    `DELETE /sessions`) and `MeController` (`GET /me`); input/output DTOs + mapper.
+  - `SessionController` (`POST /sessions`, `POST /sessions/renew`, `GET /sessions/current`,
+    `DELETE /sessions/current`, `DELETE /sessions`) and `MeController` (`GET /me`); input/output
+    DTOs (incl. `CurrentSessionOutputDto`) + mapper. `GET /sessions/current` reads the identity's
+    `SessionToken` and calls the injected `SessionExpiryPolicy` to fill `renewAfter`.
   - `BearerAuthenticationMechanism`: a custom `HttpAuthenticationMechanism` parsing
     `Authorization: Bearer <token>` into a Quarkus `TokenAuthenticationRequest` (Quarkus has no
     built-in opaque-bearer mechanism), plus an `IdentityProvider<TokenAuthenticationRequest>`
@@ -275,10 +297,15 @@ Both sides of every conditional, in particular:
 - Verify: valid token → 200; missing → 401 `AUTHENTICATION_REQUIRED`; unknown/garbled → 401
   `AUTHENTICATION_FAILED`; expired → 401 `SESSION_EXPIRED` (drive the clock past `expiresAt`).
 - Renew: valid → new token, old rejected afterwards (rotation); `persistent` preserved; expired
-  token cannot renew.
+  token cannot renew. Atomicity: a use-case unit test asserting the new token is saved **and** the
+  old deleted within the one `@Transactional` `renew`; if the save fails, the old row is not
+  deleted (no half-rotation). Full rollback under real failure is the framework's `@Transactional`
+  guarantee, not separately asserted.
+- Read current: `GET /sessions/current` returns `{expiresAt, renewAfter, persistent}` for the
+  presented token and **no** `token` field; `renewAfter` matches `renewAfterFor(expiresAt, persistent)`.
 - Revoke: current only (other tokens survive) vs all (every token dead).
-- `SessionExpiryPolicy`: `expiryFrom` and `renewAfter` for both `persistent` values (deterministic
-  via a fixed clock).
+- `SessionExpiryPolicy`: `expiryFrom` and `renewAfterFor` for both `persistent` values
+  (deterministic via a fixed clock).
 - `GET /me` returns the caller's `{id, name}`.
 
 ## 12. Risks / open points
@@ -290,10 +317,9 @@ Both sides of every conditional, in particular:
   is acceptable and should be flagged, not done silently.
 - **Lost renew response.** As in §3: rotation means a dropped renew response can strand the client
   on a dead token → re-login. No grace window in v1.
-- **Client without stored expiry.** A client that persisted only the token (not `expiresAt` /
-  `renewAfter`) cannot know when to renew. v1 expects the client to persist the timestamps from the
-  login/renew response; echoing expiry on `GET /me` or a response header is a possible later add,
-  not built now.
+- **Client without stored expiry.** Resolved: a client that persisted only the token string can
+  call `GET /sessions/current` to recover `expiresAt` / `renewAfter` and know when to renew. It need
+  not persist the timestamps from the login/renew response.
 - **Expired-row growth.** No GC in v1 (rows are inert). Flag as P2 operational debt in the handoff.
 - **Concurrency.** Two concurrent renews/logouts are last-writer-wins, consistent with the rest of
   the system; no locking in scope.
