@@ -29,6 +29,9 @@ dependencies {
     implementation(libs.kotlin.logging)
     implementation(libs.slf4j.jboss.logmanager)
 
+    // Security
+    implementation(libs.jbcrypt)
+
     // Integration testing
     testImplementation(project(":api-utilities"))
     testImplementation(libs.bundles.integration.testing)

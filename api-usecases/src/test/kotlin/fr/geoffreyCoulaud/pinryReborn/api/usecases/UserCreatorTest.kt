@@ -1,7 +1,10 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
+import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
@@ -14,10 +17,12 @@ import org.junit.jupiter.api.assertThrows
 class UserCreatorTest : BaseTest() {
     private val userRepository = mockk<UserRepositoryInterface>()
     private val userPasswordRepository = mockk<UserPasswordHashRepositoryInterface>()
+    private val passwordHasher = mockk<PasswordHasher>()
     private val useCase =
         UserCreator(
             userRepository = userRepository,
             userPasswordRepository = userPasswordRepository,
+            passwordHasher = passwordHasher,
         )
 
     @Test
@@ -64,6 +69,7 @@ class UserCreatorTest : BaseTest() {
         val password = createRandomString()
         every { userRepository.findUserByName(any()) } returns null
         every { userRepository.saveUser(any()) } answers { firstArg() }
+        every { passwordHasher.hash(any()) } returns HashedPassword("h", PasswordHashAlgorithm.BCRYPT)
         every { userPasswordRepository.saveUserPasswordHash(any(), any()) } answers { secondArg() }
 
         // When, then

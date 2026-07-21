@@ -1,20 +1,19 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
-import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.transaction.Transactional
-import org.mindrot.jbcrypt.BCrypt
 import java.util.UUID
 
 @ApplicationScoped
 class UserCreator(
     private val userRepository: UserRepositoryInterface,
     private val userPasswordRepository: UserPasswordHashRepositoryInterface,
+    private val passwordHasher: PasswordHasher,
 ) {
     @Transactional
     fun createUser(name: String): User {
@@ -35,14 +34,7 @@ class UserCreator(
         // Create the user as usual
         val user = createUser(name)
         // Hash and save the password
-        userPasswordRepository.saveUserPasswordHash(
-            user = user,
-            hashedPassword =
-                HashedPassword(
-                    hash = BCrypt.hashpw(password, BCrypt.gensalt()),
-                    algorithm = PasswordHashAlgorithm.BCRYPT,
-                ),
-        )
+        userPasswordRepository.saveUserPasswordHash(user = user, hashedPassword = passwordHasher.hash(password))
         return user
     }
 }

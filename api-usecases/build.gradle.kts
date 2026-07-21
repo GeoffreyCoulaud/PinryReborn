@@ -7,7 +7,6 @@ dependencies {
     implementation(project(":api-domain"))
     implementation(project(":api-utilities"))
 
-    implementation(libs.jbcrypt)
     implementation(libs.commons.text)
     implementation(libs.kotlin.logging)
     compileOnly(libs.jakarta.cdi.api)
