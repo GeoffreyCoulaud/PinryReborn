@@ -36,4 +36,8 @@ class TagRepository(
             .equalTo(user.id)
             .findList()
             .map { it.toDomain() }
+
+    override fun deleteAllTagsForUser(user: User) {
+        QTagModel().author.id.equalTo(user.id).delete()
+    }
 }

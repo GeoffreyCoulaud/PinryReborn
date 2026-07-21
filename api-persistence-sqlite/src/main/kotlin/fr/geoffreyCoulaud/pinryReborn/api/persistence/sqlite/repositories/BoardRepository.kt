@@ -72,6 +72,13 @@ class BoardRepository(
         QBoardModel().id.isIn(recycledIds).delete()
     }
 
+    override fun permanentlyDeleteAllBoardsForUser(user: User) {
+        val boardIds = QBoardModel().author.id.equalTo(user.id).findList().map { it.id }
+        if (boardIds.isEmpty()) return
+        QPinBoardModel().board.id.isIn(boardIds).delete()
+        QBoardModel().id.isIn(boardIds).delete()
+    }
+
     override fun countActivePinsInBoard(boardId: UUID): Int =
         QPinBoardModel().board.id.equalTo(boardId).pin.softDeletedAt.isNull.findCount()
 }

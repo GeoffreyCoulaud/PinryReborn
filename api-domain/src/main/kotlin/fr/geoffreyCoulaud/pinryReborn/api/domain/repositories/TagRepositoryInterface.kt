@@ -21,4 +21,9 @@ interface TagRepositoryInterface {
      * Find all tags for a user
      */
     fun findAllTagsForUser(user: User): List<Tag>
+
+    /**
+     * Delete all tags for a user
+     */
+    fun deleteAllTagsForUser(user: User)
 }

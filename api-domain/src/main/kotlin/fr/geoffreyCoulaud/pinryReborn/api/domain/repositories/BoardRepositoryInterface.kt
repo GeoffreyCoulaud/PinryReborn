@@ -32,6 +32,9 @@ interface BoardRepositoryInterface {
     /** Permanently delete all recycled boards for a user (and their pin memberships). */
     fun permanentlyDeleteAllRecycledBoardsForUser(user: User)
 
+    /** Permanently delete all boards for a user regardless of state (active and recycled). */
+    fun permanentlyDeleteAllBoardsForUser(user: User)
+
     /** Count active (non soft-deleted) pins currently in the board. */
     fun countActivePinsInBoard(boardId: UUID): Int
 }

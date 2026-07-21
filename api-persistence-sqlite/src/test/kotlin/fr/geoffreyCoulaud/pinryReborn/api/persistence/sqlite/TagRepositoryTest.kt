@@ -73,4 +73,18 @@ class TagRepositoryTest : RepositoryTest() {
         // Then
         assertEquals(setOf(tag1, tag2), tags.toSet())
     }
+
+    @Test
+    fun `Given tags owned by the user, Then deleteAllTagsForUser removes them`() {
+        // Given
+        val user = createAndSaveUser()
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1"))
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag2"))
+
+        // When
+        repository.deleteAllTagsForUser(user)
+
+        // Then
+        assertEquals(emptyList<Tag>(), repository.findAllTagsForUser(user))
+    }
 }

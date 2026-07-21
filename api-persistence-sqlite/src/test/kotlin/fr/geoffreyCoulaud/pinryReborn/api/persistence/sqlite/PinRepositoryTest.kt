@@ -484,6 +484,41 @@ class PinRepositoryTest : RepositoryTest() {
         assertNotNull(repository.findPinById(activePin.id))
     }
 
+    @Test
+    fun `Given active and soft-deleted pins, Then permanentlyDeleteAllPinsForUser removes all`() {
+        // Given
+        val user = createAndSaveUser()
+        val tag = createAndSaveTag(name = "tag1", user = user)
+        val board = createAndSaveBoard(name = "board1", user = user)
+        val activePin = repository.savePin(createPinWithTags(tag).copy(author = user, boards = listOf(board)))
+        val toSoftDelete = createAndSavePin(user)
+        repository.softDeletePin(toSoftDelete)
+
+        // When
+        // If the pin_tag_model / pin_board_model rows were not deleted first, this would fail
+        // with a foreign key constraint violation (references pins on delete restrict).
+        repository.permanentlyDeleteAllPinsForUser(user)
+
+        // Then
+        assertEquals(emptyList<Pin>(), repository.findAllPinsForUser(user))
+        assertEquals(emptyList<Pin>(), repository.findAllSoftDeletedPinsForUser(user))
+        assertNull(repository.findPinById(activePin.id))
+        assertNull(repository.findPinById(toSoftDelete.id))
+    }
+
+    @Test
+    fun `Given no pins for the user, Then permanentlyDeleteAllPinsForUser is a no-op`() {
+        // Given
+        val user = createAndSaveUser()
+
+        // When
+        repository.permanentlyDeleteAllPinsForUser(user)
+
+        // Then
+        assertEquals(emptyList<Pin>(), repository.findAllPinsForUser(user))
+        assertEquals(emptyList<Pin>(), repository.findAllSoftDeletedPinsForUser(user))
+    }
+
     // --- Pagination cursor resolution ---
 
     @Test

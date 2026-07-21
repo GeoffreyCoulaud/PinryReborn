@@ -177,6 +177,41 @@ class BoardRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given active and recycled boards, Then permanentlyDeleteAllBoardsForUser removes all`() {
+        // Given
+        val user = createAndSaveUser()
+        val activeBoard = createAndSaveBoard("Active", user)
+        val recycledBoard = createAndSaveBoard("Recycled", user)
+        val pinInActiveBoard = createAndSavePin(user, boards = listOf(activeBoard))
+        boardRepository.softDeleteBoard(recycledBoard)
+
+        // When
+        // If the pin_board_model rows were not deleted first, this would fail with a foreign
+        // key constraint violation (pin_board_model.board_id references boards on delete restrict).
+        boardRepository.permanentlyDeleteAllBoardsForUser(user)
+
+        // Then
+        assertNull(boardRepository.findBoardById(activeBoard.id))
+        assertNull(boardRepository.findBoardById(recycledBoard.id))
+        val reloadedPin = pinRepository.findPinById(pinInActiveBoard.id)
+        assertNotNull(reloadedPin)
+        assertTrue(reloadedPin!!.boards.isEmpty())
+    }
+
+    @Test
+    fun `Given no boards for the user, Then permanentlyDeleteAllBoardsForUser is a no-op`() {
+        // Given
+        val user = createAndSaveUser()
+
+        // When
+        boardRepository.permanentlyDeleteAllBoardsForUser(user)
+
+        // Then
+        assertTrue(boardRepository.findActiveBoardsForUser(user).isEmpty())
+        assertTrue(boardRepository.findRecycledBoardsForUser(user).isEmpty())
+    }
+
+    @Test
     fun `Given an active board, Then findActiveBoardById returns it`() {
         // Given
         val user = createAndSaveUser()

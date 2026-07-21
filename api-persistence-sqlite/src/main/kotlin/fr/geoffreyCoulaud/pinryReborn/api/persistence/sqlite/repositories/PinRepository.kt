@@ -211,6 +211,14 @@ class PinRepository(
         QPinModel().id.isIn(softDeletedPinIds).delete()
     }
 
+    override fun permanentlyDeleteAllPinsForUser(user: User) {
+        val pinIds = QPinModel().author.id.equalTo(user.id).findList().map { it.id }
+        if (pinIds.isEmpty()) return
+        QPinTagModel().pin.id.isIn(pinIds).delete()
+        QPinBoardModel().pin.id.isIn(pinIds).delete()
+        QPinModel().id.isIn(pinIds).delete()
+    }
+
     override fun findAllSoftDeletedPinsForUser(user: User): List<Pin> =
         QPinModel()
             .author.id
