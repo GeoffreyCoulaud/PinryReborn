@@ -54,15 +54,27 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 ### P0 — (none open)
 
 **Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
-(merged to `main`, in Shipped above). The next priority is **profile management**.
+(merged to `main`, in Shipped above). **Profile management** is now in progress
+(spec `docs/specs/2026-07-21-profile-management.md`).
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
-- **Profile management.** Change password, delete account, and (if visibility lands) public profiles.
+- **Profile management.** *In progress — spec `docs/specs/2026-07-21-profile-management.md`.* Two capabilities,
+  both guarded by a **step-up re-authentication** (the current password today; a second factor later):
+  - **Change password** (`PUT /me/password`): verify current password, set the new one, then revoke **all**
+    sessions (the current one included, by decision — a stolen current token must not survive).
+  - **Delete account** (`DELETE /me`): an **async hard delete**. Step-up, then mark the account with a
+    transient Ebean `@SoftDelete` tombstone (a one-way state, not a reactivatable "deactivation"; invisible to
+    auth), revoke all sessions, and enqueue an `AccountDeletion` task. The task erases the user's rows and
+    on-disk image bytes in FK order, then physically deletes the user (freeing the username).
+
+  **Public profiles are excluded** here (gated on audience; see the sequenced roadmap below).
 - **Browser-extension CORS origin.** Deferred from the CORS sub-project (decision B1): the extension
   does not exist yet and has no stable ID, so no origin is wired for it. When it ships, add its
   `chrome-extension://<id>` / `moz-extension://<id>` origin to `api.cors.origins`. See
   `docs/handoffs/2026-07-21 - handoff - cors.md`.
+- **User data export / import (portability).** Let a user export **all** their data and re-import it, on this
+  instance or another one, so they stay in control of their data and are never held hostage. Not yet specced.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
 
@@ -74,13 +86,33 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   original animated bytes instead of flattening. See the renditions handoff, "NOT validated" section.
 - **Cache GC sweep** for orphaned rendition subtrees. Eviction is best-effort; a failed eviction or a crash
   mid-write leaves a subtree forever. Spec §14 of the renditions sub-project.
-- **Perceptual `ImageHash`** for pin deduplication (deliberately YAGNI'd in sub-project 2b).
+- **Deleted-account residue GC.** If the `AccountDeletion` task (profile management) fails partially or totally,
+  an account can stay stuck in its Ebean soft-delete tombstone with orphaned child rows and on-disk files. A
+  sweep should reclaim such tombstoned accounts and their residue. New 2026-07-21.
+- **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
+  Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
 
 ---
 
-## Parked (explicitly out of scope for now)
+## Sequenced roadmap (deliberately ordered, not parked indefinitely)
 
-- **Visibility / sharing (public / private).** *(Parked 2026-07-20.)* Everything stays `@Authenticated` and
-  owner-scoped (non-owner → 403); no anonymous browsing, no public gallery, no shareable links. Revisit when a
-  sharing model is actually wanted; it will interact with boards (public boards, shared boards) and with the P1
-  profile/auth items.
+**Audience / visibility is no longer parked indefinitely** *(re-scoped 2026-07-21; was parked 2026-07-20)*.
+It is deliberately **sequenced after a solid user-segmented base**, in this order:
+
+1. **User-segmented base — advanced pin / tag / board management.** Features that make the data model genuinely
+   user-segmented and pleasant to use. Flagship: **pin merging via perceptual `ImageHash` / pHash** (see P2).
+   Others to be explored when we get there.
+2. **Audience mechanics (public / private).** Until this lands everything stays `@Authenticated` and
+   owner-scoped (non-owner → 403); no anonymous browsing, no public gallery, no shareable links. It will
+   interact with boards (public / shared boards) and with the profile items.
+
+Gated on audience (mechanics to define):
+
+- **Public profiles** — the deferred slice of profile management.
+- **Hard-copy of a public pin or board** from user B into user A's own collection: a real, independent copy,
+  not a soft link.
+
+Security enrichment (not audience-gated; builds on the profile-management step-up brick):
+
+- **Two-factor / step-up authentication** — TOTP + Passkey/WebAuthn, with a possible short-lived "sudo"
+  elevation token for sensitive actions.
