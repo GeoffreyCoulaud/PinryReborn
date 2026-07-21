@@ -4,7 +4,7 @@
 Keep it alive: update it at the end of every sub-project (Wrap phase), and whenever a scope decision is made.
 It is written in English (project language), like the specs, plans, and handoffs.
 
-Last reviewed: 2026-07-20.
+Last reviewed: 2026-07-21.
 
 ## How to use this file
 
@@ -20,10 +20,17 @@ Last reviewed: 2026-07-20.
 
 ## Shipped (baseline)
 
-Four sub-projects merged (`v0.1.0-task-queue` → `v0.4.0-image-hosting-3`), plus **boards** implemented and
-merge-ready on `feat/boards` (pending CI). CI green, 100% branch coverage, hexagonal layering, generated OpenAPI.
+Five sub-projects merged (`v0.1.0-task-queue` → `v0.5.0-boards`), plus **session-token authentication**
+implemented and merge-ready on `feat/session-token-auth` (pending CI). CI green, 100% branch coverage,
+hexagonal layering, generated OpenAPI.
 
-- **Users**: registration (`POST /api/v1/users`, public) + HTTP Basic auth (Quarkus Security).
+- **Users**: registration (`POST /api/v1/users`, public). Authentication is session-token / Bearer
+  (see the Auth bullet); HTTP Basic has been removed.
+- **Auth (session tokens)**: `POST /api/v1/sessions` login issues an opaque revocable bearer token
+  (SHA-256 hash stored, `rememberMe` persistent/ephemeral TTL); `GET /me`, `GET /sessions/current`,
+  `POST /sessions/current/renew` (atomic rotation), `DELETE /sessions/current` (logout),
+  `DELETE /sessions` (logout-all); OpenAPI declares a bearer security scheme. Replaces HTTP Basic
+  entirely. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
 - **Pins**: list (cursor pagination + sort strategy), get, create, update, soft-delete, tag.
 - **Recycle bin**: list recycled, restore, permanent delete, empty.
 - **Search**: pins (trigram similarity) + tags.
@@ -42,19 +49,21 @@ merge-ready on `feat/boards` (pending CI). CI green, 100% branch coverage, hexag
 
 ### P0 — (none open)
 
-**Boards shipped 2026-07-20** (moved to Shipped above; merge-ready on `feat/boards`). The former top priority
-is done; the next priorities are the P1 client-ergonomics items below, needed before serious UI/extension work.
+**Client auth story shipped 2026-07-21** (session tokens; moved to Shipped above; merge-ready on
+`feat/session-token-auth`). Boards shipped earlier (`v0.5.0-boards`). The next priority is **CORS** (now
+unblocked, the auth model is fixed), then profile management.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
-- **Client auth story.** Auth is HTTP Basic only, which is awkward for an SPA and a browser extension (they would
-  store the raw password). Decide on a token / API-key mechanism, and add at least `GET /me` (current identity)
-  and a credential-check endpoint. Touches both the extension and the UI, so decide early.
-- **CORS configuration.** Not configured (no entry in the Quarkus properties). Blocks any browser client calling
-  from another origin. Mechanical once the client auth model is fixed.
+- **CORS configuration.** Not configured (no `quarkus.http.cors*` entry). Blocks any browser client calling
+  from another origin. **Now unblocked** (the client auth model is fixed: Bearer, no cookies). Mechanical:
+  configure allowed origins for the SPA / extension making credentialed Bearer requests.
 - **Profile management.** Change password, delete account, and (if visibility lands) public profiles.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
+
+- **Expired session-token GC sweep.** `session_tokens` rows are inert once expired (verification rejects
+  them), but they accumulate. No sweep in v1. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
 
 - **`animated` backfill migration** for pre-existing image rows. The only item with a correctness consequence:
   rows predating migration 1.6 are labelled `animated = false`, so `?animated=false` on such a row can serve the
