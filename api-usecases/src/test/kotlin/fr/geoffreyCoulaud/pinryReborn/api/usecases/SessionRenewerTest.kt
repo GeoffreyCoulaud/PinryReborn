@@ -66,4 +66,19 @@ class SessionRenewerTest {
         assertThrows<IllegalStateException> { renewer.renew(current) }
         verify(exactly = 0) { repository.deleteById(any()) }
     }
+
+    @Test
+    fun `Given an ephemeral current token, Then renew keeps persistent false and uses the ephemeral TTL`() {
+        val ephemeralCurrent = SessionToken(randomUUID(), user, expiresAt = now.plusSeconds(5), persistent = false)
+        every { tokenGenerator.generateToken() } returns "new-token"
+        every { clock.now() } returns now
+
+        val issued = renewer.renew(ephemeralCurrent)
+
+        val expectedExpiry = now.plus(Duration.ofHours(12))
+        assertEquals(expectedExpiry, issued.expiresAt)
+        val saved = slot<SessionToken>()
+        verify { repository.saveSessionToken(capture(saved), any()) }
+        assertEquals(false, saved.captured.persistent)
+    }
 }
