@@ -467,6 +467,9 @@
         "format" : "uuid",
         "pattern" : "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
       },
+      "Unit" : {
+        "type" : "object"
+      },
       "UserInputDto" : {
         "type" : "object",
         "required" : [ "name", "password" ],
@@ -863,6 +866,39 @@
           }
         },
         "summary" : "Get Current User",
+        "tags" : [ "Me Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "delete" : {
+        "parameters" : [ {
+          "name" : "X-Reauthentication",
+          "in" : "header",
+          "schema" : {
+            "type" : [ "string", "null" ]
+          },
+          "required" : true
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Unit"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Delete Account",
         "tags" : [ "Me Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
