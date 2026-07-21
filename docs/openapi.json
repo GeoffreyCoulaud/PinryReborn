@@ -168,6 +168,22 @@
           }
         }
       },
+      "PasswordChangeInputDto" : {
+        "type" : "object",
+        "required" : [ "currentPassword", "newPassword" ],
+        "properties" : {
+          "currentPassword" : {
+            "type" : "string",
+            "pattern" : "\\S"
+          },
+          "newPassword" : {
+            "type" : "string",
+            "pattern" : "\\S",
+            "minLength" : 8,
+            "maxLength" : 72
+          }
+        }
+      },
       "PinBoardsInputDto" : {
         "type" : "object",
         "required" : [ "boardIds" ],
@@ -847,6 +863,39 @@
           }
         },
         "summary" : "Get Current User",
+        "tags" : [ "Me Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/password" : {
+      "put" : {
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordChangeInputDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          },
+          "400" : {
+            "description" : "Bad Request"
+          }
+        },
+        "summary" : "Change Password",
         "tags" : [ "Me Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
