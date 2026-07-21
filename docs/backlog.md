@@ -94,6 +94,20 @@ correction — extracting the task worker runtime out of the presentation module
   `EnqueueTask` / `CancelTask` / `ReapExpiredTasks` are correctly in `api-usecases` and stay. Watch the
   Quarkus CDI bean-discovery wiring for the new module.
 
+- **Migrate the remaining `@Transactional` use cases to the `TransactionRunner` port.** *(Architecture
+  cleanup. Flagged 2026-07-21.)* `SessionCreator` and `SessionRenewer` still carry
+  `jakarta.transaction.@Transactional` — a persistence concern leaking into the application layer. Route
+  them through the existing `TransactionRunner` domain port (as the image use cases and the new
+  profile-management use cases do) and drop the annotation. `UserCreator` is migrated by profile
+  management; only the `Session*` pair is left.
+
+- **Enforce Clean Architecture boundaries with Konsist.** *(Architecture enforcement. Flagged 2026-07-21.)*
+  Add Konsist (a Kotlin architecture-testing library) checks that fail the build when a layer imports what
+  it must not: `api-usecases` pulling in `jakarta.transaction`, `io.ebean`, `jakarta.ws.rs`, or a concrete
+  crypto/random library; `api-domain` importing any I/O; and the module dependency DAG. Makes the AGENTS.md
+  dependency rules explicit and unavoidable in CI instead of relying on review discipline. Use the context7
+  MCP for Konsist's current API when building this.
+
 - **Expired session-token GC sweep.** `session_tokens` rows are inert once expired (verification rejects
   them), but they accumulate. No sweep in v1. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
 
