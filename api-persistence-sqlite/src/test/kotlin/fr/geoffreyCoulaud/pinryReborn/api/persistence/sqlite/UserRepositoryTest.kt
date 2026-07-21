@@ -2,16 +2,21 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import jakarta.persistence.PersistenceException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
 class UserRepositoryTest : RepositoryTest() {
     private val repository = UserRepository(database)
+
+    private fun saveUser(name: String = createRandomString()) =
+        repository.saveUser(User(id = randomUUID(), name = name))
 
     @Test
     fun `saveUser should persist user and return it with same id`() {
@@ -51,16 +56,67 @@ class UserRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `deleteUser should remove user from database`() {
+    fun `Given a tombstoned user, Then normal lookups hide it but including-deleted finds it`() {
         // Given
-        val user = User(id = randomUUID(), name = "User to Delete")
-        repository.saveUser(user)
+        val user = saveUser()
+        repository.markPendingDeletion(user)
+
+        // When / Then
+        assertNull(repository.findUserById(user.id))
+        assertNull(repository.findUserByName(user.name))
+        val found = repository.findUserByIdIncludingDeleted(user.id)
+        assertEquals(user.id, found?.id)
+        assertTrue(found!!.softDeleted)
+        assertEquals(user.id, repository.findUserByNameIncludingDeleted(user.name)?.id)
+    }
+
+    @Test
+    fun `Given a tombstoned user, Then permanentlyDeleteUser removes it entirely`() {
+        // Given
+        val user = saveUser()
+        repository.markPendingDeletion(user)
 
         // When
-        repository.deleteUser(user)
+        repository.permanentlyDeleteUser(user)
 
         // Then
-        val foundUser = repository.findUserById(user.id)
+        assertNull(repository.findUserByIdIncludingDeleted(user.id))
+    }
+
+    @Test
+    fun `Given an active user, Then findUserById returns it with softDeleted false`() {
+        // Given
+        val user = saveUser()
+
+        // When / Then
+        assertEquals(false, repository.findUserById(user.id)?.softDeleted)
+    }
+
+    @Test
+    fun `Given a never-saved user, Then markPendingDeletion is a no-op`() {
+        // Given
+        val user = User(id = randomUUID(), name = createRandomString())
+
+        // When / Then
+        repository.markPendingDeletion(user)
+    }
+
+    @Test
+    fun `Given a never-saved user, Then permanentlyDeleteUser is a no-op`() {
+        // Given
+        val user = User(id = randomUUID(), name = createRandomString())
+
+        // When / Then
+        repository.permanentlyDeleteUser(user)
+    }
+
+    @Test
+    fun `Given no user with the given name, Then findUserByNameIncludingDeleted returns null`() {
+        // Given
+        // When
+        val foundUser = repository.findUserByNameIncludingDeleted(createRandomString())
+
+        // Then
         assertNull(foundUser)
     }
 

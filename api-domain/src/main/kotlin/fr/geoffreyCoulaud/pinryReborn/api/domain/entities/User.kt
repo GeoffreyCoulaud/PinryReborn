@@ -5,4 +5,5 @@ import java.util.UUID
 data class User(
     override val id: UUID,
     val name: String,
+    val softDeleted: Boolean = false,
 ) : Identifiable

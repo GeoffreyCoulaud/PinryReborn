@@ -8,7 +8,13 @@ interface UserRepositoryInterface {
 
     fun findUserByName(name: String): User?
 
+    fun findUserByNameIncludingDeleted(name: String): User?
+
+    fun findUserByIdIncludingDeleted(id: UUID): User?
+
     fun saveUser(user: User): User
 
-    fun deleteUser(user: User)
+    fun markPendingDeletion(user: User)
+
+    fun permanentlyDeleteUser(user: User)
 }
