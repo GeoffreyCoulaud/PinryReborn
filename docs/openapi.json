@@ -1,6 +1,13 @@
 {
   "openapi" : "3.1.0",
   "components" : {
+    "securitySchemes" : {
+      "SecurityScheme" : {
+        "type" : "http",
+        "description" : "Session token issued by POST /api/v1/sessions, sent as 'Authorization: Bearer <token>'.",
+        "scheme" : "bearer"
+      }
+    },
     "schemas" : {
       "BoardInputDto" : {
         "type" : "object",
