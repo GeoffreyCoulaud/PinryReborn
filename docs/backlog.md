@@ -55,7 +55,8 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 
 **Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
 (merged to `main`, in Shipped above). **Profile management** is now in progress
-(spec `docs/specs/2026-07-21-profile-management.md`).
+(spec `docs/specs/2026-07-21-profile-management.md`). Scheduled **right after it**: an architecture
+correction — extracting the task worker runtime out of the presentation module (see P2).
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -77,6 +78,21 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   instance or another one, so they stay in control of their data and are never held hostage. Not yet specced.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
+
+- **Extract the task worker runtime into a dedicated adapter module.** *(Architecture correction —
+  scheduled as the next sub-project, right after profile management. Flagged 2026-07-21.)* An entire
+  task-worker **driving** subsystem currently lives in the HTTP presentation module
+  (`api-presentation-quarkus/.../tasks/`): `TaskDispatcher` (poll loop), `TaskWorkerLifecycle`,
+  `TaskRuntimeProducers` (CDI producers), `WorkerExecutor`, `TaskQueueConfig`, `TaskQueueMetrics`, and
+  the task handlers (`PinDownloadTaskHandler`, and the `AccountDeletionTaskHandler` added by profile
+  management — knowingly placed there temporarily). Tasks are a driving adapter, not HTTP presentation.
+  Extract them into a new **`api-worker-quarkus`** module (depends on `api-usecases` + `api-domain`),
+  mirroring the existing per-adapter modules (`api-storage-filesystem`, `api-imaging-vips`,
+  `api-fetch-http`). **Exception:** `SystemClock` (the `Clock` port impl) is app-wide, not
+  worker-specific, so it moves to a shared home (the `api-application` composition root or a shared infra
+  module), **not** the worker module. `TaskProcessor`, the `TaskHandler` port, the registry, and
+  `EnqueueTask` / `CancelTask` / `ReapExpiredTasks` are correctly in `api-usecases` and stay. Watch the
+  Quarkus CDI bean-discovery wiring for the new module.
 
 - **Expired session-token GC sweep.** `session_tokens` rows are inert once expired (verification rejects
   them), but they accumulate. No sweep in v1. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
