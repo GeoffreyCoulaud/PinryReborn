@@ -38,12 +38,12 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   See `docs/handoffs/2026-07-16 - handoff - image-hosting-3-renditions.md`.
 - **Boards**: named owner-scoped collections; a pin belongs to 0..N boards (set-based membership via
   `PUT /pins/{id}/boards`, mirroring tags); board CRUD, cursor-paginated board pins, `PinOutputDto.boards`
-  + board `pinCount`, and a recycle bin mirroring `PinRecycleBin`. Merge-ready on `feat/boards`.
+  + board `pinCount`, and a recycle bin mirroring `PinRecycleBin`. On `main`.
   See `docs/handoffs/2026-07-20 - handoff - boards.md`.
 - **CORS**: Quarkus CORS filter enabled with a whitelist policy for browser clients. Allowed origins
   driven by `api.cors.origins` (typed on `ApiConfig`; dev default `http://localhost:5173`, prod via
   `API_CORS_ORIGINS`); methods `GET,POST,PUT,DELETE`, request headers `Authorization,Content-Type`,
-  `Location` exposed, credentials off (Bearer only), 24 h preflight cache. Merge-ready on `feat/cors`.
+  `Location` exposed, credentials off (Bearer only), 24 h preflight cache. On `main`.
   See `docs/handoffs/2026-07-21 - handoff - cors.md`.
 - **Infrastructure**: generic task queue (enqueue/cancel/reap), Ebean migrations, git hooks, CI gate.
 
@@ -54,7 +54,7 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 ### P0 — (none open)
 
 **Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
-(merge-ready on `feat/cors`, moved to Shipped above). The next priority is **profile management**.
+(merged to `main`, in Shipped above). The next priority is **profile management**.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
