@@ -40,7 +40,8 @@ class SessionControllerTest {
     fun `Given rememberMe true, Then createSession passes persistent=true and returns the created dto`() {
         every { creator.create(name = "alice", password = "pw", persistent = true) } returns issued
         val response = controller.createSession(SessionCreationInputDto("alice", "pw", rememberMe = true))
-        assertEquals("tok", response.token)
+        assertEquals("tok", response.entity!!.token)
+        assertEquals("no-store", response.getHeaderString("Cache-Control"))
         verify { creator.create(name = "alice", password = "pw", persistent = true) }
     }
 
@@ -74,7 +75,9 @@ class SessionControllerTest {
         val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false)
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         every { renewer.renew(current) } returns issued
-        assertEquals("tok", controller.renewSession().token)
+        val response = controller.renewSession()
+        assertEquals("tok", response.entity!!.token)
+        assertEquals("no-store", response.getHeaderString("Cache-Control"))
     }
 
     @Test

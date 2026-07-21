@@ -30,6 +30,7 @@ class SessionAuthIntegrationTest : IntegrationTest() {
         userCreator.createUserWithPassword(name, DEFAULT_PASSWORD)
         login(name)
             .then().statusCode(201)
+            .header("Cache-Control", "no-store")
             .body("token", notNullValue())
             .body("expiresAt", matchesPattern(iso8601Utc))
             .body("renewAfter", matchesPattern(iso8601Utc))
@@ -83,7 +84,7 @@ class SessionAuthIntegrationTest : IntegrationTest() {
     fun `Given a token, Then renew returns a new token and the old one is rejected`() {
         val auth = createAuthenticatedUser()
         val newToken = given().authenticatedAs(auth).post("/api/v1/sessions/current/renew")
-            .then().statusCode(200).extract().path<String>("token")
+            .then().statusCode(200).header("Cache-Control", "no-store").extract().path<String>("token")
         assertNotNull(newToken)
         // Old token now rejected:
         given().authenticatedAs(auth).get("/api/v1/me").then().statusCode(401)
@@ -107,8 +108,10 @@ class SessionAuthIntegrationTest : IntegrationTest() {
 
         given().header("Authorization", "Bearer $first").delete("/api/v1/sessions").then().statusCode(204)
 
-        given().header("Authorization", "Bearer $first").get("/api/v1/me").then().statusCode(401)
-        given().header("Authorization", "Bearer $second").get("/api/v1/me").then().statusCode(401)
+        given().header("Authorization", "Bearer $first").get("/api/v1/me")
+            .then().statusCode(401).body("code", org.hamcrest.Matchers.equalTo("AUTHENTICATION_FAILED"))
+        given().header("Authorization", "Bearer $second").get("/api/v1/me")
+            .then().statusCode(401).body("code", org.hamcrest.Matchers.equalTo("AUTHENTICATION_FAILED"))
     }
 
     @Test

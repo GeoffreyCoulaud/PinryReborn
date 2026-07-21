@@ -50,8 +50,7 @@ class SessionCreatorTest {
     }
 
     @Test
-    fun `Given the login is a BasicAuthLogin with the supplied credentials`() {
-        every { userAuthenticator.authenticate(any()) } returns user
+    fun `Given valid credentials, Then create authenticates via a BasicAuthLogin carrying them`() {
         every { tokenGenerator.generateToken() } returns "t"
         every { clock.now() } returns now
         val login = slot<BasicAuthLogin>()

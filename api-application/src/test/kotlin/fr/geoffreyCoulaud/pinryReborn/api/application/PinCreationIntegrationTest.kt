@@ -82,10 +82,8 @@ class PinCreationIntegrationTest : IntegrationTest() {
 
     @Test
     fun `creating a pin with an invalid bearer token fails with 401`() {
-        // Given: a real user exists, but the request carries a tampered (invalid) token, which is
-        // the Bearer equivalent of a per-request "wrong password" under the old Basic scheme
-        createAuthenticatedUser()
-
+        // Given: the request carries a fabricated (garbage) token, which is the Bearer equivalent
+        // of a per-request "wrong password" under the old Basic scheme
         given()
             .contentType(ContentType.JSON)
             .header("Authorization", "Bearer not-a-real-token")

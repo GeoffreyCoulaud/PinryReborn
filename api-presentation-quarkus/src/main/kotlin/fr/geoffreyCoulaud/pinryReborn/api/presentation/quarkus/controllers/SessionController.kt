@@ -21,7 +21,7 @@ import jakarta.ws.rs.DELETE
 import jakarta.ws.rs.GET
 import jakarta.ws.rs.POST
 import jakarta.ws.rs.Path
-import org.jboss.resteasy.reactive.ResponseStatus
+import org.jboss.resteasy.reactive.RestResponse
 
 @Path("/api/v1/sessions")
 class SessionController(
@@ -33,14 +33,15 @@ class SessionController(
 ) {
     @POST
     @PermitAll
-    @ResponseStatus(HTTP_CREATED)
-    fun createSession(@Valid dto: SessionCreationInputDto): CreatedSessionOutputDto {
+    fun createSession(@Valid dto: SessionCreationInputDto): RestResponse<CreatedSessionOutputDto> {
         val issued = try {
             sessionCreator.create(name = dto.name, password = dto.password, persistent = dto.rememberMe ?: false)
         } catch (e: UserAuthenticationError) {
             throw AuthenticationFailedException("Authentication failed", e)
         }
-        return issued.toCreatedDto()
+        return RestResponse.ResponseBuilder.create(RestResponse.Status.CREATED, issued.toCreatedDto())
+            .header(CACHE_CONTROL_HEADER, NO_STORE)
+            .build()
     }
 
     @GET
@@ -54,8 +55,12 @@ class SessionController(
     @POST
     @Path("/current/renew")
     @Authenticated
-    fun renewSession(): CreatedSessionOutputDto =
-        sessionRenewer.renew(securityIdentity.getSessionToken()).toCreatedDto()
+    fun renewSession(): RestResponse<CreatedSessionOutputDto> {
+        val renewed = sessionRenewer.renew(securityIdentity.getSessionToken()).toCreatedDto()
+        return RestResponse.ResponseBuilder.create(RestResponse.Status.OK, renewed)
+            .header(CACHE_CONTROL_HEADER, NO_STORE)
+            .build()
+    }
 
     @DELETE
     @Path("/current")
@@ -67,6 +72,7 @@ class SessionController(
     fun revokeAllSessions() = sessionRevoker.revokeAll(securityIdentity.getUser())
 
     private companion object {
-        const val HTTP_CREATED = 201
+        const val CACHE_CONTROL_HEADER = "Cache-Control"
+        const val NO_STORE = "no-store"
     }
 }

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -42,7 +43,7 @@ class SessionTokenRepositoryTest : RepositoryTest() {
         assertEquals(token.id, loaded!!.id)
         assertEquals(user.id, loaded.user.id)
         assertEquals(expiresAt, loaded.expiresAt.truncatedTo(ChronoUnit.MILLIS))
-        assertEquals(true, loaded.persistent)
+        assertTrue(loaded.persistent)
     }
 
     @Test

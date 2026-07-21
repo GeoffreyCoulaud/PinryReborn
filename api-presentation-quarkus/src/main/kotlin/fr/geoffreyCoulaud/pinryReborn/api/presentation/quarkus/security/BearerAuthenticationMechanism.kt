@@ -20,7 +20,7 @@ class BearerAuthenticationMechanism : HttpAuthenticationMechanism {
         identityProviderManager: IdentityProviderManager,
     ): Uni<SecurityIdentity> {
         val header = context.request().getHeader("Authorization")
-        if (header == null || !header.startsWith(BEARER_PREFIX)) {
+        if (header == null || !header.startsWith(BEARER_PREFIX, ignoreCase = true)) {
             return Uni.createFrom().nullItem()
         }
         val token = header.substring(BEARER_PREFIX.length)
