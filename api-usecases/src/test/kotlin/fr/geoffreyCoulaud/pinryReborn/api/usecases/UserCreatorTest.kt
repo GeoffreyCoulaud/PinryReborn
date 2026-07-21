@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
@@ -11,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
@@ -20,12 +22,20 @@ class UserCreatorTest : BaseTest() {
     private val userRepository = mockk<UserRepositoryInterface>()
     private val userPasswordRepository = mockk<UserPasswordHashRepositoryInterface>()
     private val passwordHasher = mockk<PasswordHasher>()
+    private val transactionRunner = mockk<TransactionRunner>()
     private val useCase =
         UserCreator(
             userRepository = userRepository,
             userPasswordRepository = userPasswordRepository,
             passwordHasher = passwordHasher,
+            transactionRunner = transactionRunner,
         )
+
+    // Runs after BaseTest's beforeEachClearMocks(), so the passthrough stub survives into each test
+    @BeforeEach
+    fun stubTransactionRunnerPassthrough() {
+        every { transactionRunner.inTransaction<User>(any()) } answers { firstArg<() -> User>().invoke() }
+    }
 
     @Test
     fun `When creating a user, then should succeed`() {
