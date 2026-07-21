@@ -94,6 +94,14 @@ correction — extracting the task worker runtime out of the presentation module
   `EnqueueTask` / `CancelTask` / `ReapExpiredTasks` are correctly in `api-usecases` and stay. Watch the
   Quarkus CDI bean-discovery wiring for the new module.
 
+- **Consolidate misplaced infra/security adapters into a dedicated module.** *(Architecture cleanup. Flagged
+  2026-07-21.)* Small, non-HTTP adapters are scattered: `SecureTokenGenerator` (the `TokenGenerator` /
+  SecureRandom impl) and `SystemClock` (the `Clock` impl) sit in `api-presentation-quarkus`, and
+  `BcryptPasswordHasher` (the `PasswordHasher` impl added by profile management) is placed in the
+  `api-application` composition root as a pragmatic temporary home. Gather them into a dedicated adapter
+  module (e.g. `api-security` / `api-system`) depending on `api-domain`, mirroring the per-adapter-module
+  convention. Companion to the `api-worker-quarkus` extraction (both move misplaced adapters out).
+
 - **Migrate the remaining `@Transactional` use cases to the `TransactionRunner` port.** *(Architecture
   cleanup. Flagged 2026-07-21.)* `SessionCreator` and `SessionRenewer` still carry
   `jakarta.transaction.@Transactional` — a persistence concern leaking into the application layer. Route

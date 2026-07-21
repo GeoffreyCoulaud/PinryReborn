@@ -94,6 +94,15 @@ after a user-segmented base (see the backlog's "Sequenced roadmap").
 - **A failed re-auth is `403`, not `401`.** The request is authenticated (valid Bearer); only the extra
   proof failed. `401` would make clients treat it as session expiry and log the user out; `403` says
   "identity known, but this action needs a valid proof you did not give".
+- **Framework/persistence concerns stay behind domain ports, not annotations or concrete libraries in the
+  use cases.** Two couplings are inverted here: (1) **transactions** — the use cases use the existing
+  `TransactionRunner` domain port (`inTransaction { }`), never `jakarta.transaction.@Transactional` (a
+  persistence concern); `UserCreator` is migrated off `@Transactional` while it is touched, and the
+  remaining `Session*` use cases are a backlog cleanup. (2) **password hashing** — BCrypt (a concrete
+  library that generates a random salt, i.e. non-determinism) goes behind a `PasswordHasher` **domain
+  port**, exactly as `SecureRandom` sits behind `TokenGenerator`, keeping the use cases deterministic and
+  branch-testable. `@ApplicationScoped` (a behaviourless DI marker) and deterministic pure computation
+  (SHA-256, URI parsing) are left as-is. Enforcing these boundaries mechanically (Konsist) is backlogged.
 - **The account-deletion task handler is placed under `api-presentation-quarkus/.../tasks/` for now —
   knowingly.** That is where `PinDownloadTaskHandler` lives. Task workers are a *driving adapter*, not HTTP
   presentation; the whole subsystem is scheduled to move into a dedicated `api-worker-quarkus` module as
@@ -118,19 +127,28 @@ data class User(
 (`UserOutputDto` stays `{ id, name }`; the mapper ignores it). Every `User(...)` construction and the
 `UserModel` ↔ `User` mapper get the new field (default `false`).
 
-### `PasswordHasher` — shared brick (targeted improvement)
+### `PasswordHasher` — a domain port (was: direct BCrypt in the use cases)
 
-The password-history reuse check needs to verify a candidate against arbitrary stored hashes, which today
-is private BCrypt logic inside `UserAuthenticator`. Extract a small brick (an object/class, no top-level
-function) reused by registration, auth, and change-password:
+Password hashing is currently `org.mindrot.jbcrypt.BCrypt` called **directly** inside `UserCreator` and
+`UserAuthenticator` — a concrete crypto library, with a **random salt** (non-determinism), living in the
+application layer. Invert it behind a **domain port** (pure interface in `api-domain`), mirroring how
+`SecureRandom` sits behind `TokenGenerator`:
 
 ```
-hash(raw: String): HashedPassword                      // BCrypt gensalt
-matches(raw: String, stored: HashedPassword): Boolean  // dispatch on stored.algorithm
+interface PasswordHasher {
+    fun hash(raw: String): HashedPassword                      // random salt
+    fun matches(raw: String, stored: HashedPassword): Boolean  // dispatch on stored.algorithm
+}
 ```
 
-`UserCreator` uses `hash`; `UserAuthenticator` uses `matches` (its constant-time dummy-hash guard stays);
-`PasswordChanger` uses both.
+- **Adapter**: `BcryptPasswordHasher` (BCrypt), `@ApplicationScoped`, placed in the **`api-application`
+  composition root** for now — *not* `api-presentation-quarkus` (it is not an HTTP concern). This is a
+  pragmatic home; a backlog item consolidates it with the other misplaced infra/security adapters
+  (`SecureTokenGenerator`, `SystemClock`) into a dedicated adapter module.
+- **Consumers**: `UserCreator` (hash on registration), `UserAuthenticator` (verify — its constant-time
+  guard now matches against a **precomputed dummy `HashedPassword`** obtained from the port),
+  `PasswordChanger` and `Reauthenticator` (verify + hash). All become deterministic under a mocked port,
+  so they stay fully branch-testable.
 
 ### Repository interface changes (pure, in `api-domain`)
 
@@ -210,7 +228,8 @@ base64url value mirrors HTTP Basic so a Unicode password survives the header cha
 
 ## 6. Change-password flow
 
-Use case `PasswordChanger.changePassword(user, currentPassword, newPassword)`, `@Transactional`:
+Use case `PasswordChanger.changePassword(user, currentPassword, newPassword)` (writes wrapped in
+`transactionRunner.inTransaction { }`):
 
 1. **Verify current password:** `passwordHasher.matches(currentPassword, findCurrentPasswordHash(user))`.
    Absent hash or mismatch → `ReauthenticationError` (403).
@@ -220,13 +239,14 @@ Use case `PasswordChanger.changePassword(user, currentPassword, newPassword)`, `
 3. **Append the new hash:** `saveUserPasswordHash(user, passwordHasher.hash(newPassword))`.
 4. **Revoke all sessions:** `sessionRevoker.revokeAll(user)`.
 
-Steps 3–4 commit together (`@Transactional`): never store the new password while old tokens survive, nor
-vice-versa. Returns `Unit` → controller emits `204`.
+Steps 3–4 run inside one `transactionRunner.inTransaction { }`: never store the new password while old
+tokens survive, nor vice-versa. (Steps 1–2 are reads/validation, before the transaction.) Returns `Unit` →
+controller emits `204`.
 
 ## 7. Delete-account request flow
 
-Use case `AccountDeleter.requestDeletion(user, factor)`, `@Transactional` (`factor` = the step-up password
-parsed from the header):
+Use case `AccountDeleter.requestDeletion(user, factor)` (`factor` = the step-up password parsed from the
+header; writes wrapped in `transactionRunner.inTransaction { }`):
 
 1. **Step-up:** `reauthenticator.reauthenticate(user, factor)` (§9). Failure → 403.
 2. **Tombstone:** `userRepository.markPendingDeletion(user)` (Ebean `.delete()`). The user is now invisible
@@ -235,8 +255,9 @@ parsed from the header):
 4. **Enqueue:** `enqueueTask.enqueue(kind = AccountDeletionTask.KIND, payload = user.id.toString(),
    maxAttempts = AccountDeletionTask.MAX_ATTEMPTS, dedupKey = "${AccountDeletionTask.KIND}:${user.id}")`.
 
-All four commit in one transaction (all-or-nothing: a failure leaves the account intact, no orphan task).
-Returns `Unit` → controller emits `202`.
+Steps 2–4 run in one `transactionRunner.inTransaction { }` (all-or-nothing: a failure leaves the account
+intact, no orphan task; the port's KDoc guarantees the enqueue joins the ambient transaction). Step 1 is
+the step-up check, before the transaction. Returns `Unit` → controller emits `202`.
 
 **Re-entrancy is self-guarding.** After the first `DELETE /me`, all sessions are revoked, so a second call
 cannot authenticate (`401`); even if a token survived, `findUserById` now returns null (auto-filtered), so
@@ -289,13 +310,15 @@ Two forms, on purpose (§3):
 
 ## 10. Security wiring (hexagonal placement)
 
-- **api-domain**: `User.softDeleted` field; the repository-interface additions (§4). No new entity.
-- **api-usecases** (domain only): `PasswordHasher` (shared brick), `Reauthenticator`, `PasswordChanger`
-  (`@Transactional`), `AccountDeleter` (`@Transactional`), `AccountDeletionCleaner`, `AccountDeletionTask`
-  constants, `ReauthenticationError` + `PasswordPreviouslyUsedError` (+ their `ErrorCode`s).
-  `UserAuthenticator`/`UserCreator` switch to `PasswordHasher`; `UserAuthenticator` reads
-  `findCurrentPasswordHash`; `UserCreator` uses `findUserByNameIncludingDeleted` for uniqueness.
-  `SessionRevoker` reused unchanged.
+- **api-domain**: `User.softDeleted` field; the `PasswordHasher` port; the repository-interface additions
+  (§4). No new entity.
+- **api-usecases** (domain only): `Reauthenticator`, `PasswordChanger`, `AccountDeleter`,
+  `AccountDeletionCleaner` (all using the `TransactionRunner` port for their writes, **not**
+  `@Transactional`), `AccountDeletionTask` constants, `ReauthenticationError` +
+  `PasswordPreviouslyUsedError` (+ their `ErrorCode`s). `UserAuthenticator`/`UserCreator` switch to the
+  `PasswordHasher` port (and `UserCreator` drops its `@Transactional` for `TransactionRunner` while it is
+  touched); `UserAuthenticator` reads `findCurrentPasswordHash`; `UserCreator` uses
+  `findUserByNameIncludingDeleted` for uniqueness. `SessionRevoker` reused unchanged.
 - **api-persistence-sqlite**: `UserModel` gains an Ebean `@SoftDelete` boolean; `UserRepository` gains the
   `…IncludingDeleted` finders, `markPendingDeletion` (`.delete()`), `permanentlyDeleteUser`
   (`.deletePermanent()`); `UserPasswordHashRepository` gains `findCurrentPasswordHash` /
@@ -304,7 +327,9 @@ Two forms, on purpose (§3):
 - **api-presentation-quarkus**: `MeController` gains `PUT /me/password` (+ `PasswordChangeInputDto`) and
   `DELETE /me` (+ the `X-Reauthentication` header parse); `AccountDeletionTaskHandler` under `.../tasks/`
   (temporary placement, §3); `BaseErrorMapper` entries for the new `ErrorCode`s.
-- **api-application**: wire the new repository methods; integration tests; regenerate `docs/openapi.json`.
+- **api-application**: the `BcryptPasswordHasher` adapter (impl of the `api-domain` `PasswordHasher` port —
+  pragmatic home, see §4 + backlog); wire the new repository methods; integration tests; regenerate
+  `docs/openapi.json`.
 
 ## 11. Errors
 
@@ -356,8 +381,8 @@ Strict TDD, 100% branch coverage per package, failing test first. Order per AGEN
 
 **Use-case unit (MockK):**
 
-- `PasswordHasher`: `hash` then `matches` round-trips; `matches` false on a different password; algorithm
-  dispatch.
+- `BcryptPasswordHasher` (adapter): `hash` then `matches` round-trips; `matches` false on a different
+  password; algorithm dispatch. (Use-case tests mock the `PasswordHasher` port.)
 - `Reauthenticator`: correct factor passes; wrong → `ReauthenticationError`.
 - `PasswordChanger`: happy path appends + `revokeAll`; wrong current → 403 short-circuit (no write, no
   revoke); reused new → 422 short-circuit; append + revoke share one `@Transactional`.
@@ -395,3 +420,6 @@ Strict TDD, 100% branch coverage per package, failing test first. Order per AGEN
   volumes; batch if accounts grow huge. Not optimised in v1.
 - **Handler placement is knowingly temporary** (§3); it moves with the scheduled `api-worker-quarkus`
   extraction. No functional risk; avoid entrenching more logic in the thin adapter.
+- **`BcryptPasswordHasher` lives in the `api-application` composition root** as a pragmatic home (§4), not a
+  layering violation; it moves to a dedicated adapter module with the other misplaced infra/security
+  adapters (backlog). No functional risk.
