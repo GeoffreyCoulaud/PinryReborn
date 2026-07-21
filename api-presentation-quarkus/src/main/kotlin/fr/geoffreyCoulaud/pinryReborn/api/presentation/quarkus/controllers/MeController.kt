@@ -15,6 +15,7 @@ import jakarta.ws.rs.GET
 import jakarta.ws.rs.HeaderParam
 import jakarta.ws.rs.PUT
 import jakarta.ws.rs.Path
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.jboss.resteasy.reactive.RestResponse
 
 @Path("/api/v1/me")
@@ -37,9 +38,10 @@ class MeController(
 
     @DELETE
     @Authenticated
-    fun deleteAccount(@HeaderParam(ReauthenticationHeader.HEADER) reauthHeader: String?): RestResponse<Unit> {
+    @APIResponse(responseCode = "202", description = "Account deletion accepted")
+    fun deleteAccount(@HeaderParam(ReauthenticationHeader.HEADER) reauthHeader: String?): RestResponse<Void> {
         val factor = ReauthenticationHeader.parsePasswordFactor(reauthHeader)
         accountDeleter.requestDeletion(securityIdentity.getUser(), factor)
-        return RestResponse.ResponseBuilder.create<Unit>(RestResponse.Status.ACCEPTED).build()
+        return RestResponse.ResponseBuilder.create<Void>(RestResponse.Status.ACCEPTED).build()
     }
 }

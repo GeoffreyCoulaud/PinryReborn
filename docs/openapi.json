@@ -467,9 +467,6 @@
         "format" : "uuid",
         "pattern" : "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
       },
-      "Unit" : {
-        "type" : "object"
-      },
       "UserInputDto" : {
         "type" : "object",
         "required" : [ "name", "password" ],
@@ -881,15 +878,8 @@
           "required" : true
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Unit"
-                }
-              }
-            }
+          "202" : {
+            "description" : "Account deletion accepted"
           },
           "401" : {
             "description" : "Not Authorized"
