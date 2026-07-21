@@ -70,6 +70,8 @@ class AccountDeletionCleanerTest : BaseTest() {
 
         // Then
         verifyOrder {
+            clearDownload.clear(pin.id)
+            images.deleteByPinId(pin.id)
             pins.permanentlyDeleteAllPinsForUser(user)
             boards.permanentlyDeleteAllBoardsForUser(user)
             tags.deleteAllTagsForUser(user)
