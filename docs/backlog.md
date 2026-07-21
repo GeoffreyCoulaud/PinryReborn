@@ -40,6 +40,11 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   `PUT /pins/{id}/boards`, mirroring tags); board CRUD, cursor-paginated board pins, `PinOutputDto.boards`
   + board `pinCount`, and a recycle bin mirroring `PinRecycleBin`. Merge-ready on `feat/boards`.
   See `docs/handoffs/2026-07-20 - handoff - boards.md`.
+- **CORS**: Quarkus CORS filter enabled with a whitelist policy for browser clients. Allowed origins
+  driven by `api.cors.origins` (typed on `ApiConfig`; dev default `http://localhost:5173`, prod via
+  `API_CORS_ORIGINS`); methods `GET,POST,PUT,DELETE`, request headers `Authorization,Content-Type`,
+  `Location` exposed, credentials off (Bearer only), 24 h preflight cache. Merge-ready on `feat/cors`.
+  See `docs/handoffs/2026-07-21 - handoff - cors.md`.
 - **Infrastructure**: generic task queue (enqueue/cancel/reap), Ebean migrations, git hooks, CI gate.
 
 ---
@@ -48,16 +53,16 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 
 ### P0 — (none open)
 
-**Client auth story shipped 2026-07-21** (session tokens; merged to `main`, moved to Shipped above).
-Boards shipped earlier (`v0.5.0-boards`). The next priority is **CORS** (now unblocked, the auth model is
-fixed), then profile management.
+**Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
+(merge-ready on `feat/cors`, moved to Shipped above). The next priority is **profile management**.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
-- **CORS configuration.** Not configured (no `quarkus.http.cors*` entry). Blocks any browser client calling
-  from another origin. **Now unblocked** (the client auth model is fixed: Bearer, no cookies). Mechanical:
-  configure allowed origins for the SPA / extension making credentialed Bearer requests.
 - **Profile management.** Change password, delete account, and (if visibility lands) public profiles.
+- **Browser-extension CORS origin.** Deferred from the CORS sub-project (decision B1): the extension
+  does not exist yet and has no stable ID, so no origin is wired for it. When it ships, add its
+  `chrome-extension://<id>` / `moz-extension://<id>` origin to `api.cors.origins`. See
+  `docs/handoffs/2026-07-21 - handoff - cors.md`.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
 
