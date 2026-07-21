@@ -1,10 +1,8 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
-import jakarta.inject.Inject
 import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.CoreMatchers.notNullValue
@@ -14,20 +12,15 @@ import org.junit.jupiter.api.Test
 @QuarkusTest
 class PinCreationIntegrationTest : IntegrationTest() {
 
-    @Inject
-    lateinit var userCreator: UserCreator
-
     // ==================== Simple Scenarios ====================
 
     @Test
     fun `creating a pin as authenticated user returns the created pin`() {
-        val username = "pinuser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         given()
             .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .body(
                 """{
                     "sourceContextUrl": "https://example.com/page",
@@ -41,7 +34,7 @@ class PinCreationIntegrationTest : IntegrationTest() {
             .statusCode(201)
             .header("Location", notNullValue())
             .body("id", notNullValue())
-            .body("authorId", equalTo(user.id.toString()))
+            .body("authorId", equalTo(auth.user.id.toString()))
             .body("sourceContextUrl", equalTo("https://example.com/page"))
             .body("sourceMediaUrl", equalTo("https://example.com/image.jpg"))
             .body("description", equalTo("A test pin"))
@@ -50,13 +43,11 @@ class PinCreationIntegrationTest : IntegrationTest() {
 
     @Test
     fun `creating a pin returns 201 Created status`() {
-        val username = "statususer"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         given()
             .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .body(
                 """{
                     "sourceContextUrl": "https://status.com",
@@ -90,14 +81,14 @@ class PinCreationIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `creating a pin with wrong password fails with 401`() {
-        val username = "wrongpassuser"
-        val password = "correctpassword"
-        userCreator.createUserWithPassword(username, password)
+    fun `creating a pin with an invalid bearer token fails with 401`() {
+        // Given: a real user exists, but the request carries a tampered (invalid) token, which is
+        // the Bearer equivalent of a per-request "wrong password" under the old Basic scheme
+        createAuthenticatedUser()
 
         given()
             .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, "wrongpassword")
+            .header("Authorization", "Bearer not-a-real-token")
             .body(
                 """{
                     "sourceContextUrl": "https://example.com/page",
@@ -112,38 +103,16 @@ class PinCreationIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `creating a pin with non-existent user fails with 401`() {
+    fun `requesting pins with an invalid bearer token fails with a RFC 7807 problem`() {
         given()
-            .contentType(ContentType.JSON)
-            .auth().preemptive().basic("nonexistent", "password")
-            .body(
-                """{
-                    "sourceContextUrl": "https://example.com/page",
-                    "sourceMediaUrl": "https://example.com/image.jpg",
-                    "description": "A test pin"
-                }"""
-            )
-            .`when`()
-            .post("/api/v1/pins")
-            .then()
-            .statusCode(401)
-    }
-
-    @Test
-    fun `requesting pins with wrong password fails with a RFC 7807 problem`() {
-        val username = "problemdetailuser"
-        val password = "correctpassword"
-        userCreator.createUserWithPassword(username, password)
-
-        given()
-            .auth().preemptive().basic(username, "wrongpassword")
+            .header("Authorization", "Bearer not-a-real-token")
             .`when`()
             .get("/api/v1/pins")
             .then()
             .statusCode(401)
             .contentType("application/problem+json")
             .body("code", equalTo("AUTHENTICATION_FAILED"))
-            .header("WWW-Authenticate", containsString("Basic"))
+            .header("WWW-Authenticate", containsString("Bearer"))
     }
 
     @Test
@@ -155,19 +124,17 @@ class PinCreationIntegrationTest : IntegrationTest() {
             .statusCode(401)
             .contentType("application/problem+json")
             .body("code", equalTo("AUTHENTICATION_REQUIRED"))
-            .header("WWW-Authenticate", containsString("Basic"))
+            .header("WWW-Authenticate", containsString("Bearer"))
     }
 
     @Test
     fun `creating multiple pins as same user succeeds`() {
-        val username = "multipleuser"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // Create first pin
         given()
             .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .body(
                 """{
                     "sourceContextUrl": "https://first.com",
@@ -184,7 +151,7 @@ class PinCreationIntegrationTest : IntegrationTest() {
         // Create second pin
         given()
             .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .body(
                 """{
                     "sourceContextUrl": "https://second.com",
@@ -201,13 +168,11 @@ class PinCreationIntegrationTest : IntegrationTest() {
 
     @Test
     fun `creating a pin with unicode description succeeds`() {
-        val username = "unicodeuser"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         given()
             .contentType(ContentType.JSON)
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .body(
                 """{
                     "sourceContextUrl": "https://unicode.com",

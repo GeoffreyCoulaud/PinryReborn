@@ -1,7 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
@@ -16,9 +15,6 @@ import java.util.UUID
 class BoardsIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var boardCreator: BoardCreator
 
     // --- Create ---
@@ -26,13 +22,11 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given valid board data, Then creation returns 201 with Location and zero pin count`() {
         // Given
-        val username = "boardcreator"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"name": "Travel", "description": "Places to visit"}""")
             .`when`()
@@ -51,14 +45,12 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given a created board, Then GET by id returns its data`() {
         // Given
-        val username = "boardgetter"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
-        val board = boardCreator.create(author = user, name = "Recipes", description = "Cooking ideas")
+        val auth = createAuthenticatedUser()
+        val board = boardCreator.create(author = auth.user, name = "Recipes", description = "Cooking ideas")
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/boards/${board.id}")
             .then()
@@ -74,19 +66,17 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given boards with mixed-case names, Then listing sorts them case-insensitively`() {
         // Given
-        val username = "boardlister"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
-        boardCreator.create(author = user, name = "Banana", description = "")
-        boardCreator.create(author = user, name = "apple", description = "")
-        boardCreator.create(author = user, name = "cherry", description = "")
+        val auth = createAuthenticatedUser()
+        boardCreator.create(author = auth.user, name = "Banana", description = "")
+        boardCreator.create(author = auth.user, name = "apple", description = "")
+        boardCreator.create(author = auth.user, name = "cherry", description = "")
 
         // When / Then
         // Naive case-sensitive ASCII order would be "Banana", "apple", "cherry" (B=66 < a=97 < c=99).
         // The correct case-insensitive order is "apple", "Banana", "cherry", so this data discriminates
         // a correct implementation from a regression to case-sensitive sorting.
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/boards")
             .then()
@@ -99,14 +89,12 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an existing board, Then updating its name and description is reflected on get`() {
         // Given
-        val username = "boardupdater"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
-        val board = boardCreator.create(author = user, name = "Old name", description = "Old description")
+        val auth = createAuthenticatedUser()
+        val board = boardCreator.create(author = auth.user, name = "Old name", description = "Old description")
 
         // When
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"name": "New name", "description": "New description"}""")
             .`when`()
@@ -118,7 +106,7 @@ class BoardsIntegrationTest : IntegrationTest() {
 
         // Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/boards/${board.id}")
             .then()
@@ -132,13 +120,13 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given another user's board, Then getting it returns 403`() {
         // Given
-        val owner = userCreator.createUserWithPassword("boardowner1", "password123")
-        userCreator.createUserWithPassword("boardattacker1", "password456")
-        val board = boardCreator.create(author = owner, name = "Private", description = "")
+        val owner = createAuthenticatedUser()
+        val attacker = createAuthenticatedUser()
+        val board = boardCreator.create(author = owner.user, name = "Private", description = "")
 
         // When / Then
         given()
-            .auth().preemptive().basic("boardattacker1", "password456")
+            .authenticatedAs(attacker)
             .`when`()
             .get("/api/v1/boards/${board.id}")
             .then()
@@ -148,13 +136,11 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an unknown board id, Then getting it returns 404`() {
         // Given
-        val username = "boardgetter404"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/boards/${UUID.randomUUID()}")
             .then()
@@ -164,13 +150,13 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given another user's board, Then updating it returns 403`() {
         // Given
-        val owner = userCreator.createUserWithPassword("boardowner2", "password123")
-        userCreator.createUserWithPassword("boardattacker2", "password456")
-        val board = boardCreator.create(author = owner, name = "Private", description = "")
+        val owner = createAuthenticatedUser()
+        val attacker = createAuthenticatedUser()
+        val board = boardCreator.create(author = owner.user, name = "Private", description = "")
 
         // When / Then
         given()
-            .auth().preemptive().basic("boardattacker2", "password456")
+            .authenticatedAs(attacker)
             .contentType(ContentType.JSON)
             .body("""{"name": "Hacked", "description": ""}""")
             .`when`()
@@ -182,13 +168,11 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an unknown board id, Then updating it returns 404`() {
         // Given
-        val username = "boardupdater404"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"name": "Ghost", "description": ""}""")
             .`when`()
@@ -200,13 +184,13 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given another user's board, Then deleting it returns 403`() {
         // Given
-        val owner = userCreator.createUserWithPassword("boardowner3", "password123")
-        userCreator.createUserWithPassword("boardattacker3", "password456")
-        val board = boardCreator.create(author = owner, name = "Private", description = "")
+        val owner = createAuthenticatedUser()
+        val attacker = createAuthenticatedUser()
+        val board = boardCreator.create(author = owner.user, name = "Private", description = "")
 
         // When / Then
         given()
-            .auth().preemptive().basic("boardattacker3", "password456")
+            .authenticatedAs(attacker)
             .`when`()
             .delete("/api/v1/boards/${board.id}")
             .then()
@@ -216,13 +200,11 @@ class BoardsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an unknown board id, Then deleting it returns 404`() {
         // Given
-        val username = "boarddeleter404"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/boards/${UUID.randomUUID()}")
             .then()

@@ -1,7 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
@@ -17,19 +16,14 @@ import java.util.UUID
 class PinTaggingIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
     @Test
     fun `setting tags returns 200 with updated tags`() {
-        val username = "taguser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/page",
             sourceMediaUrl = "https://example.com/image.jpg",
             description = "My pin",
@@ -37,7 +31,7 @@ class PinTaggingIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"tags": ["nature", "landscape"]}""")
             .`when`()
@@ -51,12 +45,10 @@ class PinTaggingIntegrationTest : IntegrationTest() {
 
     @Test
     fun `setting tags replaces existing tags`() {
-        val username = "replaceuser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/page",
             sourceMediaUrl = "https://example.com/image.jpg",
             description = "My pin",
@@ -64,7 +56,7 @@ class PinTaggingIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"tags": ["newtag"]}""")
             .`when`()
@@ -77,12 +69,10 @@ class PinTaggingIntegrationTest : IntegrationTest() {
 
     @Test
     fun `setting empty tags clears all tags`() {
-        val username = "clearuser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/page",
             sourceMediaUrl = "https://example.com/image.jpg",
             description = "My pin",
@@ -90,7 +80,7 @@ class PinTaggingIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"tags": []}""")
             .`when`()
@@ -102,11 +92,11 @@ class PinTaggingIntegrationTest : IntegrationTest() {
 
     @Test
     fun `setting tags on another user's pin returns 403`() {
-        val user1 = userCreator.createUserWithPassword("owner", "password123")
-        val user2 = userCreator.createUserWithPassword("attacker", "password456")
+        val owner = createAuthenticatedUser()
+        val attacker = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user1,
+            author = owner.user,
             sourceContextUrl = "https://example.com/page",
             sourceMediaUrl = "https://example.com/image.jpg",
             description = "Owner's pin",
@@ -114,7 +104,7 @@ class PinTaggingIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic("attacker", "password456")
+            .authenticatedAs(attacker)
             .contentType(ContentType.JSON)
             .body("""{"tags": ["hacked"]}""")
             .`when`()
@@ -125,14 +115,12 @@ class PinTaggingIntegrationTest : IntegrationTest() {
 
     @Test
     fun `setting tags on non-existent pin returns 404`() {
-        val username = "notfounduser"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val nonExistentPinId = UUID.randomUUID()
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"tags": ["tag"]}""")
             .`when`()
@@ -143,10 +131,10 @@ class PinTaggingIntegrationTest : IntegrationTest() {
 
     @Test
     fun `unauthenticated request returns 401`() {
-        val user = userCreator.createUserWithPassword("unauthuser", "password123")
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/page",
             sourceMediaUrl = "https://example.com/image.jpg",
             description = "My pin",

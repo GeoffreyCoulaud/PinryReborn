@@ -1,7 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import jakarta.inject.Inject
@@ -14,13 +14,9 @@ import org.junit.jupiter.api.Test
 class PinSearchIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
-    private fun createUserWithPins(username: String, password: String, vararg descriptions: String) {
-        val user = userCreator.createUserWithPassword(username, password)
+    private fun createPinsFor(user: User, vararg descriptions: String) {
         descriptions.forEachIndexed { index, description ->
             pinCreator.createPin(
                 author = user,
@@ -35,13 +31,12 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given pins exist, Then search returns ranked results`() {
         // Given
-        val username = "pinsearchuser1"
-        val password = "password123"
-        createUserWithPins(username, password, "Beautiful mountain landscape", "City skyline at night")
+        val auth = createAuthenticatedUser()
+        createPinsFor(auth.user, "Beautiful mountain landscape", "City skyline at night")
 
         // When, Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("q", "mountain")
             .`when`()
             .get("/api/v1/pins/search")
@@ -54,13 +49,12 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given typo in query, Then search returns fuzzy matches`() {
         // Given
-        val username = "pinsearchuser2"
-        val password = "password123"
-        createUserWithPins(username, password, "Mountain peak at sunset")
+        val auth = createAuthenticatedUser()
+        createPinsFor(auth.user, "Mountain peak at sunset")
 
         // When, Then - "mountan" should match "mountain" with high score
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("q", "mountan")
             .`when`()
             .get("/api/v1/pins/search")
@@ -72,13 +66,11 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given empty query, Then returns 400`() {
         // Given
-        val username = "pinsearchuser3"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // When, Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("q", "")
             .`when`()
             .get("/api/v1/pins/search")
@@ -91,13 +83,11 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given no query parameter, Then returns 400`() {
         // Given
-        val username = "pinsearchuser4"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         // When, Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/search")
             .then()
@@ -109,10 +99,9 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given limit parameter, Then returns at most limit results`() {
         // Given
-        val username = "pinsearchuser5"
-        val password = "password123"
-        createUserWithPins(
-            username, password,
+        val auth = createAuthenticatedUser()
+        createPinsFor(
+            auth.user,
             "Test pin number 1",
             "Test pin number 2",
             "Test pin number 3",
@@ -122,7 +111,7 @@ class PinSearchIntegrationTest : IntegrationTest() {
 
         // When, Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("q", "test")
             .queryParam("limit", 2)
             .`when`()
@@ -135,14 +124,13 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given limit exceeds max, Then returns at most max results`() {
         // Given
-        val username = "pinsearchuser6"
-        val password = "password123"
+        val auth = createAuthenticatedUser()
         val descriptions = (1..25).map { "Pin description $it" }.toTypedArray()
-        createUserWithPins(username, password, *descriptions)
+        createPinsFor(auth.user, *descriptions)
 
         // When, Then - requesting 100 should be capped to max (20)
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("q", "pin")
             .queryParam("limit", 100)
             .`when`()
@@ -166,15 +154,14 @@ class PinSearchIntegrationTest : IntegrationTest() {
     @Test
     fun `Given search for another user's pins, Then returns only own pins`() {
         // Given
-        val user1 = "pinsearchuser7"
-        val user2 = "pinsearchuser8"
-        val password = "password123"
-        createUserWithPins(user1, password, "User one pin description")
-        createUserWithPins(user2, password, "User two pin description")
+        val auth1 = createAuthenticatedUser()
+        val auth2 = createAuthenticatedUser()
+        createPinsFor(auth1.user, "User one pin description")
+        createPinsFor(auth2.user, "User two pin description")
 
         // When, Then - user1 should only see their own pins
         given()
-            .auth().preemptive().basic(user1, password)
+            .authenticatedAs(auth1)
             .queryParam("q", "user")
             .`when`()
             .get("/api/v1/pins/search")

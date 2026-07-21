@@ -1,7 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import jakarta.inject.Inject
@@ -15,21 +14,16 @@ import java.util.UUID
 class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
     // ==================== Simple Scenarios ====================
 
     @Test
     fun `retrieving own pin returns the pin`() {
-        val username = "retrieveuser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/page",
             sourceMediaUrl = "https://example.com/image.jpg",
             description = "My pin",
@@ -37,13 +31,13 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/${pin.id}")
             .then()
             .statusCode(200)
             .body("id", equalTo(pin.id.toString()))
-            .body("authorId", equalTo(user.id.toString()))
+            .body("authorId", equalTo(auth.user.id.toString()))
             .body("sourceContextUrl", equalTo("https://example.com/page"))
             .body("sourceMediaUrl", equalTo("https://example.com/image.jpg"))
             .body("description", equalTo("My pin"))
@@ -52,12 +46,10 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Test
     fun `retrieving pin returns correct authorId`() {
-        val username = "authorinfouser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://author.com",
             sourceMediaUrl = "https://author.com/img.jpg",
             description = "Author test",
@@ -65,26 +57,24 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/${pin.id}")
             .then()
             .statusCode(200)
-            .body("authorId", equalTo(user.id.toString()))
+            .body("authorId", equalTo(auth.user.id.toString()))
     }
 
     // ==================== Complex Scenarios ====================
 
     @Test
     fun `retrieving non-existent pin returns 404`() {
-        val username = "notfounduser"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val nonExistentPinId = UUID.randomUUID()
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/$nonExistentPinId")
             .then()
@@ -93,10 +83,10 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Test
     fun `retrieving pin without authentication returns 401`() {
-        val user = userCreator.createUserWithPassword("unauthuser", "password123")
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://unauth.com",
             sourceMediaUrl = "https://unauth.com/img.jpg",
             description = "Unauth test",
@@ -113,21 +103,21 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
     @Test
     fun `retrieving another user's pin returns 403 forbidden`() {
         // Create two users
-        val user1 = userCreator.createUserWithPassword("owner", "password123")
-        val user2 = userCreator.createUserWithPassword("reader", "password456")
+        val owner = createAuthenticatedUser()
+        val reader = createAuthenticatedUser()
 
-        // Create pin owned by user1
+        // Create pin owned by owner
         val pin = pinCreator.createPin(
-            author = user1,
+            author = owner.user,
             sourceContextUrl = "https://owned.com",
             sourceMediaUrl = "https://owned.com/img.jpg",
             description = "User1's pin",
             tags = emptyList()
         )
 
-        // Try to retrieve user1's pin as user2
+        // Try to retrieve owner's pin as reader
         given()
-            .auth().preemptive().basic("reader", "password456")
+            .authenticatedAs(reader)
             .`when`()
             .get("/api/v1/pins/${pin.id}")
             .then()
@@ -136,12 +126,12 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Test
     fun `user can retrieve only their own pins from multiple pins`() {
-        val user1 = userCreator.createUserWithPassword("multiowner1", "password123")
-        val user2 = userCreator.createUserWithPassword("multiowner2", "password456")
+        val auth1 = createAuthenticatedUser()
+        val auth2 = createAuthenticatedUser()
 
         // Create pin for user1
         val pin1 = pinCreator.createPin(
-            author = user1,
+            author = auth1.user,
             sourceContextUrl = "https://user1.com",
             sourceMediaUrl = "https://user1.com/img.jpg",
             description = "User1's pin",
@@ -150,7 +140,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // Create pin for user2
         val pin2 = pinCreator.createPin(
-            author = user2,
+            author = auth2.user,
             sourceContextUrl = "https://user2.com",
             sourceMediaUrl = "https://user2.com/img.jpg",
             description = "User2's pin",
@@ -159,7 +149,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // User1 can access their own pin
         given()
-            .auth().preemptive().basic("multiowner1", "password123")
+            .authenticatedAs(auth1)
             .`when`()
             .get("/api/v1/pins/${pin1.id}")
             .then()
@@ -168,7 +158,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // User1 cannot access user2's pin
         given()
-            .auth().preemptive().basic("multiowner1", "password123")
+            .authenticatedAs(auth1)
             .`when`()
             .get("/api/v1/pins/${pin2.id}")
             .then()
@@ -176,7 +166,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // User2 can access their own pin
         given()
-            .auth().preemptive().basic("multiowner2", "password456")
+            .authenticatedAs(auth2)
             .`when`()
             .get("/api/v1/pins/${pin2.id}")
             .then()
@@ -185,7 +175,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // User2 cannot access user1's pin
         given()
-            .auth().preemptive().basic("multiowner2", "password456")
+            .authenticatedAs(auth2)
             .`when`()
             .get("/api/v1/pins/${pin1.id}")
             .then()
@@ -194,20 +184,19 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Test
     fun `retrieving pin with wrong password returns 401`() {
-        val username = "wrongpassretrieve"
-        val password = "correctpassword"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://wrongpass.com",
             sourceMediaUrl = "https://wrongpass.com/img.jpg",
             description = "Wrong pass test",
             tags = emptyList()
         )
 
+        // A tampered / invalid bearer token is the Bearer equivalent of a wrong per-request credential
         given()
-            .auth().preemptive().basic(username, "wrongpassword")
+            .header("Authorization", "Bearer ${auth.token}tampered")
             .`when`()
             .get("/api/v1/pins/${pin.id}")
             .then()
@@ -216,12 +205,10 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Test
     fun `user can retrieve multiple pins they created`() {
-        val username = "multipinuser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         val pin1 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://multi1.com",
             sourceMediaUrl = "https://multi1.com/img.jpg",
             description = "First pin",
@@ -229,7 +216,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
         )
 
         val pin2 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://multi2.com",
             sourceMediaUrl = "https://multi2.com/img.jpg",
             description = "Second pin",
@@ -238,7 +225,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // Retrieve first pin
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/${pin1.id}")
             .then()
@@ -247,7 +234,7 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
         // Retrieve second pin
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/${pin2.id}")
             .then()
@@ -257,12 +244,10 @@ class PinRetrievalIntegrationTest : IntegrationTest() {
 
     @Test
     fun `retrieving pin with invalid UUID format returns error`() {
-        val username = "invaliduuiduser"
-        val password = "password123"
-        userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/not-a-valid-uuid")
             .then()

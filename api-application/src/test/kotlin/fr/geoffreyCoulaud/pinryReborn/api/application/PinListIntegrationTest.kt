@@ -7,7 +7,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.common.Curso
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.CursorMapper.toDto
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinGetter
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.specification.RequestSpecification
@@ -25,17 +24,12 @@ import kotlin.io.encoding.Base64
 @QuarkusTest
 class PinListIntegrationTest : IntegrationTest() {
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
     @Inject
     lateinit var objectMapper: ObjectMapper
 
     // ==================== Helpers ====================
-
-    private val defaultPassword = "password123"
 
     private fun createPinsForUser(
         user: User,
@@ -54,11 +48,6 @@ class PinListIntegrationTest : IntegrationTest() {
                 ).id
         }
 
-    private fun RequestSpecification.authenticatedAs(
-        username: String,
-        password: String = defaultPassword,
-    ): RequestSpecification = auth().preemptive().basic(username, password)
-
     private fun RequestSpecification.withCursor(
         pivotId: UUID,
         direction: CursorDirection = CursorDirection.FORWARD
@@ -72,12 +61,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins returns pins with correct structure`() {
-        val username = "structuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        createPinsForUser(user, 1)
+        val auth = createAuthenticatedUser()
+        createPinsForUser(auth.user, 1)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins")
             .then()
@@ -92,12 +80,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins with pageSize returns limited results`() {
-        val username = "pagesizeuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        createPinsForUser(user, 5)
+        val auth = createAuthenticatedUser()
+        createPinsForUser(auth.user, 5)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("pageSize", 2)
             .`when`()
             .get("/api/v1/pins")
@@ -108,12 +95,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins with pageSize larger than total returns all`() {
-        val username = "largepageuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        createPinsForUser(user, 3)
+        val auth = createAuthenticatedUser()
+        createPinsForUser(auth.user, 3)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("pageSize", 10)
             .`when`()
             .get("/api/v1/pins")
@@ -124,14 +110,13 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins with pageSize coerced to max server limit`() {
-        val username = "maxpageuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
+        val auth = createAuthenticatedUser()
         val userPinCount = PinGetter.MAX_PAGE_SIZE + 10
 
-        createPinsForUser(user, userPinCount)
+        createPinsForUser(auth.user, userPinCount)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("pageSize", userPinCount)
             .`when`()
             .get("/api/v1/pins")
@@ -142,12 +127,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting first page includes nextCursor when more pages exist`() {
-        val username = "nextpageuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        createPinsForUser(user, 5)
+        val auth = createAuthenticatedUser()
+        createPinsForUser(auth.user, 5)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("pageSize", 2)
             .`when`()
             .get("/api/v1/pins")
@@ -159,12 +143,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting last page has no nextCursor`() {
-        val username = "lastpageuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        val pinIds = createPinsForUser(user, 3)
+        val auth = createAuthenticatedUser()
+        val pinIds = createPinsForUser(auth.user, 3)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .withCursor(pinIds[1]) // Response should include index=2
             .queryParam("pageSize", 10) // Larger than there exists
             .`when`()
@@ -177,12 +160,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting next page with cursor returns pins after cursor`() {
-        val username = "cursoruser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        val pinIds = createPinsForUser(user, 5)
+        val auth = createAuthenticatedUser()
+        val pinIds = createPinsForUser(auth.user, 5)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .withCursor(pinIds[1])
             .queryParam("pageSize", 2)
             .`when`()
@@ -196,12 +178,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting previous page returns pins before cursor`() {
-        val username = "prevpageuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        val pinIds = createPinsForUser(user, 5)
+        val auth = createAuthenticatedUser()
+        val pinIds = createPinsForUser(auth.user, 5)
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .withCursor(pinIds[2], CursorDirection.BACKWARD)
             .queryParam("pageSize", 2)
             .`when`()
@@ -215,13 +196,12 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins with sort parameter orders results`() {
-        val username = "sortuser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        val pinIds = createPinsForUser(user, 3)
+        val auth = createAuthenticatedUser()
+        val pinIds = createPinsForUser(auth.user, 3)
 
         // Ascending sort (oldest first)
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("sort", "CREATED_AT_ASC")
             .`when`()
             .get("/api/v1/pins")
@@ -232,7 +212,7 @@ class PinListIntegrationTest : IntegrationTest() {
 
         // Descending sort (newest first)
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("sort", "CREATED_AT_DESC")
             .`when`()
             .get("/api/v1/pins")
@@ -244,11 +224,10 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins with no pins returns empty pagination`() {
-        val username = "emptypagiuser"
-        userCreator.createUserWithPassword(username, defaultPassword)
+        val auth = createAuthenticatedUser()
 
         given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("pageSize", 10)
             .`when`()
             .get("/api/v1/pins")
@@ -261,12 +240,11 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `cursors are returned as base64 encoded strings`() {
-        val username = "base64cursoruser"
-        val user = userCreator.createUserWithPassword(username, defaultPassword)
-        createPinsForUser(user, 3)
+        val auth = createAuthenticatedUser()
+        createPinsForUser(auth.user, 3)
 
         val response = given()
-            .authenticatedAs(username)
+            .authenticatedAs(auth)
             .queryParam("pageSize", 2)
             .`when`()
             .get("/api/v1/pins")
@@ -293,16 +271,14 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins returns only pins for the requesting user`() {
-        val username1 = "user1"
-        val username2 = "user2"
-        val user1 = userCreator.createUserWithPassword(username1, defaultPassword)
-        val user2 = userCreator.createUserWithPassword(username2, defaultPassword)
+        val auth1 = createAuthenticatedUser()
+        val auth2 = createAuthenticatedUser()
 
-        createPinsForUser(user1, 2)
-        createPinsForUser(user2, 1)
+        createPinsForUser(auth1.user, 2)
+        createPinsForUser(auth2.user, 1)
 
         given()
-            .authenticatedAs(username1)
+            .authenticatedAs(auth1)
             .`when`()
             .get("/api/v1/pins")
             .then()
@@ -310,7 +286,7 @@ class PinListIntegrationTest : IntegrationTest() {
             .body("pins", hasSize<Any>(2))
 
         given()
-            .authenticatedAs(username2)
+            .authenticatedAs(auth2)
             .`when`()
             .get("/api/v1/pins")
             .then()
@@ -320,12 +296,12 @@ class PinListIntegrationTest : IntegrationTest() {
 
     @Test
     fun `getting pins with a cursor pivot from another user should return 403`() {
-        val reader = userCreator.createUserWithPassword("reader", defaultPassword)
-        val author = userCreator.createUserWithPassword("author", defaultPassword)
-        val authorPinIds = createPinsForUser(author, 1)
+        val readerAuth = createAuthenticatedUser()
+        val authorAuth = createAuthenticatedUser()
+        val authorPinIds = createPinsForUser(authorAuth.user, 1)
 
         given()
-            .authenticatedAs(reader.name)
+            .authenticatedAs(readerAuth)
             .withCursor(pivotId = authorPinIds.first())
             .`when`()
             .get("/api/v1/pins")

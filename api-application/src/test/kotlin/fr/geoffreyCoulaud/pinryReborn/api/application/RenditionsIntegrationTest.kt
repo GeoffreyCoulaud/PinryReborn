@@ -7,7 +7,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInt
 import fr.geoffreyCoulaud.pinryReborn.api.imaging.vips.VipsImageProbe
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.QuarkusTestProfile
 import io.quarkus.test.junit.TestProfile
@@ -51,9 +50,6 @@ class RenditionsTestProfile : QuarkusTestProfile {
 class RenditionsIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
     @Inject
@@ -64,10 +60,9 @@ class RenditionsIntegrationTest : IntegrationTest() {
 
     private fun fixture(name: String) = File("src/test/resources/fixtures/$name")
 
-    private fun createUserAndPin(username: String, password: String): UUID {
-        val user = userCreator.createUserWithPassword(username, password)
+    private fun createPinFor(auth: AuthenticatedUser): UUID {
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "rendition test",
@@ -77,15 +72,14 @@ class RenditionsIntegrationTest : IntegrationTest() {
     }
 
     private fun upload(
-        username: String,
-        password: String,
+        auth: AuthenticatedUser,
         pinId: UUID,
         fixtureName: String,
         contentType: String,
         expectedStatus: Int = 201, // a first upload creates (201); replacing an existing image is a 200
     ) {
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .multiPart("file", fixture(fixtureName), contentType)
             .`when`().put("/api/v1/pins/$pinId/image")
             .then()
@@ -105,12 +99,13 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given a 10px image and size=tiny (4), Then GET returns a 4px WebP`() {
         // Given
-        val pinId = createUserAndPin("rtiny", "password123")
-        upload("rtiny", "password123", pinId, "sample.png", "image/png")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "sample.png", "image/png")
 
         // When
         val bytes = given()
-            .auth().preemptive().basic("rtiny", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
             .then()
             .statusCode(200)
@@ -127,12 +122,13 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given no size, Then GET returns the original bytes`() {
         // Given
-        val pinId = createUserAndPin("rorig", "password123")
-        upload("rorig", "password123", pinId, "sample.png", "image/png")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "sample.png", "image/png")
 
         // When
         val bytes = given()
-            .auth().preemptive().basic("rorig", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image")
             .then()
             .statusCode(200)
@@ -147,12 +143,13 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given size=large (960) larger than the image, Then GET serves the original as-is`() {
         // Given
-        val pinId = createUserAndPin("rlarge", "password123")
-        upload("rlarge", "password123", pinId, "sample.png", "image/png")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "sample.png", "image/png")
 
         // When / Then: never upscaled, original format
         given()
-            .auth().preemptive().basic("rlarge", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=large")
             .then()
             .statusCode(200)
@@ -162,12 +159,13 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an unknown size, Then GET returns 400`() {
         // Given
-        val pinId = createUserAndPin("rbad", "password123")
-        upload("rbad", "password123", pinId, "sample.png", "image/png")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "sample.png", "image/png")
 
         // When / Then
         given()
-            .auth().preemptive().basic("rbad", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=huge")
             .then()
             .statusCode(400)
@@ -176,12 +174,13 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an animated GIF and animated=false, Then the rendition is a static WebP`() {
         // Given
-        val pinId = createUserAndPin("rflat", "password123")
-        upload("rflat", "password123", pinId, "animated.gif", "image/gif")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "animated.gif", "image/gif")
 
         // When
         val bytes = given()
-            .auth().preemptive().basic("rflat", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=tiny&animated=false")
             .then()
             .statusCode(200)
@@ -196,12 +195,13 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given an animated GIF and the default (animated), Then the rendition keeps the animation`() {
         // Given
-        val pinId = createUserAndPin("ranim", "password123")
-        upload("ranim", "password123", pinId, "animated.gif", "image/gif")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "animated.gif", "image/gif")
 
         // When
         val bytes = given()
-            .auth().preemptive().basic("ranim", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
             .then()
             .statusCode(200)
@@ -216,13 +216,14 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given a cached rendition, Then deleting the image evicts the cache subtree`() {
         // Given
-        val pinId = createUserAndPin("revict", "password123")
-        upload("revict", "password123", pinId, "sample.png", "image/png")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "sample.png", "image/png")
         val imageId = requireNotNull(imageRepository.findByPinId(pinId)).id
 
         // When: generate + cache a rendition
         given()
-            .auth().preemptive().basic("revict", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
             .then()
             .statusCode(200)
@@ -231,7 +232,7 @@ class RenditionsIntegrationTest : IntegrationTest() {
 
         // When: delete the image
         given()
-            .auth().preemptive().basic("revict", "password123")
+            .authenticatedAs(auth)
             .`when`().delete("/api/v1/pins/$pinId/image")
             .then()
             .statusCode(204)
@@ -243,11 +244,12 @@ class RenditionsIntegrationTest : IntegrationTest() {
     @Test
     fun `Given a cached rendition, Then replacing the image evicts it and a second GET regenerates`() {
         // Given: a pin whose first rendition has been generated and cached
-        val pinId = createUserAndPin("rreplace", "password123")
-        upload("rreplace", "password123", pinId, "sample.png", "image/png")
+        val auth = createAuthenticatedUser()
+        val pinId = createPinFor(auth)
+        upload(auth, pinId, "sample.png", "image/png")
         val oldImageId = requireNotNull(imageRepository.findByPinId(pinId)).id
         given()
-            .auth().preemptive().basic("rreplace", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
             .then()
             .statusCode(200)
@@ -255,7 +257,7 @@ class RenditionsIntegrationTest : IntegrationTest() {
         assertTrue(Files.exists(oldCacheDir), "rendition cache subtree should exist after the first GET")
 
         // When: the canonical image is replaced (mode A)
-        upload("rreplace", "password123", pinId, "animated.gif", "image/gif", expectedStatus = 200)
+        upload(auth, pinId, "animated.gif", "image/gif", expectedStatus = 200)
 
         // Then: the replaced image's cache subtree is evicted
         assertFalse(Files.exists(oldCacheDir), "rendition cache subtree should be evicted on replace")
@@ -264,7 +266,7 @@ class RenditionsIntegrationTest : IntegrationTest() {
         val newImageId = requireNotNull(imageRepository.findByPinId(pinId)).id
         assertNotEquals(oldImageId, newImageId, "replacing should mint a new canonical image")
         given()
-            .auth().preemptive().basic("rreplace", "password123")
+            .authenticatedAs(auth)
             .`when`().get("/api/v1/pins/$pinId/image?size=tiny")
             .then()
             .statusCode(200)

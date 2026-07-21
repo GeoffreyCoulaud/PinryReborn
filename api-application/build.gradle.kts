@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.slf4j.jboss.logmanager)
 
     // Integration testing
+    testImplementation(project(":api-utilities"))
     testImplementation(libs.bundles.integration.testing)
     testImplementation(libs.ebean)
 }
