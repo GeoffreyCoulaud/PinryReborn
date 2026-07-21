@@ -20,9 +20,8 @@ Last reviewed: 2026-07-21.
 
 ## Shipped (baseline)
 
-Five sub-projects merged (`v0.1.0-task-queue` → `v0.5.0-boards`), plus **session-token authentication**
-implemented and merge-ready on `feat/session-token-auth` (pending CI). CI green, 100% branch coverage,
-hexagonal layering, generated OpenAPI.
+Six sub-projects merged (`v0.1.0-task-queue` → `v0.5.0-boards`, plus **session-token authentication**,
+now on `main`). CI green, 100% branch coverage, hexagonal layering, generated OpenAPI.
 
 - **Users**: registration (`POST /api/v1/users`, public). Authentication is session-token / Bearer
   (see the Auth bullet); HTTP Basic has been removed.
@@ -49,9 +48,9 @@ hexagonal layering, generated OpenAPI.
 
 ### P0 — (none open)
 
-**Client auth story shipped 2026-07-21** (session tokens; moved to Shipped above; merge-ready on
-`feat/session-token-auth`). Boards shipped earlier (`v0.5.0-boards`). The next priority is **CORS** (now
-unblocked, the auth model is fixed), then profile management.
+**Client auth story shipped 2026-07-21** (session tokens; merged to `main`, moved to Shipped above).
+Boards shipped earlier (`v0.5.0-boards`). The next priority is **CORS** (now unblocked, the auth model is
+fixed), then profile management.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
