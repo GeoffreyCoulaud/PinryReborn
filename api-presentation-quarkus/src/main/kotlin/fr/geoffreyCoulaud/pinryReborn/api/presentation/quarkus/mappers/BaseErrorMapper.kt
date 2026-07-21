@@ -49,6 +49,8 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.BOARD_NOT_SOFT_DELETED -> Response.Status.CONFLICT.statusCode
             ErrorCode.BOARD_ALREADY_SOFT_DELETED -> Response.Status.CONFLICT.statusCode
             ErrorCode.BOARD_INVALID_MEMBERSHIP -> Response.Status.BAD_REQUEST.statusCode
+            ErrorCode.REAUTHENTICATION_FAILED -> Response.Status.FORBIDDEN.statusCode
+            ErrorCode.PASSWORD_PREVIOUSLY_USED -> UNPROCESSABLE_ENTITY_STATUS_CODE
         }
 
     private companion object {

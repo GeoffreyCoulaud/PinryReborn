@@ -137,4 +137,20 @@ class BaseErrorMapperTest {
     fun `Given BOARD_INVALID_MEMBERSHIP, Then status is BAD_REQUEST`() {
         assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.BOARD_INVALID_MEMBERSHIP))
     }
+
+    @Test
+    fun `Given REAUTHENTICATION_FAILED, Then status is FORBIDDEN`() {
+        assertEquals(Response.Status.FORBIDDEN, statusFor(ErrorCode.REAUTHENTICATION_FAILED))
+    }
+
+    @Test
+    fun `Given PASSWORD_PREVIOUSLY_USED, Then status is 422`() {
+        val exception = BaseError(message = "boom", code = ErrorCode.PASSWORD_PREVIOUSLY_USED)
+        val response = mapper.toResponse(exception)
+        assertEquals(422, response.status)
+        val body = response.entity as ProblemDetail
+        assertEquals("Unprocessable Entity", body.title)
+        assertEquals(422, body.status)
+        assertEquals("PASSWORD_PREVIOUSLY_USED", body.code)
+    }
 }
