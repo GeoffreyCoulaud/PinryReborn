@@ -18,8 +18,9 @@ class UserCreator(
     @Transactional
     fun createUser(name: String): User {
         val normalizedName = name.trim()
-        // Check that the username is free (case-insensitive via the repository lookup)
-        val existingUser = userRepository.findUserByName(normalizedName)
+        // Check that the username is free (case-insensitive via the repository lookup), including
+        // usernames still held by tombstoned (pending-deletion) accounts
+        val existingUser = userRepository.findUserByNameIncludingDeleted(normalizedName)
         if (existingUser != null) throw UsernameAlreadyTakenError()
         // Create the user
         val user = User(id = UUID.randomUUID(), name = normalizedName)
