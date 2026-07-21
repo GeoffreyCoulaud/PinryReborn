@@ -1,11 +1,24 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.ebean.DB
 import io.ebean.Database
+import io.restassured.RestAssured
+import io.restassured.http.ContentType
+import io.restassured.specification.RequestSpecification
+import jakarta.inject.Inject
 import org.junit.jupiter.api.BeforeEach
 
 abstract class IntegrationTest {
+    @Inject
+    lateinit var userCreator: UserCreator
+
     private val database: Database get() = DB.getDefault()
+
+    /** A created user together with a live bearer token for it. */
+    data class AuthenticatedUser(val user: User, val token: String)
 
     /**
      * Truncate all non-internal tables in the database.
@@ -21,5 +34,33 @@ abstract class IntegrationTest {
             .map { it.getString("name") }
             .filterNot { it.startsWith("sqlite_") or it.equals("db_migration") }
             .forEach { database.truncate(it) }
+    }
+
+    /** Create a user and log it in, returning the user and a bearer token. */
+    protected fun createAuthenticatedUser(
+        name: String = createRandomString(),
+        password: String = DEFAULT_PASSWORD,
+        rememberMe: Boolean = false,
+    ): AuthenticatedUser {
+        val user = userCreator.createUserWithPassword(name = name, password = password)
+        val token = RestAssured
+            .given()
+            .contentType(ContentType.JSON)
+            .body(mapOf("name" to name, "password" to password, "rememberMe" to rememberMe))
+            .post("/api/v1/sessions")
+            .then()
+            .statusCode(HTTP_CREATED)
+            .extract()
+            .path<String>("token")
+        return AuthenticatedUser(user, token)
+    }
+
+    /** Attach `Authorization: Bearer <token>` to a REST-Assured request. */
+    protected fun RequestSpecification.authenticatedAs(auth: AuthenticatedUser): RequestSpecification =
+        header("Authorization", "Bearer ${auth.token}")
+
+    companion object {
+        const val DEFAULT_PASSWORD = "password123"
+        private const val HTTP_CREATED = 201
     }
 }

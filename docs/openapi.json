@@ -60,6 +60,21 @@
           }
         }
       },
+      "CreatedSessionOutputDto" : {
+        "type" : "object",
+        "required" : [ "token", "expiresAt", "renewAfter" ],
+        "properties" : {
+          "token" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "$ref" : "#/components/schemas/Instant"
+          },
+          "renewAfter" : {
+            "$ref" : "#/components/schemas/Instant"
+          }
+        }
+      },
       "CursorDirectionDto" : {
         "type" : "string",
         "enum" : [ "FORWARD", "BACKWARD" ]
@@ -73,6 +88,21 @@
           },
           "direction" : {
             "$ref" : "#/components/schemas/CursorDirectionDto"
+          }
+        }
+      },
+      "ExistingSessionOutputDto" : {
+        "type" : "object",
+        "required" : [ "expiresAt", "renewAfter", "persistent" ],
+        "properties" : {
+          "expiresAt" : {
+            "$ref" : "#/components/schemas/Instant"
+          },
+          "renewAfter" : {
+            "$ref" : "#/components/schemas/Instant"
+          },
+          "persistent" : {
+            "type" : "boolean"
           }
         }
       },
@@ -355,6 +385,23 @@
           }
         }
       },
+      "SessionCreationInputDto" : {
+        "type" : "object",
+        "required" : [ "name", "password", "rememberMe" ],
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "pattern" : "\\S"
+          },
+          "password" : {
+            "type" : "string",
+            "pattern" : "\\S"
+          },
+          "rememberMe" : {
+            "type" : [ "boolean", "null" ]
+          }
+        }
+      },
       "StreamingOutput" : {
         "type" : "object"
       },
@@ -426,13 +473,6 @@
             "type" : "string"
           }
         }
-      }
-    },
-    "securitySchemes" : {
-      "SecurityScheme" : {
-        "type" : "http",
-        "scheme" : "basic",
-        "description" : "Authentication"
       }
     }
   },
@@ -774,6 +814,33 @@
         },
         "summary" : "List Board Pins",
         "tags" : [ "Board Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me" : {
+      "get" : {
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Get Current User",
+        "tags" : [ "Me Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
         } ]
@@ -1396,6 +1463,127 @@
         },
         "summary" : "Set Tags",
         "tags" : [ "Pin Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/sessions" : {
+      "delete" : {
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Revoke All Sessions",
+        "tags" : [ "Session Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "post" : {
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SessionCreationInputDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreatedSessionOutputDto"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request"
+          }
+        },
+        "summary" : "Create Session",
+        "tags" : [ "Session Controller" ]
+      }
+    },
+    "/api/v1/sessions/current" : {
+      "delete" : {
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Revoke Current Session",
+        "tags" : [ "Session Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "get" : {
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingSessionOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Get Current Session",
+        "tags" : [ "Session Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/sessions/current/renew" : {
+      "post" : {
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreatedSessionOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Renew Session",
+        "tags" : [ "Session Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
         } ]

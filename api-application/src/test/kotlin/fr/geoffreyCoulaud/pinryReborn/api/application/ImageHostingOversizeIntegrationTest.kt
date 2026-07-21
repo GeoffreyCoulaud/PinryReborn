@@ -1,7 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.QuarkusTestProfile
 import io.quarkus.test.junit.TestProfile
@@ -31,19 +30,14 @@ class ImageHostingTinyLimitTestProfile : QuarkusTestProfile {
 class ImageHostingOversizeIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
     @Test
     fun `Given a tiny images_max_file_bytes limit, Then uploading a bigger image returns 413`() {
         // Given
-        val username = "imgoversize"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Oversize test pin",
@@ -52,7 +46,7 @@ class ImageHostingOversizeIntegrationTest : IntegrationTest() {
 
         // When / Then: sample.png (a few hundred bytes) exceeds the 100-byte test limit
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .multiPart("file", File("src/test/resources/fixtures/sample.png"), "image/png")
             .`when`().put("/api/v1/pins/${pin.id}/image")
             .then()

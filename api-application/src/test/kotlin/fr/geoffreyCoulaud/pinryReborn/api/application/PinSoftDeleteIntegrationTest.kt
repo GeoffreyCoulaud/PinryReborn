@@ -1,7 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.UserCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
@@ -18,9 +17,6 @@ import java.util.UUID
 class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
     @Inject
-    lateinit var userCreator: UserCreator
-
-    @Inject
     lateinit var pinCreator: PinCreator
 
     // --- Soft delete ---
@@ -28,11 +24,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given own pin, Then soft delete returns 204 and pin no longer in listing`() {
         // Given
-        val username = "softdeluser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "To be deleted",
@@ -41,7 +35,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/${pin.id}")
             .then()
@@ -49,7 +43,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // Then - pin no longer in listing
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins")
             .then()
@@ -60,11 +54,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pin, Then GET by id still returns it with softDeletedAt set`() {
         // Given
-        val username = "getdeleted"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Still accessible",
@@ -72,7 +64,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/${pin.id}")
             .then()
@@ -80,7 +72,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/${pin.id}")
             .then()
@@ -92,11 +84,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pin, Then pin excluded from search`() {
         // Given
-        val username = "searchexclude"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Beautiful landscape painting",
@@ -104,7 +94,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/${pin.id}")
             .then()
@@ -112,7 +102,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/search?q=landscape")
             .then()
@@ -123,11 +113,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given already soft-deleted pin, Then soft delete returns 409`() {
         // Given
-        val username = "doubledel"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Double delete",
@@ -135,7 +123,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
         )
 
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/${pin.id}")
             .then()
@@ -143,7 +131,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/${pin.id}")
             .then()
@@ -153,10 +141,10 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given pin not owned by user, Then soft delete returns 403`() {
         // Given
-        val owner = userCreator.createUserWithPassword("delowner", "password123")
-        userCreator.createUserWithPassword("delother", "password456")
+        val owner = createAuthenticatedUser()
+        val other = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = owner,
+            author = owner.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Not yours",
@@ -165,7 +153,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When / Then
         given()
-            .auth().preemptive().basic("delother", "password456")
+            .authenticatedAs(other)
             .`when`()
             .delete("/api/v1/pins/${pin.id}")
             .then()
@@ -174,9 +162,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
     @Test
     fun `Given unauthenticated request, Then soft delete returns 401`() {
-        val user = userCreator.createUserWithPassword("delunauthuser", "password123")
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Unauth",
@@ -195,30 +183,28 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pins, Then recycle bin lists them paginated`() {
         // Given
-        val username = "recyclelist"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin1 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/1",
             sourceMediaUrl = "https://example.com/img1.jpg",
             description = "Deleted 1",
             tags = emptyList(),
         )
         val pin2 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/2",
             sourceMediaUrl = "https://example.com/img2.jpg",
             description = "Deleted 2",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin1.id}")
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin2.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin1.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin2.id}")
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/recycled")
             .then()
@@ -229,31 +215,29 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pins, Then default sort is most recently deleted first`() {
         // Given
-        val username = "recyclesortdefault"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin1 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/1",
             sourceMediaUrl = "https://example.com/img1.jpg",
             description = "Deleted first",
             tags = emptyList(),
         )
         val pin2 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/2",
             sourceMediaUrl = "https://example.com/img2.jpg",
             description = "Deleted second",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin1.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin1.id}")
         Thread.sleep(2)
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin2.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin2.id}")
 
         // When / Then - default sort should be DELETED_AT_DESC (most recently deleted first)
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/recycled")
             .then()
@@ -266,31 +250,29 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pins, Then explicit DELETED_AT_DESC sort works`() {
         // Given
-        val username = "recyclesortexplicit"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin1 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/1",
             sourceMediaUrl = "https://example.com/img1.jpg",
             description = "Deleted first",
             tags = emptyList(),
         )
         val pin2 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/2",
             sourceMediaUrl = "https://example.com/img2.jpg",
             description = "Deleted second",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin1.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin1.id}")
         Thread.sleep(2)
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin2.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin2.id}")
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("sort", "DELETED_AT_DESC")
             .`when`()
             .get("/api/v1/pins/recycled")
@@ -304,11 +286,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pins, Then CREATED_AT_ASC sort still works on recycle bin`() {
         // Given
-        val username = "recyclesortcreated"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin1 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/1",
             sourceMediaUrl = "https://example.com/img1.jpg",
             description = "Created first",
@@ -316,19 +296,19 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
         )
         Thread.sleep(2)
         val pin2 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/2",
             sourceMediaUrl = "https://example.com/img2.jpg",
             description = "Created second",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin2.id}")
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin1.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin2.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin1.id}")
 
         // When / Then - CREATED_AT_ASC should sort by creation date regardless of deletion order
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .queryParam("sort", "CREATED_AT_ASC")
             .`when`()
             .get("/api/v1/pins/recycled")
@@ -344,22 +324,20 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pin, Then restore returns 200 and pin back in normal listing`() {
         // Given
-        val username = "restoreuser"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "To restore",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin.id}")
 
         // When
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .post("/api/v1/pins/recycled/${pin.id}/restore")
             .then()
@@ -369,7 +347,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // Then - back in normal listing
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins")
             .then()
@@ -380,11 +358,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given active pin, Then restore returns 409`() {
         // Given
-        val username = "restoreactive"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Active",
@@ -393,7 +369,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .post("/api/v1/pins/recycled/${pin.id}/restore")
             .then()
@@ -405,22 +381,20 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pin, Then permanent delete returns 204 and pin gone entirely`() {
         // Given
-        val username = "permdel"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Permanent delete",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin.id}")
 
         // When
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/recycled/${pin.id}")
             .then()
@@ -428,7 +402,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // Then - gone entirely
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/${pin.id}")
             .then()
@@ -438,11 +412,9 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given active pin, Then permanent delete returns 409`() {
         // Given
-        val username = "permdelactive"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Still active",
@@ -451,7 +423,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/recycled/${pin.id}")
             .then()
@@ -463,30 +435,28 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given user with soft-deleted pins, Then empty recycle bin returns 204 and all gone`() {
         // Given
-        val username = "emptybin"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin1 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/1",
             sourceMediaUrl = "https://example.com/img1.jpg",
             description = "Bin 1",
             tags = emptyList(),
         )
         val pin2 = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com/2",
             sourceMediaUrl = "https://example.com/img2.jpg",
             description = "Bin 2",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin1.id}")
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin2.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin1.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin2.id}")
 
         // When
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .delete("/api/v1/pins/recycled")
             .then()
@@ -494,7 +464,7 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
         // Then - recycle bin empty
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .`when`()
             .get("/api/v1/pins/recycled")
             .then()
@@ -507,22 +477,20 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
     @Test
     fun `Given soft-deleted pin, Then tagging returns 409`() {
         // Given
-        val username = "tagdeleted"
-        val password = "password123"
-        val user = userCreator.createUserWithPassword(username, password)
+        val auth = createAuthenticatedUser()
         val pin = pinCreator.createPin(
-            author = user,
+            author = auth.user,
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = "Tag deleted",
             tags = emptyList(),
         )
 
-        given().auth().preemptive().basic(username, password).delete("/api/v1/pins/${pin.id}")
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin.id}")
 
         // When / Then
         given()
-            .auth().preemptive().basic(username, password)
+            .authenticatedAs(auth)
             .contentType(ContentType.JSON)
             .body("""{"tags": ["newtag"]}""")
             .`when`()

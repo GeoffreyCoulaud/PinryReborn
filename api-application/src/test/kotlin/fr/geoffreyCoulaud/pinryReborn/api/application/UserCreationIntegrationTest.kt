@@ -167,19 +167,22 @@ class UserCreationIntegrationTest : IntegrationTest() {
             .then()
             .statusCode(200)
 
-        // When / Then - authentication with correct password succeeds
+        // When / Then - logging in with the correct password succeeds and issues a token
         given()
-            .auth().preemptive().basic(username, password)
+            .contentType(ContentType.JSON)
+            .body("""{"name": "$username", "password": "$password"}""")
             .`when`()
-            .get("/api/v1/pins")
+            .post("/api/v1/sessions")
             .then()
-            .statusCode(200)
+            .statusCode(201)
+            .body("token", notNullValue())
 
-        // When / Then - authentication with wrong password fails
+        // When / Then - logging in with the wrong password fails
         given()
-            .auth().preemptive().basic(username, "wrongpassword")
+            .contentType(ContentType.JSON)
+            .body("""{"name": "$username", "password": "wrongpassword"}""")
             .`when`()
-            .get("/api/v1/pins")
+            .post("/api/v1/sessions")
             .then()
             .statusCode(401)
     }
@@ -215,8 +218,18 @@ class UserCreationIntegrationTest : IntegrationTest() {
             .then()
             .statusCode(200)
 
+        val token = given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "caselogin", "password": "$password"}""")
+            .`when`()
+            .post("/api/v1/sessions")
+            .then()
+            .statusCode(201)
+            .extract()
+            .path<String>("token")
+
         given()
-            .auth().preemptive().basic("caselogin", password)
+            .header("Authorization", "Bearer $token")
             .`when`()
             .get("/api/v1/pins")
             .then()
