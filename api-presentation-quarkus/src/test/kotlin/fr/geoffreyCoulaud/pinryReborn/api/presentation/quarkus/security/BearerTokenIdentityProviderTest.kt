@@ -48,21 +48,30 @@ class BearerTokenIdentityProviderTest {
     }
 
     @Test
-    fun `Given an invalid token, Then it throws AuthenticationFailedException`() {
-        every { authenticator.authenticate("bad") } throws SessionTokenInvalidError()
-        assertThrows<AuthenticationFailedException> {
+    fun `Given an invalid token, Then it throws AuthenticationFailedException with a SessionTokenInvalidError cause`() {
+        val invalidError = SessionTokenInvalidError()
+        every { authenticator.authenticate("bad") } throws invalidError
+
+        val exception = assertThrows<AuthenticationFailedException> {
             provider.authenticate(request("bad"), context).await().indefinitely()
         }
+
+        assertEquals(invalidError, exception.cause)
     }
 
     @Test
-    fun `Given an expired token, Then it throws AuthenticationFailedException`() {
-        // Spec §12 fallback: SESSION_EXPIRED could not be routed through a JAX-RS mapper at runtime
-        // (verified in Task 9), so the provider collapses expired and invalid tokens to the same
-        // AuthenticationFailedException. The distinction still lives in SessionTokenAuthenticator.
-        every { authenticator.authenticate("old") } throws SessionTokenExpiredError()
-        assertThrows<AuthenticationFailedException> {
+    fun `Given an expired token, Then it throws AuthenticationFailedException with a SessionTokenExpiredError cause`() {
+        // Spec §12: a dedicated exception subtype could not be routed through a JAX-RS mapper at
+        // runtime (verified in Task 9), so both branches throw the same (proven to route)
+        // AuthenticationFailedException; AuthenticationFailedExceptionMapper distinguishes SESSION_EXPIRED
+        // from AUTHENTICATION_FAILED by inspecting this cause.
+        val expiredError = SessionTokenExpiredError()
+        every { authenticator.authenticate("old") } throws expiredError
+
+        val exception = assertThrows<AuthenticationFailedException> {
             provider.authenticate(request("old"), context).await().indefinitely()
         }
+
+        assertEquals(expiredError, exception.cause)
     }
 }

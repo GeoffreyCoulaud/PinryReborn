@@ -112,11 +112,11 @@ class SessionAuthIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `Given an expired token, Then it is rejected with 401 AUTHENTICATION_FAILED`() {
-        // Spec §12 fallback (verified in Task 9): a dedicated SESSION_EXPIRED code was tried, but
-        // Quarkus never routes a thrown AuthenticationCompletionException subtype through the JAX-RS
-        // exception-mapper chain at runtime -- it short-circuits with a bodyless 401 first. Expired
-        // tokens therefore report the same AUTHENTICATION_FAILED code as an invalid token.
+    fun `Given an expired token, Then it is rejected with 401 SESSION_EXPIRED`() {
+        // Spec §12: a dedicated SessionExpiredException subtype was tried in Task 9 but never routed
+        // through the JAX-RS exception-mapper chain at runtime. AuthenticationFailedExceptionMapper now
+        // inspects the exception's cause instead, distinguishing an expired token from an invalid one
+        // while reusing the (proven to route) AuthenticationFailedException path.
         val auth = createAuthenticatedUser()
         // Age the single session-token row directly via Ebean (deterministic, no clock mocking).
         val model = DB.getDefault().find(SessionTokenModel::class.java).findList().single()
@@ -124,6 +124,6 @@ class SessionAuthIntegrationTest : IntegrationTest() {
         DB.getDefault().save(model)
 
         given().authenticatedAs(auth).get("/api/v1/me")
-            .then().statusCode(401).body("code", org.hamcrest.Matchers.equalTo("AUTHENTICATION_FAILED"))
+            .then().statusCode(401).body("code", org.hamcrest.Matchers.equalTo("SESSION_EXPIRED"))
     }
 }
