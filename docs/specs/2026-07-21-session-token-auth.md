@@ -103,11 +103,12 @@ data class SessionToken(
 The plaintext token is **never** a field on the entity and is never stored; it exists only in the
 issue/renew response. The row is addressed by the SHA-256 hash of the plaintext (see §9).
 
-New `Login` subtype (forces a branch in `UserAuthenticator.authenticate`'s exhaustive `when`):
-
-```
-class SessionTokenLogin(val token: String) : Login
-```
+> **Amendment (2026-07-21, agreed before planning):** token verification is a **dedicated
+> `SessionTokenAuthenticator` use case** returning the full `SessionToken` (its id/expiry/persistent
+> are needed by renew/revoke/`GET /sessions/current`), **not** a `SessionTokenLogin` subtype of
+> `Login`. Routing tokens through `UserAuthenticator.authenticate(login): User` would be lossy (it
+> returns only the user) and the extra `Login` branch would be dead in production. So the `Login`
+> sealed interface and `UserAuthenticator` stay **password-only and unchanged**; no dead code.
 
 Value returned by the issue/renew use cases (carries the transient plaintext):
 
@@ -177,10 +178,10 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   `expiresAt = expiryPolicy.expiryFrom(clock.now(), persistent)`; persist
   `SessionToken(randomUUID(), user, expiresAt, persistent)` under `hash`; return
   `IssuedSession(token, expiresAt, expiryPolicy.renewAfterFor(expiresAt, persistent))`.
-- **Verify (every Bearer request).** `UserAuthenticator.authenticate(SessionTokenLogin(token))`:
+- **Verify (every Bearer request).** `SessionTokenAuthenticator.authenticate(token)`:
   `hash = TokenHasher.sha256(token)`; `findByTokenHash(hash)`; if absent → invalid; if
-  `expiresAt <= clock.now()` → expired; otherwise the token's `user` is the identity. The Quarkus
-  identity carries `user`, `userId`, and the full `SessionToken` (so renew/revoke can act on it).
+  `expiresAt <= clock.now()` → expired; otherwise return the `SessionToken`. The Quarkus identity
+  carries `user`, `userId`, and the full `SessionToken` (so renew/revoke can act on it).
 - **Renew.** From the presented token's `SessionToken`, within a **single transaction**
   (`@Transactional` on `SessionRenewer.renew`): persist a new token with the same `persistent`
   **and** delete the old row by id, then return the new `IssuedSession`. The delete-old +
@@ -200,14 +201,17 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
 
 ## 7. Security wiring (hexagonal placement)
 
-- **api-domain**: `SessionToken`, `SessionTokenLogin`, `IssuedSession`, `TokenGenerator`,
-  `SessionExpiryPolicy` (concrete pure class), `SessionTokenRepositoryInterface`.
-- **api-usecases** (domain only): `SessionCreator` (authenticate + issue), `SessionRenewer`
-  (`@Transactional`: atomic delete-old + save-new, §6), `SessionRevoker` (current + all);
-  `UserAuthenticator` gains the `SessionTokenLogin` branch and two new deps (`Clock`,
-  `SessionTokenRepositoryInterface`); `TokenHasher` (an object, not a top-level function — SHA-256);
-  new exceptions (see §8). `GET /sessions/current` needs no use case: it is a pure read of the
-  identity's `SessionToken` plus a `SessionExpiryPolicy.renewAfterFor` call, done in presentation.
+- **api-domain**: `SessionToken`, `IssuedSession`, `TokenGenerator`,
+  `SessionExpiryPolicy` (concrete pure class), `SessionTokenRepositoryInterface`. (No `SessionTokenLogin`;
+  see the §4 amendment.)
+- **api-usecases** (domain only): `SessionTokenAuthenticator` (verify a token → `SessionToken`, via
+  `Clock` + `SessionTokenRepositoryInterface`; throws `SessionTokenInvalidError` /
+  `SessionTokenExpiredError`); `SessionCreator` (authenticate via the existing password-only
+  `UserAuthenticator`, then issue); `SessionRenewer` (`@Transactional`: atomic save-new + delete-old,
+  §6); `SessionRevoker` (current + all); `TokenHasher` (an object, not a top-level function — SHA-256);
+  new exceptions (see §8). `UserAuthenticator` is **unchanged**. `GET /sessions/current` needs no use
+  case: it is a pure read of the identity's `SessionToken` plus a `SessionExpiryPolicy.renewAfterFor`
+  call, done in presentation.
 - **api-persistence-sqlite**: `SessionTokenModel` (`@Table("session_tokens")`) + mapper;
   `SessionTokenRepository`; migration **1.8** (additive).
 - **api-presentation-quarkus**:
@@ -218,7 +222,7 @@ All routes are under `/api/v1`. Every route except `POST /sessions` requires a v
   - `BearerAuthenticationMechanism`: a custom `HttpAuthenticationMechanism` parsing
     `Authorization: Bearer <token>` into a Quarkus `TokenAuthenticationRequest` (Quarkus has no
     built-in opaque-bearer mechanism), plus an `IdentityProvider<TokenAuthenticationRequest>`
-    delegating to `UserAuthenticator.authenticate(SessionTokenLogin)` and building the identity with
+    delegating to `SessionTokenAuthenticator.authenticate(token)` and building the identity with
     `user`/`userId`/`sessionToken` attributes.
   - `SecureTokenGenerator` (`SecureRandom`) implementing `TokenGenerator`, `@ApplicationScoped`.
   - `AuthConfig` (`@ConfigMapping(prefix = "auth")`) + a producer building `SessionExpiryPolicy`
