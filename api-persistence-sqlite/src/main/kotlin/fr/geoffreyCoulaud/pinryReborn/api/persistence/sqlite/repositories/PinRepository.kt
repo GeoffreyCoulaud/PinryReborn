@@ -65,6 +65,14 @@ class PinRepository(
             .findList()
             .map { it.board.toDomain() }
 
+    override fun findBoardsForPinIncludingRecycled(pinId: UUID): List<Board> =
+        QPinBoardModel()
+            .pin.id
+            .equalTo(pinId)
+            .fetch("board")
+            .findList()
+            .map { it.board.toDomain() }
+
     override fun savePin(pin: Pin): Pin {
         val pinModel = sqlRepository.saveAndReturn(pin.toModel())
         savePinTags(pinModel, pin.tags)

@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.domain.repositories
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Page
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
@@ -99,4 +100,12 @@ interface PinRepositoryInterface {
         pageSize: Int,
         sortStrategy: PinSortStrategy,
     ): Page<Pin>
+
+    /**
+     * Find every board a pin belongs to, regardless of the board's own state (active or
+     * recycled). Unlike the boards exposed on a mapped [Pin], this does NOT filter out recycled
+     * boards: `softDeleteBoard` keeps the join row, and the export must see it, exactly as
+     * recycled pins are already exported with their own deletion marker.
+     */
+    fun findBoardsForPinIncludingRecycled(pinId: UUID): List<Board>
 }
