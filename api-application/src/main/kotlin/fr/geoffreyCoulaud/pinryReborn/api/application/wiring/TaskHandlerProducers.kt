@@ -1,8 +1,8 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application.wiring
 
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
-import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.tasks.PinDownloadTaskHandler
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.DownloadPinImage
+import fr.geoffreyCoulaud.pinryReborn.api.worker.PinDownloadTaskHandler
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.inject.Produces
 

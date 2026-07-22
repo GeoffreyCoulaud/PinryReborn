@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.tasks
+package fr.geoffreyCoulaud.pinryReborn.api.worker
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.ReapExpiredTasks
 import io.github.oshai.kotlinlogging.KotlinLogging

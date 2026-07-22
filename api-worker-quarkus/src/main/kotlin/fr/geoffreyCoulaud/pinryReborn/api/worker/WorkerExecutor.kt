@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.tasks
+package fr.geoffreyCoulaud.pinryReborn.api.worker
 
 import java.time.Duration
 import java.util.concurrent.ExecutorService
