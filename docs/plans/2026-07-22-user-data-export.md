@@ -452,17 +452,29 @@ the soft-delete predicate does not filter these queries.
 `save` translates the unique-index violation:
 
 ```kotlin
+// api-domain/.../domain/exports/ExportAlreadyInProgressException.kt
+class ExportAlreadyInProgressException : Exception("An export is already in progress for this user")
+```
+
+```kotlin
 override fun save(export: UserDataExport): UserDataExport =
     try {
         sqlRepository.saveAndReturn(export.toModel(resolveUser(export.userId))).toDomain()
     } catch (error: DuplicateKeyException) {
-        throw ExportAlreadyInProgressError()
+        throw ExportAlreadyInProgressException()
     }
 ```
 
 Translating here is mandatory: Konsist bans `io.ebean` from `api-usecases`. **Confirm the exception
 type first** — Ebean may wrap SQLite's `SQLITE_CONSTRAINT_UNIQUE` as `DuplicateKeyException` or as a
 plain `PersistenceException`; the test in Step 1 tells you which, catch exactly that.
+
+**Correction to the original plan (2026-07-22, during execution).** The adapter cannot throw
+`ExportAlreadyInProgressError`: that is a `BaseError` living in `api-usecases`, which
+`api-persistence-sqlite` must not depend on. It throws the **domain** exception
+`ExportAlreadyInProgressException` instead, exactly as `ImageStore.stage` throws the domain
+`ImageTooLargeException` and `SetPinImage` translates it. Task 6's `UserDataExportRequester` catches
+the domain exception and rethrows `ExportAlreadyInProgressError` for the presentation layer.
 
 - [ ] **Step 5: Generate `1.10`, hand-write `1.11`**
 
@@ -763,6 +775,8 @@ EXPORT_GONE,
 ```kotlin
 open class UserDataExportError(message: String, code: ErrorCode) : BaseError(message, code)
 
+// Thrown by the requester when it catches the domain ExportAlreadyInProgressException raised by the
+// repository's unique-index guard (see the correction note in Task 4).
 class ExportAlreadyInProgressError :
     UserDataExportError("An export is already in progress", ErrorCode.EXPORT_ALREADY_IN_PROGRESS)
 class ExportTooSoonError(val retryAfterSeconds: Long) :
