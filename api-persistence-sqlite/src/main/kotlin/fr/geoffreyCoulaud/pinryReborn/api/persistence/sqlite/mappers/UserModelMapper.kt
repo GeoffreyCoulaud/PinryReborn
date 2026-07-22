@@ -17,5 +17,6 @@ object UserModelMapper {
             id = id,
             name = name,
             softDeleted = deleted,
+            createdAt = whenCreated,
         )
 }

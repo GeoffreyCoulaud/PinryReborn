@@ -144,8 +144,11 @@ class PinRepositoryTest : RepositoryTest() {
         val actual = repository.findPinById(pin.id)
 
         // Then
+        // createdAt/updatedAt are populated on read but absent on the never-persisted `pin`
+        // reference (it was constructed in memory and never reassigned from savePin's return),
+        // so they are normalized away rather than compared.
         assertNotNull(actual)
-        assertEquals(pin, actual!!)
+        assertEquals(pin, actual!!.copy(createdAt = null, updatedAt = null))
     }
 
     @Test
@@ -251,9 +254,12 @@ class PinRepositoryTest : RepositoryTest() {
         repository.savePin(updatedPin)
 
         // Then
+        // Compared by id only: `board2`/`board3` come from this file's own `createAndSaveBoard`
+        // helper, which saves the model directly and returns the original in-memory Board (its
+        // createdAt/updatedAt stay null), unlike `actual`'s boards which are freshly read.
         val actual = repository.findPinById(pin.id)
         assertNotNull(actual)
-        assertEquals(setOf(board2, board3), actual!!.boards.toSet())
+        assertEquals(setOf(board2.id, board3.id), actual!!.boards.map { it.id }.toSet())
     }
 
     // --- Soft delete tests ---
@@ -796,6 +802,22 @@ class PinRepositoryTest : RepositoryTest() {
         // Then
         assertEquals(1, page.items.size)
         assertEquals(pin.id, page.items[0].id)
+    }
+
+    // --- Creation timestamps ---
+
+    @Test
+    fun `Given a saved pin, Then reading it back exposes its timestamps`() {
+        // Given
+        val user = createAndSaveUser()
+        val pin = createAndSavePin(user)
+
+        // When
+        val found = repository.findPinById(pin.id)
+
+        // Then
+        assertNotNull(found?.createdAt)
+        assertNotNull(found?.updatedAt)
     }
 
     @Test

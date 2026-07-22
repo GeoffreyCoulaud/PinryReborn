@@ -170,4 +170,18 @@ class UserRepositoryTest : RepositoryTest() {
         // Then
         assertNull(foundUser)
     }
+
+    // --- Creation timestamps ---
+
+    @Test
+    fun `Given a saved user, Then reading it back exposes its creation timestamp`() {
+        // Given
+        val user = saveUser()
+
+        // When
+        val found = repository.findUserById(user.id)
+
+        // Then
+        assertNotNull(found?.createdAt)
+    }
 }

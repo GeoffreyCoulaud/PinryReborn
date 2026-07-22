@@ -277,4 +277,20 @@ class BoardRepositoryTest : RepositoryTest() {
         // Then
         assertNull(result)
     }
+
+    // --- Creation timestamps ---
+
+    @Test
+    fun `Given a saved board, Then reading it back exposes its timestamps`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("Board", user)
+
+        // When
+        val found = boardRepository.findBoardById(board.id)
+
+        // Then
+        assertNotNull(found?.createdAt)
+        assertNotNull(found?.updatedAt)
+    }
 }

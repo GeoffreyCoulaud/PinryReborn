@@ -29,7 +29,14 @@ class BoardRepository(
     private fun List<BoardModel>.sortedForListing(): List<BoardModel> =
         sortedWith(compareBy({ it.name.lowercase() }, { it.id }))
 
-    override fun saveBoard(board: Board): Board = sqlRepository.saveAndReturn(board.toModel()).toDomain()
+    override fun saveBoard(board: Board): Board {
+        val model = sqlRepository.saveAndReturn(board.toModel())
+        // Re-read by id rather than mapping `model` directly: its `author` is still the bare
+        // placeholder built by `Board.toModel()` (id + name only, no Ebean-managed timestamps), so
+        // mapping it straight would throw UninitializedPropertyAccessException on
+        // `UserModel.whenCreated`. A fresh query loads a genuine Ebean reference for the author.
+        return findBoardById(model.id)!!
+    }
 
     override fun findBoardById(id: UUID): Board? =
         QBoardModel().id.equalTo(id).findOne()?.toDomain()

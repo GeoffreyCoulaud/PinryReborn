@@ -22,5 +22,7 @@ object BoardModelMapper {
             name = name,
             description = description,
             softDeletedAt = softDeletedAt,
+            createdAt = whenCreated,
+            updatedAt = whenModified,
         )
 }
