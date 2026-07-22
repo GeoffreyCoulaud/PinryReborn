@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security
+package fr.geoffreyCoulaud.pinryReborn.api.system
 
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
