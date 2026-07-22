@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Login.BasicAuthLogin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.SessionToken
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.SessionExpiryPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.TokenGenerator
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
@@ -14,6 +15,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -26,10 +28,20 @@ class SessionCreatorTest {
     private val tokenGenerator = mockk<TokenGenerator>()
     private val clock = mockk<Clock>()
     private val policy = SessionExpiryPolicy(Duration.ofDays(30), Duration.ofHours(12), 0.75)
-    private val creator = SessionCreator(userAuthenticator, repository, tokenGenerator, clock, policy)
+    private val transactionRunner = mockk<TransactionRunner>()
+    private val creator =
+        SessionCreator(userAuthenticator, repository, tokenGenerator, clock, policy, transactionRunner)
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
     private val user = User(id = randomUUID(), name = "alice")
+
+    // Passthrough so the transactional block runs in the behavioral tests; overridden where a test
+    // needs to prove the writes live inside the block.
+    @BeforeEach
+    fun stubTransactionRunnerPassthrough() {
+        every { transactionRunner.inTransaction<IssuedSession>(any()) } answers
+            { firstArg<() -> IssuedSession>().invoke() }
+    }
 
     @Test
     fun `Given valid credentials, Then create issues, stores the hash, and returns the token with expiry metadata`() {
@@ -66,6 +78,18 @@ class SessionCreatorTest {
     fun `Given invalid credentials, Then create propagates the authentication error and stores nothing`() {
         every { userAuthenticator.authenticate(any()) } throws UserAuthenticationInvalidPasswordError()
         assertThrows<UserAuthenticationInvalidPasswordError> { creator.create("alice", "bad", persistent = false) }
+        verify(exactly = 0) { repository.saveSessionToken(any(), any()) }
+    }
+
+    @Test
+    fun `Given create, Then the token save runs inside the transaction`() {
+        // Given the transaction runner never invokes its block (no-op)
+        every { transactionRunner.inTransaction<IssuedSession>(any()) } returns IssuedSession("x", now, now)
+
+        // When
+        creator.create(name = "alice", password = "pw", persistent = true)
+
+        // Then nothing was written, proving the save lives inside the transactional block
         verify(exactly = 0) { repository.saveSessionToken(any(), any()) }
     }
 }
