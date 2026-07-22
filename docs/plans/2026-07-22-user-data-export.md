@@ -1294,7 +1294,12 @@ exports.minimum_interval=PT1H
 exports.purge_interval=PT1H
 exports.staged_file_max_age=PT6H
 exports.page_size=500
+exports.minimum_free_bytes=1073741824
 ```
+
+`exports.minimum_free_bytes` (added 2026-07-23) is the free-space floor the builder checks via
+`archiveStore.hasFreeSpace(...)` before it starts writing; 1 GiB is a conservative default. It is the
+`minimumFreeBytes: Long` constructor parameter of `UserDataExportBuilder`.
 
 This is a **new volume**: note it for the deployment documentation in Task 14.
 
