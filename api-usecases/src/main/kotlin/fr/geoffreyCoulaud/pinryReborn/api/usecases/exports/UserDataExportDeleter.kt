@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.CancelTask
+import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 
 /**
@@ -16,10 +17,8 @@ import java.util.UUID
  * [CancelTask.cancel]'s `Boolean` result is deliberately ignored: whether the task was still
  * cancellable or had already settled, the export is being deleted either way, so branching on it
  * would create a side with no observable difference and no way to test it.
- *
- * Deliberately not `@ApplicationScoped` yet: [ExportArchiveStore] has no CDI producer until the
- * wiring task (`ExportProducers`). Same precedent as `UserDataExportRequester`/`UserDataExportBuilder`.
  */
+@ApplicationScoped
 @Suppress("UnsafeCallOnNullableType")
 class UserDataExportDeleter(
     private val getter: UserDataExportGetter,

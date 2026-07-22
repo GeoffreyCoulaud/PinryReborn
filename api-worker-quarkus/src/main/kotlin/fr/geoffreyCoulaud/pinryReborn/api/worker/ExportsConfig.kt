@@ -23,4 +23,7 @@ interface ExportsConfig {
 
     @WithDefault("500")
     fun pageSize(): Int
+
+    @WithDefault("1073741824")
+    fun minimumFreeBytes(): Long
 }
