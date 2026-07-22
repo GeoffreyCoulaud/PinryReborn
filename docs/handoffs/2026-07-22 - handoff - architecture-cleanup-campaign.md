@@ -30,7 +30,10 @@ fresh `main`).
 - **A — DONE (merged to `main`, PR #25, 2026-07-22).**
 - **B — DONE (merged to `main`, PR #26, 2026-07-22).**
 - **C — DONE (merged to `main`, PR #27, 2026-07-22).**
-- D — not started.
+- **D — DONE (merged to `main`, PR #28, 2026-07-22).**
+
+**Campaign complete.** All four architecture items are on `main`; CI green, 100% branch coverage,
+and the boundaries are now enforced by Konsist (item D) rather than review discipline.
 
 ## A — what was built
 
@@ -109,12 +112,38 @@ produced by a new `api-application` `TaskHandlerProducers`), then the pure modul
 - The worker module reproduced the `api-system` invariant: only `api-application` (composition root)
   depends on it; every other consumer references the use-case/domain ports.
 
-## Suggested next step
+## D — what was built
 
-Start **D** (the campaign capstone) off a fresh `main`: add Konsist checks that fail the build on layer
-violations — `api-usecases` importing `jakarta.transaction` / `io.ebean` / `jakarta.ws.rs` / a concrete
-crypto-random library; `api-domain` importing any I/O; and the module dependency DAG (now including
-`api-system` and `api-worker-quarkus`). Items A–C were done partly to make these rules pass cleanly, so
-D should go green with little churn. Use the context7 MCP for Konsist's current API. Decide where the
-Konsist test source set lives (a dedicated `api-architecture-tests` module is the usual pattern, so the
-rules can see every module on the classpath).
+One test, `ArchitectureKonsistTest`, in `api-application`'s test source set (Konsist reads source, so
+`scopeFromProduction` sees every module; `api-application` is the only module without the Kover gate, so
+no near-empty dedicated module was needed). Three rule groups: the module dependency DAG via
+`assertArchitecture`; an `api-usecases` import ban (`jakarta.transaction` / `io.ebean` / `jakarta.ws.rs`
+/ `org.mindrot`); and a strict `api-domain` allowlist (own package + `java.time.Instant`/`Duration`,
+`java.util.UUID`, `java.io.InputStream`). Two "scope is not empty" guards prevent a mistyped
+`moduleName` from passing vacuously.
+
+### Learned pitfalls (D)
+
+- **`konsist` was already in the version catalog** and already used by `api-persistence-sqlite`
+  (`ModelsPackageArchTest`). That existing test is the local reference for the API
+  (`com.lemonappdev.konsist.api.*`, `scopeFromProduction(moduleName = ...)`) — context7 showed the older
+  `com.lemonappdev.konsist.core.*` package. Follow the in-repo test, not the doc snippet.
+- **The operator strengthened the domain rule from a blocklist to an allowlist** during design: a
+  blocklist lets unforeseen imports through, and a wide `java.util` allow would permit
+  `java.util.concurrent` / `java.util.logging`. The allowlist matches exact types only.
+- **`java.io.InputStream` is a deliberate domain import**: it is the byte-stream boundary type on the
+  four `domain.images` ports (`ImageStore`, `ImageFetcher`, `ImageTransformer`, `RenditionCache`). Kept
+  in the allowlist as an exact type, documented. Removing it would require a separate refactor
+  introducing a domain-level byte-source abstraction (a possible future item, not done here).
+- **Verifying enforcement tests have teeth:** the forbidden imports are not even on `api-usecases`'
+  classpath (that is the point), so you cannot add a real violating import. Prove teeth by breaking the
+  *rule* instead (ban the domain package, drop an allowed type, flip a `dependsOn` to `dependsOnNothing`)
+  and watching exactly that assertion fail, then revert.
+
+## Next steps (post-campaign)
+
+The architecture cleanup is done. Remaining P2 items in `docs/backlog.md` are operational debt, not
+architecture (GC sweeps, task-worker DEAD/failed observability, the `findCurrentPasswordHash`
+tie-breaker, the `animated` backfill migration). A possible future architecture item surfaced here:
+introduce a domain-level byte-source abstraction so `java.io.InputStream` no longer appears in domain
+ports (would let the Konsist allowlist drop that entry).

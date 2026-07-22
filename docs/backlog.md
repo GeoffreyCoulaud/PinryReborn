@@ -71,6 +71,12 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   `PinDownloadTaskHandler`'s image limits are supplied by an `api-application` producer, so the worker
   carries no presentation dependency. On `main`.
   See `docs/specs/2026-07-22-worker-runtime-extraction.md`.
+- **Architecture enforcement (Konsist)**: `ArchitectureKonsistTest` (in `api-application`'s test source
+  set) fails the build on layer violations: the module dependency DAG, an `api-usecases` import ban
+  (`jakarta.transaction` / `io.ebean` / `jakarta.ws.rs` / `org.mindrot`), and a strict `api-domain`
+  import allowlist (own package + `java.time`, `java.util.UUID`, `java.io.InputStream`). The AGENTS.md
+  dependency table is now enforced in CI, not just by review. On `main`.
+  See `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
 
 ---
 
@@ -80,11 +86,11 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 
 **Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
 (merged to `main`, in Shipped above). **Profile management shipped 2026-07-21** (change password +
-async account deletion, in Shipped above). **In progress: the architecture cleanup campaign** (four
-sequenced items A to D, see P2 and `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`).
-Items A (`Session*` use cases routed through the `TransactionRunner` port), B (misplaced adapters
-gathered into the new `api-system` module) and C (task-worker runtime extracted into the new
-`api-worker-quarkus` module) shipped 2026-07-22; only D (Konsist enforcement) remains.
+async account deletion, in Shipped above). **The architecture cleanup campaign is complete** (all four
+sequenced items A–D shipped 2026-07-22, in Shipped above; see
+`docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`): `Session*` use cases on the
+`TransactionRunner` port, the `api-system` and `api-worker-quarkus` modules, and Konsist boundary
+enforcement in CI.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -96,13 +102,6 @@ gathered into the new `api-system` module) and C (task-worker runtime extracted 
   instance or another one, so they stay in control of their data and are never held hostage. Not yet specced.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
-
-- **Enforce Clean Architecture boundaries with Konsist.** *(Architecture enforcement. Flagged 2026-07-21.)*
-  Add Konsist (a Kotlin architecture-testing library) checks that fail the build when a layer imports what
-  it must not: `api-usecases` pulling in `jakarta.transaction`, `io.ebean`, `jakarta.ws.rs`, or a concrete
-  crypto/random library; `api-domain` importing any I/O; and the module dependency DAG. Makes the AGENTS.md
-  dependency rules explicit and unavoidable in CI instead of relying on review discipline. Use the context7
-  MCP for Konsist's current API when building this.
 
 - **Expired session-token GC sweep.** `session_tokens` rows are inert once expired (verification rejects
   them), but they accumulate. No sweep in v1. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
