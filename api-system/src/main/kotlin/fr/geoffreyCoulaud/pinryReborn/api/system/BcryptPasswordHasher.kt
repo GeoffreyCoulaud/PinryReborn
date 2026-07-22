@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.application
+package fr.geoffreyCoulaud.pinryReborn.api.system
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm

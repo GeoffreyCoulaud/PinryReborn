@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.tasks
+package fr.geoffreyCoulaud.pinryReborn.api.system
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import jakarta.enterprise.context.ApplicationScoped

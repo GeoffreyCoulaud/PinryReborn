@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.security
+package fr.geoffreyCoulaud.pinryReborn.api.system
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.TokenGenerator
 import jakarta.enterprise.context.ApplicationScoped

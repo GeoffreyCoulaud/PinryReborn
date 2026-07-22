@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":api-storage-filesystem"))
     implementation(project(":api-imaging-vips"))
     implementation(project(":api-fetch-http"))
+    implementation(project(":api-system"))
 
     // BOM
     implementation(enforcedPlatform(libs.quarkus.bom))
@@ -28,9 +29,6 @@ dependencies {
     // Logging
     implementation(libs.kotlin.logging)
     implementation(libs.slf4j.jboss.logmanager)
-
-    // Security
-    implementation(libs.jbcrypt)
 
     // Integration testing
     testImplementation(project(":api-utilities"))
