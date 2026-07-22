@@ -4,81 +4,194 @@
 
 **Goal:** Let an authenticated user request, track and download a self-contained archive of all their data, following `docs/specs/2026-07-22-user-data-export.md`.
 
-**Architecture:** Hexagonal. A new `ExportArchiveStore` domain port owns archive production (stage into a temp file, measure size + SHA-256, promote by atomic rename) and **declares** the container format it produces; the ZIP and Jackson mechanics live in the `api-storage-filesystem` adapter, so `api-usecases` gains no serialization dependency. Building is asynchronous on the existing task queue (`account.export`), the archive metadata lives in a new `user_data_exports` table (bytes on disk, never in the database), and the download endpoint reads the media type, size and extension **back from the row** so an archive is always served as what it actually is.
+**Architecture:** Hexagonal. A new `ExportArchiveStore` domain port owns archive production (stage into a temp file, measure size + SHA-256, fsync, promote by atomic rename) and declares the container format it produces; ZIP and Jackson mechanics live in `api-storage-filesystem`. Building is asynchronous on the task queue (`account.export`); metadata lives in `user_data_exports` (bytes on disk, never in the database); the download endpoint reads media type, size and extension back from the row through a non-nullable projection.
 
 **Tech Stack:** Kotlin, Quarkus 3 (Jakarta REST), Ebean 19 + SQLite, `java.util.zip`, Jackson (adapter only), JUnit 5, MockK, REST Assured, Kover (100% branch coverage).
 
 ## Global Constraints
 
 - **100% branch coverage per package**, gated by `koverVerify`. Exercise both sides of every conditional.
-- **Strict TDD**: write the failing test first, watch it fail, then the minimal implementation.
-- **Clean/Hexagonal**: `api-domain` pure; `api-usecases` depends only on `api-domain`. No `@Transactional` (use the `TransactionRunner` port). **No Jackson, no `java.util.zip` in `api-usecases`** — Konsist (`ArchitectureKonsistTest`) enforces the module DAG and the `api-domain` import allowlist.
-- **`api-domain` import allowlist** (Konsist): own packages plus `java.time.Instant`/`Duration`, `java.util.UUID`, `java.io.InputStream`. **Adding any other import to the domain requires editing `ArchitectureKonsistTest` deliberately** — do not widen it casually.
-- **Language: English everywhere** — identifiers, prose, commit messages.
-- **Conventional commits** (`feat(...)`, `refactor(...)`, `test(...)`, `docs(...)`).
-- **No top-level functions** — helpers live in a class/companion/object; extension functions are the only exception.
-- **Test naming**: backticked `` `Given ..., Then ...` `` (no "when" in the name); body uses `// Given` / `// When` / `// Then`.
-- **Test bases**: integration → `IntegrationTest` (`api-application`, add `@QuarkusTest`); use-case → `BaseTest` (MockK; `checkUnnecessaryStub()` runs in `@AfterEach`, so every `every {}` must be exercised **by the test that declares it**); repository → `RepositoryTest`.
-- **Run the gate** with `./gradlew check koverVerify` (needs JDK 25 as the default JVM and libvips for the image tests).
+- **Strict TDD**: write the failing test first, watch it fail, then the minimal implementation. **A Kotlin `@Test` with an empty body compiles and PASSES** — every test below must be written with its body before running the "watch it fail" step, or that step is a lie.
+- **Clean/Hexagonal**: `api-usecases` depends only on `api-domain`. Konsist (`ArchitectureKonsistTest`) bans `io.ebean`, `jakarta.transaction`, `jakarta.ws.rs` and `org.mindrot` from `api-usecases`, and restricts `api-domain` imports to its own packages plus `java.time.Instant`/`Duration`, `java.util.UUID`, `java.io.InputStream`. **Verified: the new domain port needs no widening of that allowlist.**
+- **Assertions**: `kotlin.test` is NOT on any module's test classpath. Use `org.junit.jupiter.api.Assertions.*` (`assertEquals`, `assertNull`, `assertTrue`, `assertThrows`, `assertArrayEquals`). There is no `assertContentEquals`.
+- **Language: English everywhere.** **Conventional commits.** **No top-level functions.**
+- **Test naming**: `` `Given ..., Then ...` ``; bodies carry `// Given` / `// When` / `// Then`.
+- **Test bases**: integration → `IntegrationTest` (+ `@QuarkusTest`); use-case → `BaseTest` (MockK; `checkUnnecessaryStub()` in `@AfterEach`, so a stub must be exercised **by the test that declares it** — never put an `inTransaction` passthrough in `@BeforeEach` when some tests throw before the transaction); repository → `RepositoryTest`.
+- **Repository test helpers are per-class**: `createAndSaveUser()` is a private method duplicated in each repository test, and repositories take the `Database` (`UserDataExportRepository(database)`).
+- **Repository tests live in the package root** `fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite`, not under `repositories/` (only `SessionTokenRepositoryTest` does).
+- **Worker package** is `fr.geoffreyCoulaud.pinryReborn.api.worker` (no `.quarkus` suffix).
+- **`@Suppress("LongParameterList")`** on constructors above 6 parameters, following `TaskModel`.
+- **Run the gate** with `./gradlew check koverVerify` (JDK 25 as the default JVM, libvips installed).
+
+## This plan supersedes the spec on nothing
+
+Both were revised together after the adversarial review. Where an earlier draft said `api.exports.*`
+or `EXPORT_NOT_FOUND`, the current spec says `exports.*` (snake case) and `EXPORT_DOES_NOT_EXIST`.
 
 ## File Structure
 
 **New files**
 
-- `api-domain/.../domain/storage/StagedFile.kt` — moved from `domain.images` (Task 2).
-- `api-domain/.../domain/exports/ExportArchiveStore.kt` — port + `ArchiveSink` + `ArchiveFormat` + `ArchiveEntryDigest`.
-- `api-domain/.../domain/entities/UserDataExport.kt` — entity.
-- `api-domain/.../domain/enums/UserDataExportState.kt` — `PENDING`, `READY`, `FAILED`, `EXPIRED`, `DELETED`, `SUPERSEDED`.
-- `api-domain/.../domain/repositories/UserDataExportRepositoryInterface.kt`.
-- `api-persistence-sqlite/.../models/UserDataExportModel.kt`, `.../mappers/UserDataExportModelMapper.kt`, `.../repositories/UserDataExportRepository.kt`.
-- `api-persistence-sqlite/src/main/resources/dbmigration/1.10.sql` (+ `model/1.10.model.xml`) — generated, then hand-edited.
-- `api-storage-filesystem/.../FilesystemZipExportArchiveStore.kt`, `.../ZipArchiveSink.kt`, `.../CountingDigestOutputStream.kt`.
-- `api-usecases/.../usecases/exports/UserDataExportRequester.kt`, `UserDataExportBuilder.kt`, `UserDataExportGetter.kt`, `UserDataExportDownloader.kt`, `UserDataExportDeleter.kt`, `ReapExpiredUserDataExports.kt`, `ExportContent.kt` (the format's data classes).
-- `api-usecases/.../usecases/tasks/UserDataExportTask.kt`.
-- `api-usecases/.../usecases/exceptions/UserDataExportError.kt`.
-- `api-worker-quarkus/.../UserDataExportTaskHandler.kt`, `.../ExportRetentionLifecycle.kt`.
-- `api-application/.../ExportsConfig.kt`, `.../ExportProducers.kt`.
-- `api-presentation-quarkus/.../controllers/MeExportController.kt`, `.../dtos/output/UserDataExportOutputDto.kt`, `.../mappers/UserDataExportDtoMapper.kt`, `.../http/RangeHeader.kt`, `.../http/ContentDispositionFileName.kt`.
+- `api-domain/.../domain/storage/StagedFile.kt` (moved), `.../domain/exports/ExportArchiveStore.kt`, `.../domain/entities/UserDataExport.kt`, `.../domain/enums/UserDataExportState.kt`, `.../domain/repositories/UserDataExportRepositoryInterface.kt`
+- `api-persistence-sqlite/.../models/UserDataExportModel.kt`, `.../mappers/UserDataExportModelMapper.kt`, `.../repositories/UserDataExportRepository.kt`, `dbmigration/1.10.sql`, `dbmigration/1.11.sql` (hand-written index)
+- `api-storage-filesystem/.../CountingDigestOutputStream.kt`, `.../ZipArchiveSink.kt`, `.../FilesystemZipExportArchiveStore.kt`
+- `api-usecases/.../usecases/exports/` : `ExportContent.kt`, `ExportImageExtension.kt`, `ExportReadme.kt`, `UserDataExportRequester.kt`, `UserDataExportBuilder.kt`, `UserDataExportGetter.kt`, `UserDataExportDownloader.kt`, `UserDataExportDeleter.kt`, `ReapExpiredUserDataExports.kt`
+- `api-usecases/.../usecases/tasks/UserDataExportTask.kt`, `.../exceptions/UserDataExportError.kt`
+- `api-worker-quarkus/.../UserDataExportTaskHandler.kt`, `.../ExportRetentionLifecycle.kt`, `.../ExportsConfig.kt`
+- `api-application/.../wiring/ExportProducers.kt`
+- `api-presentation-quarkus/.../controllers/MeExportController.kt`, `.../dtos/output/UserDataExportOutputDto.kt`, `.../mappers/UserDataExportDtoMapper.kt`, `.../http/RangeHeader.kt`, `.../http/ContentDispositionFileName.kt`
 
 **Modified files**
 
-- `api-domain/.../entities/User.kt`, `Pin.kt`, `Board.kt`, `Tag.kt` — timestamps (Task 1).
-- `api-domain/.../images/ImageStore.kt`, `RenditionCache.kt` — `StagedFile` import (Task 2).
-- `api-persistence-sqlite/.../mappers/*ModelMapper.kt` — map timestamps.
-- `api-usecases/.../usecases/AccountDeletionCleaner.kt` — erase exports (Task 12).
-- `api-usecases/.../usecases/exceptions/ErrorCode.kt` — five new codes.
-- `api-presentation-quarkus/.../mappers/BaseErrorMapper.kt` — five new arms.
-- `api-worker-quarkus/.../TaskRuntimeProducers.kt` or the new lifecycle — schedule the purge.
-- `api-application/build.gradle.kts`, `api-storage-filesystem/build.gradle.kts` — Jackson in the adapter.
-- `docs/openapi.json` — regenerated (Task 14).
+- `api-persistence-sqlite/.../pagination/PinModelSortStrategy.kt` (Task 0a)
+- `api-domain/.../repositories/TaskQueueInterface.kt`, `api-persistence-sqlite/.../repositories/EbeanTaskQueue.kt` (Task 0b)
+- `api-domain/.../entities/{User,Pin,Board,Tag}.kt`, the four model mappers (Task 1)
+- `api-domain/.../images/{ImageStore,RenditionCache,ImageTransformer}.kt` + adapters (Task 2)
+- `api-domain/.../repositories/PinRepositoryInterface.kt` + `PinRepository` (Task 3: unfiltered memberships)
+- `api-usecases/.../exceptions/ErrorCode.kt`, `api-presentation-quarkus/.../mappers/BaseErrorMapper.kt` (Task 6, same commit)
+- `api-usecases/.../AccountDeletionCleaner.kt` (Task 12)
+- `gradle/libs.versions.toml`, `api-storage-filesystem/build.gradle.kts` (Task 5)
+- `api-application/src/main/resources/application.properties` (Task 10)
 
-## Task order rationale
+---
 
-Tasks 1 and 2 are refactors with no user-visible behaviour, required by everything downstream. Tasks 3 to 5 build the storage substrate bottom-up. Tasks 6 to 11 build the feature. Tasks 12 and 13 close the two holes that only end-to-end tests can prove (account-deletion residue, real archive content).
+### Task 0a: Give cursor pagination a tie-breaker (pre-existing bug)
+
+Latent today, fatal for an export: `PinModelSortStrategy` filters and orders on `whenCreated` alone,
+so if more than one page of pins shares a timestamp the cursor never advances. The existing API shows
+a stuck page; a drained cursor writes an unbounded archive.
+
+**Files:**
+- Modify: `api-persistence-sqlite/src/main/kotlin/.../pagination/PinModelSortStrategy.kt`
+- Test: `api-persistence-sqlite/src/test/kotlin/.../PinRepositoryTest.kt`
+
+- [ ] **Step 1: Write the failing test**
+
+```kotlin
+@Test
+fun `Given more pins than a page sharing one creation instant, Then paging reaches them all`() {
+    // Given
+    val user = createAndSaveUser()
+    val instant = Instant.parse("2026-07-22T10:00:00Z")
+    val ids = (1..5).map { createAndSavePinAt(user, instant).id }.toSet()
+
+    // When
+    val seen = mutableSetOf<UUID>()
+    var cursor: Cursor? = null
+    var pages = 0
+    do {
+        val page = pinRepository.findPinsForUser(user, cursor, 2, PinSortStrategy.CREATED_AT_DESC)
+        seen += page.items.map { it.id }
+        cursor = page.nextCursor
+        pages++
+    } while (cursor != null && pages < 10)
+
+    // Then
+    assertEquals(ids, seen)
+    assertTrue(pages < 10, "pagination did not terminate")
+}
+```
+
+`createAndSavePinAt` forces `whenCreated` with a raw SQL update after saving (`@WhenCreated` is
+Ebean-managed): `database.sqlUpdate("update pins set when_created = ? where id = ?")`.
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Run: `./gradlew :api-persistence-sqlite:test --tests "*PinRepositoryTest*"`
+Expected: FAIL, `seen` holds 2 ids and the loop hits its 10-page guard.
+
+- [ ] **Step 3: Add the id tie-breaker**
+
+In each strategy, make the keyset `(sortColumn, id)`: the predicate becomes
+`whenCreated < pivot OR (whenCreated = pivot AND id < pivotId)` for a descending sort (mirror for
+ascending, and for `DELETED_AT_DESC` on `softDeletedAt`), and the ordering gains `.id.desc()`.
+
+- [ ] **Step 4: Run the whole module, then commit**
+
+Run: `./gradlew :api-persistence-sqlite:test`
+Expected: PASS (existing pagination tests included).
+
+```bash
+git commit -m "fix(persistence): break cursor pagination ties by id so paging always advances"
+```
+
+---
+
+### Task 0b: Stop the queue from re-claiming a task forever (pre-existing bug)
+
+`tasks.lease_duration` is `PT1M` and the reaper runs every 30 s, so a handler running longer than a
+minute is re-claimed by another worker while still running. `claimNext` never compares `attempts` to
+`maxAttempts`, and a handler that never returns never reaches `settle`, so the task never dies.
+
+**Files:**
+- Modify: `api-domain/.../repositories/TaskQueueInterface.kt`, `api-persistence-sqlite/.../repositories/EbeanTaskQueue.kt`
+- Test: `api-persistence-sqlite/src/test/kotlin/.../EbeanTaskQueueTest.kt`
+
+**Interfaces:**
+- Produces: `TaskQueueInterface.renewLease(id: UUID, leaseId: String, until: Instant): Boolean`
+
+- [ ] **Step 1: Write the failing tests**
+
+```kotlin
+@Test
+fun `Given a task that exhausted its attempts, Then claiming marks it dead instead of running it`() {
+    // Given
+    val task = queue.enqueue(NewTask("k", "p", now, 0, maxAttempts = 1, null))
+    queue.claimNext(now, lease)          // attempts becomes 1
+    queue.reapExpired(now.plusSeconds(120))   // back to PENDING, still attempts = 1
+
+    // When
+    val claimed = queue.claimNext(now.plusSeconds(121), lease)
+
+    // Then
+    assertNull(claimed)
+    assertEquals(TaskState.DEAD, queue.findById(task.id)?.state)
+}
+
+@Test
+fun `Given a held lease, Then renewing it pushes the expiry back`() { ... }
+
+@Test
+fun `Given a stale lease id, Then renewing it fails and changes nothing`() { ... }
+```
+
+- [ ] **Step 2: Run and watch them fail**
+
+Run: `./gradlew :api-persistence-sqlite:test --tests "*EbeanTaskQueueTest*"`
+
+- [ ] **Step 3: Implement**
+
+In `claimNext`, before leasing: if `model.attempts >= model.maxAttempts`, mark it `DEAD` with
+`"attempts exhausted"` and return null (loop to the next candidate is unnecessary: the poller calls
+again). Add `renewLease` as a fenced update, mirroring `markSucceeded`'s `leaseGuard(id, leaseId)`.
+
+- [ ] **Step 4: Run the gate, then commit**
+
+```bash
+git commit -m "fix(persistence): never re-claim an exhausted task, and allow lease renewal"
+```
 
 ---
 
 ### Task 1: Promote creation timestamps into the domain
 
-The database already stores `when_created` / `when_modified` on every entity via `BaseModel`, but the domain entities do not carry them, so an export cannot record chronology.
-
-**Decision, apply it consistently:** the new fields are **nullable with a `null` default** (`val createdAt: Instant? = null`). `null` means "this instance was not read from the database" (a use case building a `Pin` before saving it). A non-null default is impossible without a clock, and a clock in the domain would be an I/O dependency; making them non-null would force every construction site — including every existing test — to invent a timestamp. Nullable-with-default keeps this task to a handful of files and every existing call site compiling untouched.
+Nullable with a `null` default: `null` means "not read from persistence". A non-null default would
+need a clock in the domain; making them non-null would force every existing construction site to
+invent a timestamp.
 
 **Files:**
-- Modify: `api-domain/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/domain/entities/User.kt`, `Pin.kt`, `Board.kt`, `Tag.kt`
-- Modify: `api-persistence-sqlite/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/persistence/sqlite/mappers/UserModelMapper.kt`, `PinModelMapper.kt`, `BoardModelMapper.kt`, `TagModelMapper.kt`
-- Test: `api-persistence-sqlite/src/test/kotlin/.../repositories/PinRepositoryTest.kt` (add a case), same for board/tag/user repository tests
+- Modify: `api-domain/.../entities/{User,Pin,Board,Tag}.kt`
+- Modify: `api-persistence-sqlite/.../mappers/{User,Pin,Board,Tag}ModelMapper.kt`
+- Test: `api-persistence-sqlite/src/test/kotlin/.../PinRepositoryTest.kt` (+ board, tag, user)
 
 **Interfaces:**
-- Produces: `User.createdAt: Instant?`, `Pin.createdAt: Instant?`, `Pin.updatedAt: Instant?`, `Board.createdAt: Instant?`, `Board.updatedAt: Instant?`, `Tag.createdAt: Instant?`
+- Produces: `User.createdAt`, `Pin.createdAt`/`updatedAt`, `Board.createdAt`/`updatedAt`, `Tag.createdAt`, all `Instant?`
 
-- [ ] **Step 1: Write the failing repository test**
-
-In `PinRepositoryTest`:
+- [ ] **Step 1: Write the failing test**
 
 ```kotlin
 @Test
-fun `Given a saved pin, Then reading it back exposes its creation timestamp`() {
+fun `Given a saved pin, Then reading it back exposes its timestamps`() {
     // Given
     val pin = createAndSavePin()
 
@@ -91,64 +204,31 @@ fun `Given a saved pin, Then reading it back exposes its creation timestamp`() {
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [ ] **Step 2: Run and watch it fail** (`unresolved reference: createdAt`)
 
-Run: `./gradlew :api-persistence-sqlite:test --tests "*PinRepositoryTest*"`
-Expected: FAIL, compilation error `unresolved reference: createdAt`.
+- [ ] **Step 3: Add the fields, map them in `toDomain` only**
 
-- [ ] **Step 3: Add the fields to the entities**
+`@WhenCreated`/`@WhenModified` are Ebean-managed; never write them in `toModel`.
 
-```kotlin
-data class Pin(
-    override val id: UUID,
-    val author: User,
-    val sourceContextUrl: String,
-    val sourceMediaUrl: String?,
-    val description: String,
-    val tags: List<Tag>,
-    val boards: List<Board>,
-    val softDeletedAt: Instant? = null,
-    val image: Image? = null,
-    /** Set when read from persistence; null on an instance that was never saved. */
-    val createdAt: Instant? = null,
-    val updatedAt: Instant? = null,
-) : Identifiable
-```
+**Pitfall:** `BaseModel.whenCreated` is `lateinit`. On a partial row (the soft-deleted-author case),
+reading it throws `UninitializedPropertyAccessException` instead of the previously known NPE. Same
+race, different symptom — record it in the handoff (Task 14). Do **not** add a defensive
+`isInitialized` check: it would be an uncoverable branch.
 
-Same shape for `Board` (`createdAt`, `updatedAt`), `Tag` (`createdAt`) and `User` (`createdAt`).
-
-- [ ] **Step 4: Map them in the model mappers**
-
-In `PinModelMapper.toDomain`, add `createdAt = model.whenCreated, updatedAt = model.whenModified`. Same in the board, tag and user mappers. **Do not** map them in `toModel`: `@WhenCreated` / `@WhenModified` are Ebean-managed and writing them by hand would fight the ORM.
-
-**Pitfall:** `BaseModel.whenCreated` is `lateinit var`. On a model instance that was never persisted, reading it throws `UninitializedPropertyAccessException`. Mappers only ever run on loaded models, but if a test builds a bare `PinModel` and maps it, this throws. Use `model.whenCreated` directly (loaded rows always have it) and do not add a defensive `isInitialized` check: it would be an uncoverable branch under the 100% gate.
-
-- [ ] **Step 5: Run the whole persistence module**
-
-Run: `./gradlew :api-persistence-sqlite:test`
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Run `./gradlew :api-persistence-sqlite:test`, then commit**
 
 ```bash
-git add api-domain api-persistence-sqlite
 git commit -m "feat(domain): carry creation timestamps on user, pin, board and tag"
 ```
 
 ---
 
-### Task 2: Move `StagedFile` to a neutral package
+### Task 2: Move `StagedFile` to `domain.storage`
 
-`StagedFile` is about staged bytes on disk, not about images, and the export store is about to share it.
+**Files:** create `api-domain/.../domain/storage/StagedFile.kt`; remove the declaration from
+`ImageStore.kt`; fix every reference.
 
-**Files:**
-- Move: `api-domain/.../domain/images/ImageStore.kt` (the `StagedFile` declaration at its top) → `api-domain/.../domain/storage/StagedFile.kt`
-- Modify: `api-domain/.../domain/images/ImageStore.kt`, `RenditionCache.kt`, `api-storage-filesystem/.../FilesystemImageStore.kt`, `FilesystemRenditionCache.kt`, `api-usecases/.../GetPinImageRendition.kt`, `SetPinImage.kt`, `api-domain/.../images/ImageTransformer.kt`, and every test importing it
-
-**Interfaces:**
-- Produces: `fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile(path: String, byteSize: Long, contentHash: String)`
-
-- [ ] **Step 1: Create the new file and delete the old declaration**
+- [ ] **Step 1: Create the file**
 
 ```kotlin
 package fr.geoffreyCoulaud.pinryReborn.api.domain.storage
@@ -157,44 +237,32 @@ package fr.geoffreyCoulaud.pinryReborn.api.domain.storage
 data class StagedFile(val path: String, val byteSize: Long, val contentHash: String)
 ```
 
-- [ ] **Step 2: Fix every import**
+- [ ] **Step 2: Fix every reference with one grep**
 
-Run: `grep -rln "domain.images.StagedFile\|images.StagedFile" --include=*.kt .` and rewrite each import to `...domain.storage.StagedFile`. Files in the same package as the old declaration had no import at all: `grep -rn "StagedFile" api-domain api-usecases` catches those.
+Run: `grep -rln "StagedFile" --include=*.kt .` — same-package users (`ImageStore`, `RenditionCache`,
+`ImageTransformer`) have no import at all and would be missed by an import-only grep;
+`api-storage-filesystem` does import it.
 
-- [ ] **Step 3: Compile and run the full gate**
-
-Run: `./gradlew check koverVerify`
-Expected: PASS, no behaviour change.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: `./gradlew check koverVerify`, then commit**
 
 ```bash
-git add -A
 git commit -m "refactor(domain): move StagedFile to domain.storage, shared by images and exports"
 ```
 
 ---
 
-### Task 3: Export entity, state and repository port
+### Task 3: Export entity, state, repository port, unfiltered memberships
 
 **Files:**
-- Create: `api-domain/.../domain/enums/UserDataExportState.kt`, `api-domain/.../domain/entities/UserDataExport.kt`, `api-domain/.../domain/repositories/UserDataExportRepositoryInterface.kt`
-
-**Interfaces:**
-- Produces: the entity, the enum, and the repository port consumed by Tasks 4, 6, 7, 8, 9, 12.
+- Create: `api-domain/.../enums/UserDataExportState.kt`, `.../entities/UserDataExport.kt`, `.../repositories/UserDataExportRepositoryInterface.kt`
+- Modify: `api-domain/.../repositories/PinRepositoryInterface.kt`, `api-persistence-sqlite/.../repositories/PinRepository.kt`
+- Test: `api-domain/src/test/kotlin/.../enums/UserDataExportStateTest.kt`, `api-persistence-sqlite/src/test/kotlin/.../PinRepositoryTest.kt`
 
 - [ ] **Step 1: Write the enum and entity**
 
 ```kotlin
-package fr.geoffreyCoulaud.pinryReborn.api.domain.enums
-
 enum class UserDataExportState {
-    PENDING,
-    READY,
-    FAILED,
-    EXPIRED,
-    DELETED,
-    SUPERSEDED,
+    PENDING, READY, FAILED, EXPIRED, DELETED, SUPERSEDED,
     ;
 
     /** True for the states where the archive bytes no longer exist. */
@@ -202,63 +270,15 @@ enum class UserDataExportState {
 }
 ```
 
-```kotlin
-package fr.geoffreyCoulaud.pinryReborn.api.domain.entities
+The entity is exactly the one in spec §5 (including `taskId`, `mediaType`, `fileExtension`).
 
-import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
-import java.time.Instant
-import java.util.UUID
-
-data class UserDataExport(
-    override val id: UUID,
-    val userId: UUID,
-    val state: UserDataExportState,
-    val formatVersion: Int,
-    val requestedAt: Instant,
-    val completedAt: Instant? = null,
-    val expiresAt: Instant? = null,
-    val storageKey: String? = null,
-    val byteSize: Long? = null,
-    val sha256: String? = null,
-    val mediaType: String? = null,
-    val fileExtension: String? = null,
-    val failureCode: String? = null,
-) : Identifiable
-```
-
-- [ ] **Step 2: Write the repository port**
-
-```kotlin
-package fr.geoffreyCoulaud.pinryReborn.api.domain.repositories
-
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
-import java.time.Instant
-import java.util.UUID
-
-interface UserDataExportRepositoryInterface {
-    fun save(export: UserDataExport): UserDataExport
-    fun findById(id: UUID): UserDataExport?
-    /** Newest first. */
-    fun findAllForUser(userId: UUID): List<UserDataExport>
-    fun findPendingForUser(userId: UUID): UserDataExport?
-    fun findReadyForUser(userId: UUID): UserDataExport?
-    fun findLastRequestedAtForUser(userId: UUID): Instant?
-    fun findExpiredReadyExports(now: Instant): List<UserDataExport>
-    fun deleteAllForUser(userId: UUID)
-    fun findStorageKeysForUser(userId: UUID): List<String>
-}
-```
-
-`isGone` is a domain rule with two branches, so it needs its own tiny test to stay inside the coverage gate.
-
-- [ ] **Step 3: Write the enum test**
-
-`api-domain/src/test/kotlin/.../enums/UserDataExportStateTest.kt`:
+- [ ] **Step 2: Write the enum test (both branches)**
 
 ```kotlin
 class UserDataExportStateTest {
     @Test
-    fun `Given a terminal destroyed state, Then it is gone`() {
+    fun `Given a destroyed state, Then it is gone`() {
+        // Given / When / Then
         assertTrue(UserDataExportState.EXPIRED.isGone)
         assertTrue(UserDataExportState.DELETED.isGone)
         assertTrue(UserDataExportState.SUPERSEDED.isGone)
@@ -273,103 +293,141 @@ class UserDataExportStateTest {
 }
 ```
 
-- [ ] **Step 4: Run and commit**
+Import `org.junit.jupiter.api.Assertions.assertTrue` / `assertFalse` (no `kotlin.test` here).
 
-Run: `./gradlew :api-domain:test`
-Expected: PASS.
+- [ ] **Step 3: Write the repository port**
+
+```kotlin
+interface UserDataExportRepositoryInterface {
+    fun save(export: UserDataExport): UserDataExport
+    fun findById(id: UUID): UserDataExport?
+    fun findAllForUser(userId: UUID, cursor: Cursor?, pageSize: Int): Page<UserDataExport>
+    fun findPendingForUser(userId: UUID): UserDataExport?
+    fun findReadyForUser(userId: UUID): UserDataExport?
+    /** The most recent requestedAt across ALL states, DELETED and FAILED included. */
+    fun findLastRequestedAtForUser(userId: UUID): Instant?
+    fun findExpiredReadyExports(now: Instant): List<UserDataExport>
+    fun findAllExportIdsForUser(userId: UUID): List<UUID>
+    fun deleteAllForUser(userId: UUID)
+}
+```
+
+The KDoc on `findLastRequestedAtForUser` is load-bearing: counting only live rows would make
+request-cancel-request a free loop.
+
+- [ ] **Step 4: Add the unfiltered membership read (failing test first)**
+
+```kotlin
+@Test
+fun `Given a pin in a recycled board, Then the export membership read still sees it`() {
+    // Given
+    val user = createAndSaveUser()
+    val board = createAndSaveBoard(user)
+    val pin = createAndSavePinInBoard(user, board)
+    boardRepository.softDeleteBoard(board)
+
+    // When
+    val boards = pinRepository.findBoardsForPinIncludingRecycled(pin.id)
+
+    // Then
+    assertEquals(listOf(board.id), boards.map { it.id })
+    assertTrue(pinRepository.findPinById(pin.id)!!.boards.isEmpty(), "the API view still filters")
+}
+```
+
+Implementation: the same query as `getBoardsForPin` **without** `.board.softDeletedAt.isNull`.
+`softDeleteBoard` keeps the join rows, so the data is there.
+
+- [ ] **Step 5: Run both modules, then commit**
 
 ```bash
-git add api-domain
-git commit -m "feat(domain): user data export entity, state and repository port"
+git commit -m "feat(domain): export entity, state, repository port and unfiltered board memberships"
 ```
 
 ---
 
-### Task 4: Persistence — model, mapper, repository, migration 1.10
+### Task 4: Persistence — model, mapper, repository, migrations
 
 **Files:**
 - Create: `api-persistence-sqlite/.../models/UserDataExportModel.kt`, `.../mappers/UserDataExportModelMapper.kt`, `.../repositories/UserDataExportRepository.kt`
-- Create: `api-persistence-sqlite/src/test/kotlin/.../repositories/UserDataExportRepositoryTest.kt`
-- Generate then edit: `api-persistence-sqlite/src/main/resources/dbmigration/1.10.sql`
-
-**Interfaces:**
-- Consumes: `UserDataExport`, `UserDataExportState`, `UserDataExportRepositoryInterface` (Task 3)
-- Produces: `UserDataExportRepository` implementing the port, discovered as an `@ApplicationScoped` bean like its siblings
+- Create: `api-persistence-sqlite/src/test/kotlin/.../UserDataExportRepositoryTest.kt`
+- Generate: `dbmigration/1.10.sql`; hand-write `dbmigration/1.11.sql`
 
 - [ ] **Step 1: Write the failing repository test**
 
 ```kotlin
 class UserDataExportRepositoryTest : RepositoryTest() {
-    private val repository = UserDataExportRepository()
+    private val repository = UserDataExportRepository(database)
+    private val userRepository = UserRepository(database)
+
+    private fun createAndSaveUser(): User =
+        userRepository.saveUser(User(id = UUID.randomUUID(), name = createRandomString()))
+
+    private fun pendingExport(userId: UUID, requestedAt: Instant = Instant.parse("2026-07-22T10:00:00Z")) =
+        UserDataExport(
+            id = UUID.randomUUID(), userId = userId, state = UserDataExportState.PENDING,
+            formatVersion = 1, requestedAt = requestedAt,
+        )
 
     @Test
     fun `Given a pending export, Then it is found for its user`() {
         // Given
         val user = createAndSaveUser()
         val export = repository.save(pendingExport(user.id))
-
         // When
         val found = repository.findPendingForUser(user.id)
-
         // Then
         assertEquals(export.id, found?.id)
     }
 
     @Test
-    fun `Given only a ready export, Then no pending export is found`() {
+    fun `Given only a ready export, Then no pending export is found`() { ... }
+
+    @Test
+    fun `Given a ready export past its expiry, Then it is listed as expired`() { ... }
+
+    @Test
+    fun `Given a ready export before its expiry, Then it is not listed as expired`() { ... }
+
+    @Test
+    fun `Given a deleted export as the only row, Then it still counts as the last request`() {
+        // Given
         val user = createAndSaveUser()
-        repository.save(pendingExport(user.id).copy(state = UserDataExportState.READY))
-        assertNull(repository.findPendingForUser(user.id))
+        val at = Instant.parse("2026-07-22T09:00:00Z")
+        repository.save(pendingExport(user.id, at).copy(state = UserDataExportState.DELETED))
+        // When / Then
+        assertEquals(at, repository.findLastRequestedAtForUser(user.id))
     }
 
     @Test
-    fun `Given a ready export past its expiry, Then it is listed as expired`() {
+    fun `Given a second pending export for one user, Then saving it violates the unique index`() {
+        // Given
         val user = createAndSaveUser()
-        val now = Instant.parse("2026-07-22T10:00:00Z")
-        repository.save(
-            pendingExport(user.id).copy(
-                state = UserDataExportState.READY,
-                expiresAt = now.minusSeconds(1),
-                storageKey = "exports/x.zip",
-            ),
-        )
-        assertEquals(1, repository.findExpiredReadyExports(now).size)
-    }
-
-    @Test
-    fun `Given a ready export before its expiry, Then it is not listed as expired`() {
-        val user = createAndSaveUser()
-        val now = Instant.parse("2026-07-22T10:00:00Z")
-        repository.save(
-            pendingExport(user.id).copy(
-                state = UserDataExportState.READY,
-                expiresAt = now.plusSeconds(1),
-                storageKey = "exports/x.zip",
-            ),
-        )
-        assertTrue(repository.findExpiredReadyExports(now).isEmpty())
+        repository.save(pendingExport(user.id))
+        // When / Then
+        assertThrows(ExportAlreadyInProgressError::class.java) { repository.save(pendingExport(user.id)) }
     }
 }
 ```
 
-Add a `pendingExport(userId)` private helper returning a `UserDataExport` with `state = PENDING`, `formatVersion = 1`, `requestedAt = Instant.now()`. Cover `findAllForUser` ordering, `findReadyForUser`, `findLastRequestedAtForUser` (present and absent), `deleteAllForUser` and `findStorageKeysForUser` (a stored key and a null one) in the same class.
+Also cover `findAllForUser` ordering + paging, `findReadyForUser`, `findAllExportIdsForUser`,
+`deleteAllForUser`.
 
 - [ ] **Step 2: Run and watch it fail**
 
-Run: `./gradlew :api-persistence-sqlite:test --tests "*UserDataExportRepositoryTest*"`
-Expected: FAIL, unresolved reference.
-
-- [ ] **Step 3: Write the Ebean model**
+- [ ] **Step 3: Write the model**
 
 ```kotlin
+@Suppress("LongParameterList")
 @Entity
 @Table(name = "user_data_exports")
 class UserDataExportModel(
     id: UUID,
     @ManyToOne var user: UserModel,
-    @Enumerated(EnumType.STRING) var state: UserDataExportState,
+    var state: String,
     var formatVersion: Int,
     var requestedAt: Instant,
+    var taskId: UUID? = null,
     var completedAt: Instant? = null,
     var expiresAt: Instant? = null,
     var storageKey: String? = null,
@@ -381,36 +439,47 @@ class UserDataExportModel(
 ) : BaseModel(id = id)
 ```
 
-**Pitfall:** the state is stored as `@Enumerated(EnumType.STRING)`, never ordinal. An ordinal column silently corrupts every row the day someone reorders the enum.
+**The state is a `String`, converted in the mapper** — the repo keeps domain enums out of Ebean
+entities (`TaskModel.state`, `ImageDownloadModel.status`). Never an ordinal.
 
-- [ ] **Step 4: Write the mapper and the repository**
+- [ ] **Step 4: Write the mapper and repository**
 
-Follow `TagModelMapper` / `TagRepository` for shape. The repository is `@ApplicationScoped`, uses generated query beans (`QUserDataExportModel`), and `findPendingForUser` filters `user.id.equalTo(userId).state.equalTo(PENDING)`.
+The mapper maps `userId = model.user.id` and **never** dereferences `model.user.name`: an export row
+outlives its owner's tombstone until the cleaner runs, and mapping a soft-deleted `UserModel` is the
+known NPE. Verified safe: `.user.id.equalTo(...)` resolves on the local FK column with no join, so
+the soft-delete predicate does not filter these queries.
 
-**Pitfall:** the repository must load the `UserModel` to build the model on save. Reuse the pattern in `TagRepository` (`database.find(UserModel::class.java, userId)`), and **never dereference `model.user.name`** in the mapper: an export row can outlive its owner's tombstone until the cleaner runs, and mapping a soft-deleted `UserModel` is exactly the NPE that broke account deletion. Map `userId = model.user.id` only.
+`save` translates the unique-index violation:
 
-- [ ] **Step 5: Generate the migration**
+```kotlin
+override fun save(export: UserDataExport): UserDataExport =
+    try {
+        sqlRepository.saveAndReturn(export.toModel(resolveUser(export.userId))).toDomain()
+    } catch (error: DuplicateKeyException) {
+        throw ExportAlreadyInProgressError()
+    }
+```
+
+Translating here is mandatory: Konsist bans `io.ebean` from `api-usecases`. **Confirm the exception
+type first** — Ebean may wrap SQLite's `SQLITE_CONSTRAINT_UNIQUE` as `DuplicateKeyException` or as a
+plain `PersistenceException`; the test in Step 1 tells you which, catch exactly that.
+
+- [ ] **Step 5: Generate `1.10`, hand-write `1.11`**
 
 Run: `./gradlew :api-persistence-sqlite:generateDbMigration`
-Expected: creates `1.10.sql` and `model/1.10.model.xml` with the new table.
 
-- [ ] **Step 6: Hand-edit the migration to add the partial unique index**
-
-Append to `1.10.sql`:
+Then create `dbmigration/1.11.sql` **by hand**, in its own file so a later regeneration cannot drop it:
 
 ```sql
 create unique index uq_user_data_exports_pending on user_data_exports (user_id) where state = 'PENDING';
 ```
 
-This is the concurrency guard: two simultaneous requests (a double-click) both pass the in-transaction check otherwise. SQLite supports partial indexes.
+Verified: SQLite supports partial indexes, and `ebean.migration.run=true` is set in both test
+property files, so the index is present in tests.
 
-- [ ] **Step 7: Run and commit**
-
-Run: `./gradlew :api-persistence-sqlite:test`
-Expected: PASS.
+- [ ] **Step 6: Run, then commit**
 
 ```bash
-git add api-persistence-sqlite
 git commit -m "feat(persistence): user_data_exports table, model, mapper and repository"
 ```
 
@@ -418,63 +487,39 @@ git commit -m "feat(persistence): user_data_exports table, model, mapper and rep
 
 ### Task 5: The ZIP archive store adapter
 
-The heart of the format. Everything ZIP-shaped and Jackson-shaped lives here and nowhere else.
-
 **Files:**
-- Create: `api-domain/.../domain/exports/ExportArchiveStore.kt`
+- Create: `api-domain/.../domain/exports/ExportArchiveStore.kt` (port, per spec §5)
 - Create: `api-storage-filesystem/.../CountingDigestOutputStream.kt`, `.../ZipArchiveSink.kt`, `.../FilesystemZipExportArchiveStore.kt`
 - Create: `api-storage-filesystem/src/test/kotlin/.../FilesystemZipExportArchiveStoreTest.kt`
-- Modify: `api-storage-filesystem/build.gradle.kts` (add `implementation(libs.jackson.databind)` and the Jackson JSR-310 module)
+- Modify: `gradle/libs.versions.toml`, `api-storage-filesystem/build.gradle.kts`
 
-**Interfaces:**
-- Produces:
-  - `ArchiveFormat(mediaType: String, fileExtension: String)`
-  - `ArchiveEntryDigest(path: String, byteSize: Long, sha256: String)`
-  - `ArchiveSink.putTextEntry(name: String, text: String): ArchiveEntryDigest`
-  - `ArchiveSink.putJsonEntry(name: String, value: Any): ArchiveEntryDigest`
-  - `ArchiveSink.putJsonLinesEntry(name: String, values: Sequence<Any>): ArchiveEntryDigest`
-  - `ArchiveSink.putBinaryEntry(name: String, bytes: InputStream): ArchiveEntryDigest`
-  - `ExportArchiveStore.format`, `.stage(block)`, `.promote(staged, key)`, `.openStream(key, skipBytes)`, `.delete(key)`, `.discard(staged)`, `.discardOrphanedStagedFiles(olderThan)`
+- [ ] **Step 1: Fix the dependencies first**
 
-- [ ] **Step 1: Write the port**
+`jackson-databind` is declared **without a version** (it comes from the Quarkus BOM) and
+`jackson-datatype-jsr310` is absent. In `libs.versions.toml`:
 
-```kotlin
-package fr.geoffreyCoulaud.pinryReborn.api.domain.exports
-
-import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
-import java.io.InputStream
-import java.time.Instant
-
-/** What the adapter actually produces, surfaced so no upper layer has to assume it. */
-data class ArchiveFormat(val mediaType: String, val fileExtension: String)
-
-data class ArchiveEntryDigest(val path: String, val byteSize: Long, val sha256: String)
-
-interface ArchiveSink {
-    fun putTextEntry(name: String, text: String): ArchiveEntryDigest
-    fun putJsonEntry(name: String, value: Any): ArchiveEntryDigest
-    fun putJsonLinesEntry(name: String, values: Sequence<Any>): ArchiveEntryDigest
-    fun putBinaryEntry(name: String, bytes: InputStream): ArchiveEntryDigest
-}
-
-interface ExportArchiveStore {
-    val format: ArchiveFormat
-    fun stage(block: (ArchiveSink) -> Unit): StagedFile
-    fun promote(staged: StagedFile, storageKey: String)
-    fun openStream(storageKey: String, skipBytes: Long = 0): InputStream
-    fun delete(storageKey: String)
-    fun discard(staged: StagedFile)
-    fun discardOrphanedStagedFiles(olderThan: Instant): Int
-}
+```toml
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310" }
 ```
 
-- [ ] **Step 2: Write the failing adapter tests**
+In `api-storage-filesystem/build.gradle.kts`:
+
+```kotlin
+implementation(platform(libs.quarkus.bom))
+implementation(libs.jackson.databind)
+implementation(libs.jackson.datatype.jsr310)
+```
+
+Run `./gradlew :api-storage-filesystem:dependencies --configuration compileClasspath` and confirm
+both resolve with a version before writing code.
+
+- [ ] **Step 2: Write the port** (copy spec §5 verbatim, including `hasFreeSpace`)
+
+- [ ] **Step 3: Write the failing adapter tests**
 
 ```kotlin
 class FilesystemZipExportArchiveStoreTest {
-    @TempDir
-    lateinit var tempDir: Path
-
+    @TempDir lateinit var tempDir: Path
     private val store by lazy { FilesystemZipExportArchiveStore(tempDir.toString()) }
 
     @Test
@@ -486,71 +531,61 @@ class FilesystemZipExportArchiveStoreTest {
             sink.putJsonLinesEntry("pins.jsonl", sequenceOf(mapOf("id" to "a"), mapOf("id" to "b")))
             sink.putBinaryEntry("images/x.bin", ByteArrayInputStream(byteArrayOf(1, 2, 3)))
         }
-
         // When
         store.promote(staged, "exports/e1.zip")
-
         // Then
         ZipFile(tempDir.resolve("exports/e1.zip").toFile()).use { zip ->
             assertEquals("hello", zip.getInputStream(zip.getEntry("README.md")).readBytes().decodeToString())
             assertEquals(2, zip.getInputStream(zip.getEntry("pins.jsonl")).readBytes().decodeToString().trim().lines().size)
-            assertContentEquals(byteArrayOf(1, 2, 3), zip.getInputStream(zip.getEntry("images/x.bin")).readBytes())
+            assertArrayEquals(byteArrayOf(1, 2, 3), zip.getInputStream(zip.getEntry("images/x.bin")).readBytes())
         }
     }
 
     @Test
-    fun `Given a staged archive, Then its size and digest match the file on disk`() {
-        val staged = store.stage { it.putTextEntry("a.txt", "content") }
-        val bytes = Path.of(staged.path).toFile().readBytes()
-        assertEquals(bytes.size.toLong(), staged.byteSize)
-        assertEquals(sha256Hex(bytes), staged.contentHash)
-    }
+    fun `Given a staged archive, Then its size and digest match the file on disk`() { ... }
 
     @Test
-    fun `Given an entry, Then its digest describes the uncompressed content`() {
-        lateinit var digest: ArchiveEntryDigest
-        store.stage { digest = it.putTextEntry("a.txt", "content") }
-        assertEquals("content".length.toLong(), digest.byteSize)
-        assertEquals(sha256Hex("content".toByteArray()), digest.sha256)
-    }
+    fun `Given an entry, Then its digest describes the uncompressed content`() { ... }
 
     @Test
     fun `Given a failing writer block, Then no temp file is left behind`() {
-        assertThrows<IllegalStateException> { store.stage { error("boom") } }
+        assertThrows(IllegalStateException::class.java) { store.stage { error("boom") } }
         assertTrue(Files.list(tempDir.resolve("tmp")).use { it.findAny().isEmpty })
     }
 
     @Test
-    fun `Given a skip offset, Then the stream starts at that byte`() {
-        val staged = store.stage { it.putTextEntry("a.txt", "content") }
-        store.promote(staged, "exports/e2.zip")
-        val full = store.openStream("exports/e2.zip").use { it.readBytes() }
-        val skipped = store.openStream("exports/e2.zip", 10).use { it.readBytes() }
-        assertContentEquals(full.copyOfRange(10, full.size), skipped)
-    }
+    fun `Given a skip offset, Then the stream starts at that byte`() { ... }
 
     @Test
     fun `Given more entries than the classic ZIP limit, Then the archive is still readable`() {
-        val staged = store.stage { sink ->
-            repeat(65_600) { sink.putTextEntry("e/$it.txt", "x") }
-        }
+        val staged = store.stage { sink -> repeat(65_600) { sink.putTextEntry("e/$it.txt", "x") } }
         store.promote(staged, "exports/big.zip")
-        ZipFile(tempDir.resolve("exports/big.zip").toFile()).use { zip ->
-            assertEquals(65_600, zip.size())
-        }
+        ZipFile(tempDir.resolve("exports/big.zip").toFile()).use { assertEquals(65_600, it.size()) }
     }
 
     @Test
-    fun `Given an old staged temp file, Then it is discarded as orphaned`() { /* touch a file, set its mtime in the past, assert 1 removed and the recent one kept */ }
+    fun `Given an old export temp file, Then it is discarded as orphaned`() {
+        // Given
+        val tmp = Files.createDirectories(tempDir.resolve("tmp"))
+        val old = Files.createFile(tmp.resolve("export-old.tmp"))
+        val recent = Files.createFile(tmp.resolve("export-recent.tmp"))
+        val foreign = Files.createFile(tmp.resolve("stage-image.tmp"))
+        Files.setLastModifiedTime(old, FileTime.from(Instant.parse("2026-07-01T00:00:00Z")))
+        // When
+        val removed = store.discardOrphanedStagedFiles(Instant.parse("2026-07-20T00:00:00Z"))
+        // Then
+        assertEquals(1, removed)
+        assertTrue(Files.exists(recent))
+        assertTrue(Files.exists(foreign), "an image store temp must never be swept by the export store")
+    }
 }
 ```
 
-- [ ] **Step 3: Run and watch it fail**
+Note: the ZIP64 case runs in about 150 ms, not seconds (measured).
 
-Run: `./gradlew :api-storage-filesystem:test`
-Expected: FAIL, unresolved reference.
+- [ ] **Step 4: Run and watch them fail**
 
-- [ ] **Step 4: Write `CountingDigestOutputStream`**
+- [ ] **Step 5: Write `CountingDigestOutputStream`**
 
 ```kotlin
 package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
@@ -558,71 +593,58 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 import java.io.FilterOutputStream
 import java.io.OutputStream
 import java.security.MessageDigest
+import java.util.HexFormat
 
-/**
- * Counts bytes and digests them on the way through, without closing the delegate: a ZIP entry
- * stream must outlive the per-entry wrapper.
- */
+/** Counts and digests bytes on the way through, WITHOUT closing the delegate. */
 internal class CountingDigestOutputStream(delegate: OutputStream) : FilterOutputStream(delegate) {
     private val digest = MessageDigest.getInstance("SHA-256")
     var count: Long = 0
         private set
 
     override fun write(b: Int) {
-        out.write(b)
-        digest.update(b.toByte())
-        count++
+        out.write(b); digest.update(b.toByte()); count++
     }
 
     override fun write(b: ByteArray, off: Int, len: Int) {
-        out.write(b, off, len)
-        digest.update(b, off, len)
-        count += len
+        out.write(b, off, len); digest.update(b, off, len); count += len
     }
 
-    /** Does NOT close the delegate. */
+    /** Flushes only: a ZIP entry stream must outlive this wrapper. */
     override fun close() = flush()
 
-    fun digestHex(): String = HexFormat.of().formatHex(digest.digest())
+    fun digestHex(): String = HEX.formatHex(digest.digest())
+
+    private companion object { private val HEX = HexFormat.of() }
 }
 ```
 
-**Pitfall:** `FilterOutputStream.write(ByteArray, Int, Int)` defaults to a per-byte loop through `write(Int)`. Overriding it is a performance requirement here (gigabytes of image bytes), not a nicety.
+`FilterOutputStream.write(ByteArray, Int, Int)` defaults to a per-byte loop; overriding it is a
+performance requirement for gigabytes of image bytes.
 
-- [ ] **Step 5: Write `ZipArchiveSink`**
+- [ ] **Step 6: Write `ZipArchiveSink`**
 
 ```kotlin
-internal class ZipArchiveSink(
-    private val zip: ZipOutputStream,
-    private val mapper: ObjectMapper,
-) : ArchiveSink {
+internal class ZipArchiveSink(private val zip: ZipOutputStream, private val mapper: ObjectMapper) : ArchiveSink {
 
     override fun putTextEntry(name: String, text: String): ArchiveEntryDigest =
-        deflatedEntry(name) { out -> out.write(text.toByteArray()) }
+        entry(name) { out -> out.write(text.toByteArray()) }
 
     override fun putJsonEntry(name: String, value: Any): ArchiveEntryDigest =
-        deflatedEntry(name) { out -> out.write(mapper.writeValueAsBytes(value)) }
+        entry(name) { out -> out.write(mapper.writeValueAsBytes(value)) }
 
     override fun putJsonLinesEntry(name: String, values: Sequence<Any>): ArchiveEntryDigest =
-        deflatedEntry(name) { out ->
-            for (value in values) {
-                out.write(mapper.writeValueAsBytes(value))
-                out.write('\n'.code)
-            }
+        entry(name) { out ->
+            for (value in values) { out.write(mapper.writeValueAsBytes(value)); out.write('\n'.code) }
         }
 
     override fun putBinaryEntry(name: String, bytes: InputStream): ArchiveEntryDigest {
-        // Already-compressed payloads: level 0 skips deflate work while keeping the streaming
-        // data descriptor, so neither CRC nor size is needed up front (unlike a STORED entry,
-        // which would force reading every image twice).
         zip.setLevel(Deflater.NO_COMPRESSION)
-        val digest = entry(name) { out -> bytes.use { it.copyTo(out) } }
-        zip.setLevel(Deflater.DEFAULT_COMPRESSION)
-        return digest
+        try {
+            return entry(name) { out -> bytes.use { it.copyTo(out) } }
+        } finally {
+            zip.setLevel(Deflater.DEFAULT_COMPRESSION)
+        }
     }
-
-    private fun deflatedEntry(name: String, write: (OutputStream) -> Unit): ArchiveEntryDigest =
-        entry(name, write)
 
     private fun entry(name: String, write: (OutputStream) -> Unit): ArchiveEntryDigest {
         zip.putNextEntry(ZipEntry(name))
@@ -635,13 +657,11 @@ internal class ZipArchiveSink(
 }
 ```
 
-**Pitfall, the one that silently corrupts archives:** `ObjectMapper.writeValue(OutputStream, value)` closes the target stream by default (`AUTO_CLOSE_TARGET`), which would close the whole `ZipOutputStream` after the first JSON entry. `writeValueAsBytes` sidesteps it entirely; keep it that way, and if a future change needs streaming JSON, disable `JsonGenerator.Feature.AUTO_CLOSE_TARGET` explicitly.
+**Pitfall:** `mapper.writeValue(OutputStream, …)` closes its target (`AUTO_CLOSE_TARGET`), which would
+close the whole `ZipOutputStream` after the first JSON entry. `writeValueAsBytes` avoids it entirely;
+keep it. **Pitfall:** `setLevel` applies to entries opened after the call, hence the `finally`.
 
-**Pitfall:** `setLevel` applies to entries opened *after* the call, so it must be set before `putNextEntry` and restored after `closeEntry`.
-
-- [ ] **Step 6: Write `FilesystemZipExportArchiveStore`**
-
-Mirror `FilesystemImageStore`: plain class taking `dataDir: String` (**not** `@ApplicationScoped`; ARC cannot satisfy a `String` constructor parameter, and a class must not be both discovered and produced), reuse `DataDirPaths` for containment and atomic move, stage into `<dataDir>/tmp/`.
+- [ ] **Step 7: Write `FilesystemZipExportArchiveStore`**
 
 ```kotlin
 class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchiveStore {
@@ -652,13 +672,28 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
         .registerModule(JavaTimeModule())
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
+    private val paths = DataDirPaths(dataDir)
+    private val tmpDir: Path get() = Path.of(dataDir).resolve("tmp")
+
+    override fun hasFreeSpace(requiredBytes: Long): Boolean {
+        Files.createDirectories(tmpDir)
+        return Files.getFileStore(tmpDir).usableSpace >= requiredBytes
+    }
+
     @Suppress("TooGenericExceptionCaught")
     override fun stage(block: (ArchiveSink) -> Unit): StagedFile {
         Files.createDirectories(tmpDir)
-        val tempPath = Files.createTempFile(tmpDir, "export-", ".tmp")
+        val tempPath = Files.createTempFile(tmpDir, TEMP_PREFIX, ".tmp")
         try {
-            val counting = CountingDigestOutputStream(BufferedOutputStream(Files.newOutputStream(tempPath)))
-            ZipOutputStream(counting).use { zip -> block(ZipArchiveSink(zip, mapper)) }
+            val fileOut = FileOutputStream(tempPath.toFile())
+            val counting = CountingDigestOutputStream(BufferedOutputStream(fileOut))
+            try {
+                ZipOutputStream(counting).use { zip -> block(ZipArchiveSink(zip, mapper)) }
+                fileOut.flush()
+                fileOut.channel.force(true)
+            } finally {
+                fileOut.close()
+            }
             return StagedFile(tempPath.toString(), counting.count, counting.digestHex())
         } catch (error: Throwable) {
             Files.deleteIfExists(tempPath)
@@ -671,78 +706,114 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
         channel.position(skipBytes)
         return Channels.newInputStream(channel)
     }
-    // promote / delete / discard: identical to FilesystemImageStore
+
+    override fun discardOrphanedStagedFiles(olderThan: Instant): Int {
+        if (!Files.isDirectory(tmpDir)) return 0
+        return Files.list(tmpDir).use { stream ->
+            stream.filter { it.fileName.toString().startsWith(TEMP_PREFIX) }
+                .filter { Files.getLastModifiedTime(it).toInstant().isBefore(olderThan) }
+                .toList()
+        }.count { Files.deleteIfExists(it) }
+    }
+
+    // promote / delete / discard: identical to FilesystemImageStore (atomic move via DataDirPaths,
+    // deleteIfExists on the resolved key, deleteIfExists on the staged path).
+
+    private companion object { const val TEMP_PREFIX = "export-" }
 }
 ```
 
-**Pitfall:** seek with a positioned `SeekableByteChannel`, never `InputStream.skip`, which is allowed to skip fewer bytes than asked and would silently serve the wrong range. **Pitfall:** `CountingDigestOutputStream.close()` deliberately does not close its delegate, so here the delegate must be closed explicitly after the `use` block, or the counting stream must wrap the file stream *inside* something that does. Close the underlying file stream in a `finally`, and assert the size on disk equals `staged.byteSize` in the test (Step 2 already does).
+Three corrections over the naive version, each with a reason: the file stream is closed in a
+`finally` (the counting wrapper deliberately does not close its delegate, so nothing else would);
+`force(true)` fsyncs before returning, as `FilesystemImageStore` already does "so a promote never
+observes a partially-flushed file"; and the orphan sweep filters on `export-`, so it can never delete
+an image store's `stage-*.tmp` even if both stores share a directory.
 
-- [ ] **Step 7: Run the tests**
-
-Run: `./gradlew :api-storage-filesystem:test`
-Expected: PASS. The ZIP64 case takes a few seconds; that is expected.
-
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Run `./gradlew :api-storage-filesystem:test`, then commit**
 
 ```bash
-git add api-domain api-storage-filesystem
 git commit -m "feat(storage): ZIP-backed export archive store with per-entry digests"
 ```
 
 ---
 
-### Task 6: `UserDataExportRequester` + error codes
+### Task 6: Errors, error mapper arms, and the requester
+
+Error codes and mapper arms **must land together**: `BaseErrorMapper.statusFor` is an exhaustive
+`when` with no `else`, deliberately, so adding an `ErrorCode` without its arm breaks the compilation
+of `api-presentation-quarkus` and everything downstream.
 
 **Files:**
-- Create: `api-usecases/.../usecases/exports/UserDataExportRequester.kt`, `api-usecases/.../usecases/exceptions/UserDataExportError.kt`, `api-usecases/.../usecases/tasks/UserDataExportTask.kt`
-- Modify: `api-usecases/.../usecases/exceptions/ErrorCode.kt`
-- Create: `api-usecases/src/test/kotlin/.../exports/UserDataExportRequesterTest.kt`
+- Create: `api-usecases/.../exceptions/UserDataExportError.kt`, `.../tasks/UserDataExportTask.kt`, `.../exports/UserDataExportRequester.kt`
+- Modify: `api-usecases/.../exceptions/ErrorCode.kt`, `api-presentation-quarkus/.../mappers/BaseErrorMapper.kt`
+- Test: `api-usecases/src/test/kotlin/.../exports/UserDataExportRequesterTest.kt`, `api-presentation-quarkus/src/test/kotlin/.../BaseErrorMapperTest.kt`
 
-**Interfaces:**
-- Consumes: `UserDataExportRepositoryInterface`, `ExportArchiveStore`, `EnqueueTask`, `Clock`, `TransactionRunner`
-- Produces: `UserDataExportRequester.request(user: User): UserDataExport`, `UserDataExportTask.KIND = "account.export"`, `MAX_ATTEMPTS = 3`, and the five new `ErrorCode` entries
-
-- [ ] **Step 1: Add the error codes and errors**
+- [ ] **Step 1: Add the six codes, the errors, and the six mapper arms in one edit**
 
 ```kotlin
-// ErrorCode.kt, appended to the enum
+// ErrorCode.kt
 EXPORT_ALREADY_IN_PROGRESS,
 EXPORT_TOO_SOON,
 EXPORT_DOES_NOT_EXIST,
+EXPORT_INSUFFICIENT_PERMISSIONS,
 EXPORT_NOT_READY,
 EXPORT_GONE,
 ```
 
 ```kotlin
-package fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions
-
 open class UserDataExportError(message: String, code: ErrorCode) : BaseError(message, code)
 
 class ExportAlreadyInProgressError :
     UserDataExportError("An export is already in progress", ErrorCode.EXPORT_ALREADY_IN_PROGRESS)
-
 class ExportTooSoonError(val retryAfterSeconds: Long) :
     UserDataExportError("Another export was requested too recently", ErrorCode.EXPORT_TOO_SOON)
-
 class ExportDoesNotExistError : UserDataExportError("Export does not exist", ErrorCode.EXPORT_DOES_NOT_EXIST)
+class ExportPermissionError :
+    UserDataExportError("Export belongs to another user", ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS)
 class ExportNotReadyError : UserDataExportError("Export is not ready", ErrorCode.EXPORT_NOT_READY)
 class ExportGoneError : UserDataExportError("Export is no longer available", ErrorCode.EXPORT_GONE)
 ```
 
-- [ ] **Step 2: Write the failing use-case tests**
+```kotlin
+// BaseErrorMapper.statusFor
+ErrorCode.EXPORT_ALREADY_IN_PROGRESS -> Response.Status.CONFLICT.statusCode
+ErrorCode.EXPORT_TOO_SOON -> Response.Status.TOO_MANY_REQUESTS.statusCode
+ErrorCode.EXPORT_DOES_NOT_EXIST -> Response.Status.NOT_FOUND.statusCode
+ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
+ErrorCode.EXPORT_NOT_READY -> Response.Status.CONFLICT.statusCode
+ErrorCode.EXPORT_GONE -> Response.Status.GONE.statusCode
+```
+
+Verified by `javap` on the resolved jar: `TOO_MANY_REQUESTS` and `GONE` exist in jakarta.ws.rs-api
+4.0.0, so no raw-status-code constant and no title fallback are needed. Add one `BaseErrorMapperTest`
+case per arm (each arm is a branch under the gate).
+
+- [ ] **Step 2: Write the failing requester tests**
 
 ```kotlin
 class UserDataExportRequesterTest : BaseTest() {
     private val repository = mockk<UserDataExportRepositoryInterface>()
     private val archiveStore = mockk<ExportArchiveStore>()
     private val enqueueTask = mockk<EnqueueTask>()
+    private val reauthenticator = mockk<Reauthenticator>()
     private val clock = mockk<Clock>()
     private val transactionRunner = mockk<TransactionRunner>()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
+    private val user = User(id = UUID.randomUUID(), name = "alice")
     private val requester = UserDataExportRequester(
-        repository, archiveStore, enqueueTask, clock, transactionRunner,
+        repository, archiveStore, enqueueTask, reauthenticator, clock, transactionRunner,
         minimumInterval = Duration.ofHours(1),
     )
+
+    @Test
+    fun `Given a wrong step-up factor, Then nothing is written and no task is enqueued`() {
+        // Given
+        every { reauthenticator.reauthenticate(user, "bad") } throws ReauthenticationFailedError()
+        // When / Then
+        assertThrows(ReauthenticationFailedError::class.java) { requester.request(user, "bad") }
+        verify(exactly = 0) { repository.save(any()) }
+        verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
+    }
 
     @Test
     fun `Given no previous export, Then a pending export is created and a task enqueued`() { ... }
@@ -754,252 +825,199 @@ class UserDataExportRequesterTest : BaseTest() {
     fun `Given a request within the minimum interval, Then it throws ExportTooSoonError`() { ... }
 
     @Test
-    fun `Given a ready export, Then it is superseded and its bytes deleted`() { ... }
+    fun `Given a previous export older than the minimum interval, Then a new export is created`() { ... }
+
+    @Test
+    fun `Given a ready export, Then it is superseded and its bytes deleted after the commit`() { ... }
 
     @Test
     fun `Given a ready export without a storage key, Then no delete is attempted`() { ... }
 
     @Test
-    fun `Given the transaction never runs, Then nothing is written`() {
-        // Given: inTransaction stubbed as a no-op that never invokes the block
-        every { transactionRunner.inTransaction<UserDataExport>(any()) } returns pendingExport()
-        // When
-        requester.request(user)
-        // Then
-        verify(exactly = 0) { repository.save(any()) }
-        verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
-    }
+    fun `Given the transaction never runs, Then nothing is written`() { ... }
 }
 ```
 
-**Pitfall (`checkUnnecessaryStub` is global):** the early-throwing tests never reach the transaction, so the `inTransaction` passthrough stub must live **inside** each test that reaches it, never in a `@BeforeEach`. This bit `PasswordChanger` and `AccountDeleter` before.
+The third and fifth cases are the two sides of the `last != null && last.isAfter(...)` short-circuit;
+without the fifth, `koverVerify` fails on this package.
 
-- [ ] **Step 3: Run and watch it fail**
+**Pitfall:** put the `inTransaction` passthrough stub **inside** each test that reaches the
+transaction. The early-throwing tests never call it, and `checkUnnecessaryStub()` would fail them.
 
-Run: `./gradlew :api-usecases:test --tests "*UserDataExportRequesterTest*"`
-Expected: FAIL.
+- [ ] **Step 3: Run and watch them fail**
 
 - [ ] **Step 4: Implement**
 
 ```kotlin
+@Suppress("LongParameterList")
 class UserDataExportRequester(
     private val repository: UserDataExportRepositoryInterface,
     private val archiveStore: ExportArchiveStore,
     private val enqueueTask: EnqueueTask,
+    private val reauthenticator: Reauthenticator,
     private val clock: Clock,
     private val transactionRunner: TransactionRunner,
     private val minimumInterval: Duration,
 ) {
-    fun request(user: User): UserDataExport = transactionRunner.inTransaction {
+    fun request(user: User, factor: String): UserDataExport {
+        reauthenticator.reauthenticate(user, factor)
+        val (export, supersededKey) = transactionRunner.inTransaction { createPending(user) }
+        // Outside the transaction on purpose: deleting inside means a later rollback leaves a READY
+        // row pointing at bytes that no longer exist, which serves a 500 instead of a clean error.
+        supersededKey?.let { archiveStore.delete(it) }
+        return export
+    }
+
+    private fun createPending(user: User): Pair<UserDataExport, String?> {
         val now = clock.now()
         if (repository.findPendingForUser(user.id) != null) throw ExportAlreadyInProgressError()
         val last = repository.findLastRequestedAtForUser(user.id)
-        if (last != null && last.isAfter(now.minus(minimumInterval))) {
-            throw ExportTooSoonError(Duration.between(now.minus(minimumInterval), last).seconds)
+        val earliest = now.minus(minimumInterval)
+        if (last != null && last.isAfter(earliest)) {
+            throw ExportTooSoonError(Duration.between(earliest, last).seconds.coerceAtLeast(1))
         }
-        repository.findReadyForUser(user.id)?.let { ready ->
-            ready.storageKey?.let { archiveStore.delete(it) }
-            repository.save(ready.copy(state = UserDataExportState.SUPERSEDED, storageKey = null))
-        }
+        val ready = repository.findReadyForUser(user.id)
+        ready?.let { repository.save(it.copy(state = UserDataExportState.SUPERSEDED, storageKey = null)) }
         val export = repository.save(
             UserDataExport(
-                id = UUID.randomUUID(),
-                userId = user.id,
-                state = UserDataExportState.PENDING,
-                formatVersion = EXPORT_FORMAT_VERSION,
-                requestedAt = now,
+                id = UUID.randomUUID(), userId = user.id, state = UserDataExportState.PENDING,
+                formatVersion = EXPORT_FORMAT_VERSION, requestedAt = now,
             ),
         )
-        enqueueTask.enqueue(
+        val task = enqueueTask.enqueue(
             kind = UserDataExportTask.KIND,
             payload = export.id.toString(),
             maxAttempts = UserDataExportTask.MAX_ATTEMPTS,
         )
-        export
+        return repository.save(export.copy(taskId = task.id)) to ready?.storageKey
     }
 
-    private companion object {
-        const val EXPORT_FORMAT_VERSION = 1
-    }
+    private companion object { const val EXPORT_FORMAT_VERSION = 1 }
 }
 ```
 
-**Note:** the bytes are deleted inside the transaction here, which is the one place this plan accepts a non-transactional side effect inside a transaction: the alternative (deferring to after commit) leaves the superseded archive on disk if the process dies, and the purge sweep would not catch it because its row is no longer `READY`. A failed delete throws and rolls the request back, which is the safe direction.
+`coerceAtLeast(1)` keeps `Retry-After: 0` out of the response. The task id is captured, since
+`CancelTask.cancel` takes a task id and there is no dedup-key alternative.
 
-- [ ] **Step 5: Run, then commit**
-
-Run: `./gradlew :api-usecases:test --tests "*UserDataExportRequesterTest*"`
-Expected: PASS.
+- [ ] **Step 5: Run `:api-usecases:test` and `:api-presentation-quarkus:test`, then commit**
 
 ```bash
-git add api-usecases
-git commit -m "feat(usecases): request a user data export"
+git commit -m "feat(usecases): request a user data export behind step-up re-authentication"
 ```
 
 ---
 
-### Task 7: `UserDataExportBuilder` — the archive content
+### Task 7a: The format's content types
 
-**Files:**
-- Create: `api-usecases/.../usecases/exports/ExportContent.kt` (the format's data classes), `.../exports/UserDataExportBuilder.kt`
-- Create: `api-usecases/src/test/kotlin/.../exports/UserDataExportBuilderTest.kt`
+**Files:** `api-usecases/.../exports/ExportContent.kt`, `ExportImageExtension.kt`, `ExportReadme.kt` + tests
 
-**Interfaces:**
-- Consumes: everything from Tasks 3 to 6, plus `PinRepositoryInterface.findPinsForUser` / `findSoftDeletedPinsForUser`, `BoardRepositoryInterface.findAllBoardsForUser`, `TagRepositoryInterface.findAllTagsForUser`, `ImageStore.openStream`
-- Produces: `UserDataExportBuilder.build(exportId: UUID, isLastAttempt: Boolean)`
+- [ ] **Step 1: Write the data classes** (exactly the shapes in spec §4)
 
-**Format writing order (this differs from a naive reading of spec §8 and is not negotiable):** a ZIP holds **one open entry at a time**, so image bytes cannot be written while `pins.jsonl` is open. The builder therefore walks the pins **twice**: pass one writes `pins.jsonl`, pass two writes the image entries. Both passes are paginated, so memory stays constant; the cost is a second read of the pin pages. Collecting the image keys in memory during pass one was rejected: it is unbounded in the number of pins, which is the thing this design refuses to be.
+`ExportedUser`, `ExportedRef`, `ExportedImage`, `ExportedPin`, `ExportedBoard`, `ExportedTag`,
+`ExportManifest`, `ExportGenerator`, `ExportExclusion`. Field names are the published contract.
 
-- [ ] **Step 1: Write the content data classes**
+- [ ] **Step 2: Write `ExportImageExtension` test-first (six branches)**
 
 ```kotlin
-package fr.geoffreyCoulaud.pinryReborn.api.usecases.exports
-
-/** The archive's version-1 wire format. Field names are the contract; changing one is a format break. */
-data class ExportedUser(val id: String, val name: String, val createdAt: Instant?)
-
-data class ExportedRef(val id: String, val name: String)
-
-data class ExportedImage(
-    val id: String,
-    val path: String,
-    val mimeType: String,
-    val width: Int,
-    val height: Int,
-    val animated: Boolean,
-    val byteSize: Long,
-    val sha256: String,
-    val createdAt: Instant,
-)
-
-data class ExportedPin(
-    val id: String,
-    val description: String,
-    val sourceContextUrl: String,
-    val sourceMediaUrl: String?,
-    val createdAt: Instant?,
-    val updatedAt: Instant?,
-    val deletedAt: Instant?,
-    val tags: List<ExportedRef>,
-    val boards: List<ExportedRef>,
-    val image: ExportedImage?,
-)
-
-data class ExportedBoard(
-    val id: String,
-    val name: String,
-    val description: String,
-    val createdAt: Instant?,
-    val updatedAt: Instant?,
-    val deletedAt: Instant?,
-)
-
-data class ExportedTag(val id: String, val name: String, val createdAt: Instant?)
-
-data class ExportManifest(
-    val formatVersion: Int,
-    val generator: ExportGenerator,
-    val exportId: String,
-    val createdAt: Instant,
-    val expiresAt: Instant,
-    val user: ExportedUser,
-    val counts: Map<String, Int>,
-    val entries: List<ArchiveEntryDigest>,
-    val excluded: List<ExportExclusion>,
-)
-
-data class ExportGenerator(val name: String, val version: String)
-data class ExportExclusion(val what: String, val why: String)
+@ParameterizedTest
+@CsvSource("image/jpeg,jpg", "image/png,png", "image/webp,webp", "image/gif,gif", "image/avif,avif", "application/x-thing,bin")
+fun `Given a mime type, Then the archive extension matches`(mimeType: String, expected: String) {
+    assertEquals(expected, ExportImageExtension.forMimeType(mimeType))
+}
 ```
 
-- [ ] **Step 2: Write the failing builder tests**
+```kotlin
+internal object ExportImageExtension {
+    fun forMimeType(mimeType: String): String = when (mimeType) {
+        "image/jpeg" -> "jpg"
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/gif" -> "gif"
+        "image/avif" -> "avif"
+        else -> "bin"
+    }
+}
+```
 
-Use a **fake sink** that records entries, so the test asserts content without touching a real ZIP:
+- [ ] **Step 3: Write `ExportReadme`**
+
+A single `fun render(manifest: ExportManifest): String` producing the human-readable text spec §4
+requires: contents, per-file meaning, the JSONL convention, how to verify SHA-256, and the explicit
+exclusion list (built from `manifest.excluded`, so the two can never disagree). Test that it contains
+each file name and each exclusion reason.
+
+- [ ] **Step 4: Write the golden-JSON test**
+
+For every `Exported*` type, serialize a fully-populated instance with the adapter's mapper
+configuration and assert the exact JSON string. This is what pins the published format against a
+Jackson upgrade or an accidental property rename.
+
+- [ ] **Step 5: Run, then commit**
+
+```bash
+git commit -m "feat(usecases): export archive content types, extension map and README"
+```
+
+---
+
+### Task 7b: Walking the data into the sink
+
+**Files:** `api-usecases/.../exports/UserDataExportBuilder.kt` (the `stageArchive` half) + tests
+
+**Writing order is load-bearing** (spec §3): `README.md`, `user.json`, `boards.jsonl`, `tags.jsonl`,
+**images first**, then `pins.jsonl` referencing only images actually written, then `manifest.json`.
+
+- [ ] **Step 1: Write the failing tests with a recording sink**
 
 ```kotlin
 private class RecordingSink : ArchiveSink {
-    val text = mutableMapOf<String, String>()
-    val json = mutableMapOf<String, Any>()
-    val jsonLines = mutableMapOf<String, List<Any>>()
-    val binary = mutableListOf<String>()
-    override fun putTextEntry(name: String, text: String): ArchiveEntryDigest { ... }
-    override fun putJsonLinesEntry(name: String, values: Sequence<Any>): ArchiveEntryDigest {
-        jsonLines[name] = values.toList()   // the sequence MUST be consumed here, as the real sink does
-        return ArchiveEntryDigest(name, 0, "")
+    val text = linkedMapOf<String, String>()
+    val json = linkedMapOf<String, Any>()
+    val jsonLines = linkedMapOf<String, List<Any>>()
+    val binary = linkedMapOf<String, ByteArray>()
+
+    override fun putTextEntry(name: String, text: String): ArchiveEntryDigest {
+        this.text[name] = text
+        return digest(name, text.toByteArray())
     }
-    // ...
+    override fun putJsonLinesEntry(name: String, values: Sequence<Any>): ArchiveEntryDigest {
+        val list = values.toList()          // the real sink consumes the sequence here too
+        jsonLines[name] = list
+        return digest(name, list.toString().toByteArray())
+    }
+    // putJsonEntry / putBinaryEntry likewise
+    private fun digest(name: String, bytes: ByteArray) =
+        ArchiveEntryDigest(name, bytes.size.toLong(), sha256Hex(bytes))
 }
 ```
+
+The digests must be **real**, not `("", 0)`: with constant digests the manifest test cannot tell a
+correct manifest from one that loses or mixes up entries.
 
 Cases:
 
 ```kotlin
-@Test fun `Given a user with pins, Then every pin including the recycle bin is written`()
-@Test fun `Given a pin with an image, Then its bytes are written under images and referenced by path`()
-@Test fun `Given a pin without an image, Then its image field is null and no binary entry is written`()
+@Test fun `Given active and recycled pins, Then every pin is written with its deletion marker`()
+@Test fun `Given a pin with an image, Then the image entry is written before the pin references it`()
+@Test fun `Given an image deleted between the two walks, Then the pin references no image`()
+@Test fun `Given a pin in a recycled board, Then the membership is still written`()
+@Test fun `Given recycled boards, Then boards jsonl carries them with their deletion marker`()
 @Test fun `Given several pages of pins, Then every page is walked`()
 @Test fun `Given a completed archive, Then the manifest carries the counts and the entry digests`()
-@Test fun `Given a successful build, Then the export becomes READY with size, digest, media type and extension`()
-@Test fun `Given an export that is not pending, Then the build is a no-op`()
-@Test fun `Given a missing or tombstoned user, Then the export is FAILED and a PermanentTaskException is thrown`()
-@Test fun `Given a failure on the last attempt, Then the export is FAILED and the staged file discarded`()
-@Test fun `Given a failure on a non-final attempt, Then the export stays PENDING and the staged file is discarded`()
 ```
 
-- [ ] **Step 3: Run and watch it fail**
+- [ ] **Step 2: Run and watch them fail**
 
-Run: `./gradlew :api-usecases:test --tests "*UserDataExportBuilderTest*"`
-Expected: FAIL.
-
-- [ ] **Step 4: Implement the builder**
+- [ ] **Step 3: Implement the walks**
 
 ```kotlin
-class UserDataExportBuilder(
-    private val exportRepository: UserDataExportRepositoryInterface,
-    private val userRepository: UserRepositoryInterface,
-    private val pinRepository: PinRepositoryInterface,
-    private val boardRepository: BoardRepositoryInterface,
-    private val tagRepository: TagRepositoryInterface,
-    private val imageStore: ImageStore,
-    private val archiveStore: ExportArchiveStore,
-    private val transactionRunner: TransactionRunner,
-    private val clock: Clock,
-    private val retention: Duration,
-    private val pageSize: Int,
-    private val generatorVersion: String,
-) {
-    @Suppress("TooGenericExceptionCaught")
-    fun build(exportId: UUID, isLastAttempt: Boolean) {
-        val export = exportRepository.findById(exportId) ?: return
-        if (export.state != UserDataExportState.PENDING) return
-        val user = userRepository.findUserById(export.userId)
-            ?: run {
-                markFailed(export, "USER_GONE")
-                throw PermanentTaskException("user no longer exists")
-            }
-        val staged = try {
-            stageArchive(export, user)
-        } catch (error: Throwable) {
-            if (isLastAttempt) markFailed(export, "BUILD_FAILED")
-            throw error
-        }
-        promoteAndPublish(export, user, staged)
-    }
-}
-```
-
-`stageArchive` writes, in order: `README.md`, `user.json`, `pins.jsonl` (active pages then recycle-bin pages), `boards.jsonl`, `tags.jsonl`, then the image entries (second walk), then `manifest.json` last, built from the digests collected so far.
-
-**Pitfall:** `putJsonLinesEntry` takes a `Sequence`; build the pages with `generateSequence` over the cursor so pages are pulled lazily inside the sink, never materialized:
-
-```kotlin
-private fun pinSequence(user: User, softDeleted: Boolean): Sequence<Pin> = sequence {
+private fun pinSequence(user: User, recycled: Boolean): Sequence<Pin> = sequence {
     var cursor: Cursor? = null
     do {
-        val page = if (softDeleted) {
-            pinRepository.findSoftDeletedPinsForUser(user, cursor, pageSize, PinSortStrategy.NEWEST_FIRST)
+        val page = if (recycled) {
+            pinRepository.findSoftDeletedPinsForUser(user, cursor, pageSize, PinSortStrategy.DELETED_AT_DESC)
         } else {
-            pinRepository.findPinsForUser(user, cursor, pageSize, PinSortStrategy.NEWEST_FIRST)
+            pinRepository.findPinsForUser(user, cursor, pageSize, PinSortStrategy.CREATED_AT_DESC)
         }
         yieldAll(page.items)
         cursor = page.nextCursor
@@ -1007,30 +1025,113 @@ private fun pinSequence(user: User, softDeleted: Boolean): Sequence<Pin> = seque
 }
 ```
 
-Check `Page`'s actual property names (`api-domain/.../entities/Page.kt`) before writing this; the plan assumes `items` and `nextCursor`.
+Verified: `Page` exposes `items` and `nextCursor`; the sort strategies are `CREATED_AT_ASC`,
+`CREATED_AT_DESC`, `DELETED_AT_DESC` (there is no `NEWEST_FIRST`).
 
-**Pitfall:** promoting and publishing must happen in this order — `promote` first, then the transactional row update. A row that says `READY` before the file is in place is a 500 waiting to happen.
+The image walk resolves each pin's image with **`imageRepository.findByPinId(pin.id)`**:
+`PinModelMapper.toDomain` never populates `Pin.image`, so reading `pin.image` would produce an
+archive with zero images and unit tests that pass. It writes `images/<id>.<ext>` and records the path
+in a `Set`. The pin walk then emits `image.path` only for paths in that set, and reads memberships
+with `findBoardsForPinIncludingRecycled`.
 
-- [ ] **Step 5: Run, then commit**
+**Counts come from counters incremented inside the sequences** (`onEach { count++ }` read after
+`putJsonLinesEntry` returns), never from re-iterating: `sequence {}` is lazy but re-iterable, so a
+second pass would silently re-run the whole pagination.
+
+- [ ] **Step 4: Run, then commit**
 
 ```bash
-git add api-usecases
-git commit -m "feat(usecases): build the user data export archive"
+git commit -m "feat(usecases): walk user data into the export archive sink"
 ```
 
 ---
 
-### Task 8: Getter, downloader and deleter use cases
+### Task 7c: The build state machine
 
-**Files:**
-- Create: `api-usecases/.../usecases/exports/UserDataExportGetter.kt`, `UserDataExportDownloader.kt`, `UserDataExportDeleter.kt`
-- Create: the three matching test classes
+**Files:** `api-usecases/.../exports/UserDataExportBuilder.kt` (the `build` half) + tests
 
-**Interfaces:**
-- Produces:
-  - `UserDataExportGetter.get(user: User, exportId: UUID): UserDataExport`, `.list(user: User): List<UserDataExport>`
-  - `UserDataExportDownloader.open(user: User, exportId: UUID, skipBytes: Long): OpenedExport` where `data class OpenedExport(val export: UserDataExport, val stream: InputStream)`
-  - `UserDataExportDeleter.delete(user: User, exportId: UUID)`
+- [ ] **Step 1: Write the failing tests**
+
+```kotlin
+@Test fun `Given an export that is not pending, Then the build is a no-op`()
+@Test fun `Given a missing user, Then the export is FAILED and a PermanentTaskException is thrown`()
+@Test fun `Given insufficient free space, Then the export is FAILED with DISK_FULL and not built`()
+@Test fun `Given a successful build, Then the row carries size, digest, media type and extension`()
+@Test fun `Given an export cancelled during the build, Then READY is not written and the bytes are deleted`()
+@Test fun `Given a failure on the last attempt, Then the export is FAILED and the staged file discarded`()
+@Test fun `Given a failure on an earlier attempt, Then the export stays PENDING and the file discarded`()
+@Test fun `Given entries being written, Then the task lease is renewed`()
+```
+
+- [ ] **Step 2: Run and watch them fail**
+
+- [ ] **Step 3: Implement**
+
+```kotlin
+fun build(exportId: UUID, isLastAttempt: Boolean) {
+    val export = exportRepository.findById(exportId) ?: return
+    if (export.state != UserDataExportState.PENDING) return
+    val user = userRepository.findUserById(export.userId) ?: run {
+        markFailed(export, "USER_GONE"); throw PermanentTaskException("user no longer exists")
+    }
+    if (!archiveStore.hasFreeSpace(requiredBytes)) {
+        markFailed(export, "DISK_FULL"); throw PermanentTaskException("not enough free space")
+    }
+    val storageKey = storageKeyFor(exportId)
+    exportRepository.save(export.copy(storageKey = storageKey))   // referenced BEFORE it exists
+    val staged = try {
+        stageArchive(export, user)
+    } catch (error: Throwable) {
+        if (isLastAttempt) markFailed(export, "BUILD_FAILED")
+        throw error
+    }
+    archiveStore.promote(staged, storageKey)
+    publish(exportId, storageKey, staged)
+}
+
+private fun publish(exportId: UUID, storageKey: String, staged: StagedFile) {
+    val published = transactionRunner.inTransaction {
+        val current = exportRepository.findById(exportId)
+        if (current?.state != UserDataExportState.PENDING) {
+            false                                   // cancelled, or the account was deleted
+        } else {
+            exportRepository.save(
+                current.copy(
+                    state = UserDataExportState.READY,
+                    completedAt = clock.now(),
+                    expiresAt = clock.now().plus(retention),
+                    byteSize = staged.byteSize,
+                    sha256 = staged.contentHash,
+                    mediaType = archiveStore.format.mediaType,
+                    fileExtension = archiveStore.format.fileExtension,
+                ),
+            )
+            true
+        }
+    }
+    if (!published) archiveStore.delete(storageKey)
+}
+```
+
+The compare-and-set is the difference between "the archive the user asked us to destroy is
+downloadable" and correct behaviour. Writing `storageKey` before promoting is what lets the purge and
+the account cleaner reclaim bytes from a build that died between the two.
+
+- [ ] **Step 4: Run, then commit**
+
+```bash
+git commit -m "feat(usecases): build, publish and fail export archives safely"
+```
+
+---
+
+### Task 8: Getter, downloader and deleter
+
+**Files:** `api-usecases/.../exports/{UserDataExportGetter,UserDataExportDownloader,UserDataExportDeleter}.kt` + three test classes
+
+**Interfaces produced:** `get(user, exportId)`, `list(user, cursor, pageSize)`,
+`open(user, exportId, skipBytes): OpenedExport` (the non-nullable projection of spec §5),
+`delete(user, exportId)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1040,35 +1141,55 @@ git commit -m "feat(usecases): build the user data export archive"
 @Test fun `Given a pending export, Then downloading it throws ExportNotReadyError`()
 @Test fun `Given a failed export, Then downloading it throws ExportNotReadyError`()
 @Test fun `Given an expired export, Then downloading it throws ExportGoneError`()
-@Test fun `Given a ready export, Then downloading opens a stream at the requested offset`()
+@Test fun `Given a ready export missing its storage key, Then downloading throws ExportNotReadyError`()
+@Test fun `Given a negative offset, Then downloading throws ExportNotReadyError`()
+@Test fun `Given an offset past the end, Then downloading throws ExportNotReadyError`()
+@Test fun `Given a ready export, Then the stream is opened eagerly at the requested offset`()
 @Test fun `Given a pending export, Then deleting it cancels the task and marks it DELETED`()
+@Test fun `Given a pending export with no task id, Then no cancellation is attempted`()
 @Test fun `Given a ready export, Then deleting it removes the bytes and marks it DELETED`()
 @Test fun `Given an already terminal export, Then deleting it is a no-op`()
 ```
 
-Ownership uses a `403`-mapped error; reuse the existing convention (`ImagePermissionError` maps to `IMAGE_INSUFFICIENT_PERMISSIONS` → 403). Add `EXPORT_INSUFFICIENT_PERMISSIONS` to `ErrorCode` and an `ExportPermissionError`, mapped to `FORBIDDEN` in Task 11.
+The "missing storage key" case is what makes the projection's null check a **reachable** branch, which
+is why the nullable fields are collapsed here rather than in the controller.
 
-- [ ] **Step 2: Implement, run, commit**
+- [ ] **Step 2: Run, watch them fail, implement, run again**
 
-Cancelling a `PENDING` export reuses `CancelTask`. It needs the task id, which the export row does not carry — **either** add a `task_id` column in Task 4's model (preferred: one nullable UUID column, set at enqueue time) **or** have `CancelTask` accept a dedup key. Take the column: it also makes operator debugging possible. If Task 4 is already committed, add the column in this task with its own migration `1.11`.
+The stream is opened **eagerly** in `open`, not lazily inside a `StreamingOutput`: a purge racing the
+download then fails before the status line is sent, instead of truncating a committed `200`.
+Do not branch on `CancelTask.cancel`'s `Boolean` return: one side would be unreachable.
+
+- [ ] **Step 3: Commit**
 
 ```bash
-git add api-usecases
 git commit -m "feat(usecases): read, download and delete user data exports"
 ```
 
 ---
 
-### Task 9: Purge sweep + worker scheduling
+### Task 9: Purge sweep and its own scheduler
 
-**Files:**
-- Create: `api-usecases/.../usecases/exports/ReapExpiredUserDataExports.kt`, its test
-- Create: `api-worker-quarkus/.../ExportRetentionLifecycle.kt`, its test
+**Files:** `api-usecases/.../exports/ReapExpiredUserDataExports.kt`, `api-worker-quarkus/.../ExportsConfig.kt`, `.../ExportRetentionLifecycle.kt` + tests
 
-**Interfaces:**
-- Produces: `ReapExpiredUserDataExports.reap(): Int`
+`ExportsConfig` lives in `api-worker-quarkus`, next to `TaskQueueConfig`: the worker cannot depend on
+`api-application`, and every `@ConfigMapping` in this repo lives in its consumer module.
 
-- [ ] **Step 1: Write the failing use-case tests**
+- [ ] **Step 1: Write `ExportsConfig`**
+
+```kotlin
+@ConfigMapping(prefix = "exports", namingStrategy = ConfigMapping.NamingStrategy.SNAKE_CASE)
+interface ExportsConfig {
+    @WithDefault("/var/lib/pinry/exports") fun dataDir(): String
+    @WithDefault("P7D") fun retention(): Duration
+    @WithDefault("PT1H") fun minimumInterval(): Duration
+    @WithDefault("PT1H") fun purgeInterval(): Duration
+    @WithDefault("PT6H") fun stagedFileMaxAge(): Duration
+    @WithDefault("500") fun pageSize(): Int
+}
+```
+
+- [ ] **Step 2: Write the failing reaper tests**
 
 ```kotlin
 @Test fun `Given a ready export past its expiry, Then its bytes are deleted and it becomes EXPIRED`()
@@ -1077,66 +1198,35 @@ git commit -m "feat(usecases): read, download and delete user data exports"
 @Test fun `Given orphaned staged files, Then they are discarded`()
 ```
 
-- [ ] **Step 2: Implement**
+- [ ] **Step 3: Implement the reaper, then the lifecycle**
 
-```kotlin
-class ReapExpiredUserDataExports(
-    private val repository: UserDataExportRepositoryInterface,
-    private val archiveStore: ExportArchiveStore,
-    private val clock: Clock,
-    private val stagedFileMaxAge: Duration,
-) {
-    fun reap(): Int {
-        val now = clock.now()
-        val expired = repository.findExpiredReadyExports(now)
-        for (export in expired) {
-            export.storageKey?.let { archiveStore.delete(it) }
-            repository.save(export.copy(state = UserDataExportState.EXPIRED, storageKey = null))
-        }
-        archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge))
-        return expired.size
-    }
-}
-```
-
-- [ ] **Step 3: Write `ExportRetentionLifecycle`**
-
-Mirror `TaskWorkerLifecycle` exactly: `@Observes StartupEvent` → one immediate `reap()` plus `scheduleWithFixedDelay` at the configured purge interval, each call wrapped in a `safeReap()` that logs and swallows. Reuse the `@Identifier(TASK_POLL_SCHEDULER)` scheduler rather than creating a second thread.
-
-**Pitfall:** `TASK_POLL_SCHEDULER` is `internal` in `TaskWorkerLifecycle.kt` — same module, so it is reachable; do not duplicate the literal.
+`ExportRetentionLifecycle` mirrors `TaskWorkerLifecycle` (`@Observes StartupEvent`, one immediate
+sweep, then `scheduleWithFixedDelay`, each call wrapped in a logging `safeReap()`), but on **its own**
+single-thread scheduler produced for it: the task poll scheduler already carries the poll loop and the
+lease reaper, and deleting multi-gigabyte archives would block task claiming.
 
 - [ ] **Step 4: Run, then commit**
 
 ```bash
-git add api-usecases api-worker-quarkus
-git commit -m "feat(worker): purge expired export archives on a schedule"
+git commit -m "feat(worker): purge expired export archives on a dedicated schedule"
 ```
 
 ---
 
 ### Task 10: Task handler and CDI wiring
 
-**Files:**
-- Create: `api-worker-quarkus/.../UserDataExportTaskHandler.kt`, its test
-- Create: `api-application/.../ExportsConfig.kt`, `.../ExportProducers.kt`
-
-**Interfaces:**
-- Consumes: `UserDataExportBuilder`, `ExportArchiveStore`
-- Produces: CDI beans for `UserDataExportRequester`, `UserDataExportBuilder`, `ReapExpiredUserDataExports`, `ExportArchiveStore`
+**Files:** `api-worker-quarkus/.../UserDataExportTaskHandler.kt`, `api-application/.../wiring/ExportProducers.kt`, `application.properties` + tests
 
 - [ ] **Step 1: Write the handler test**
 
 ```kotlin
 @Test
-fun `Given a task payload, Then the builder is invoked with the export id and the attempt flag`() {
+fun `Given the final attempt, Then the builder is told it is the last one`() {
     // Given
     val builder = mockk<UserDataExportBuilder>(relaxed = true)
-    val handler = UserDataExportTaskHandler(builder)
     val exportId = UUID.randomUUID()
-
     // When
-    handler.handle(exportId.toString(), TaskContext(attempt = 3, maxAttempts = 3))
-
+    UserDataExportTaskHandler(builder).handle(exportId.toString(), TaskContext(attempt = 3, maxAttempts = 3))
     // Then
     verify { builder.build(exportId, isLastAttempt = true) }
 }
@@ -1151,48 +1241,39 @@ fun `Given an earlier attempt, Then the builder is told it is not the last one`(
 @ApplicationScoped
 class UserDataExportTaskHandler(private val builder: UserDataExportBuilder) : TaskHandler {
     override val kind = UserDataExportTask.KIND
-
     override fun handle(payload: String, context: TaskContext) =
         builder.build(UUID.fromString(payload), isLastAttempt = context.attempt >= context.maxAttempts)
 }
 ```
 
-The comparison mirrors `TaskProcessor.settle`, which marks a task `DEAD` on exactly `attempts >= maxAttempts`.
+- [ ] **Step 3: Write `ExportProducers` and the properties**
 
-- [ ] **Step 3: Write the config and producers**
+`@Produces` for `ExportArchiveStore` (`FilesystemZipExportArchiveStore(exportsConfig.dataDir())`),
+`UserDataExportRequester`, `UserDataExportBuilder`, `ReapExpiredUserDataExports`, injecting config
+values and `@ConfigProperty(name = "quarkus.application.version") applicationVersion` for the
+manifest's `generator.version`.
 
-```kotlin
-@ConfigMapping(prefix = "exports", namingStrategy = ConfigMapping.NamingStrategy.SNAKE_CASE)
-interface ExportsConfig {
-    @WithDefault("/var/lib/pinry/exports")
-    fun dataDir(): String
+**Pitfall (learned in the worker-extraction sub-project):** a produced class must **not** also carry
+`@ApplicationScoped` (ambiguous bean), and a discovered bean cannot have `Duration`/`Int`/`String`
+constructor parameters. These four are plain classes, produced here, like `PinDownloadTaskHandler`.
 
-    @WithDefault("P7D")
-    fun retention(): Duration
+Add to `api-application/src/main/resources/application.properties`, next to `images.*` and `tasks.*`:
 
-    @WithDefault("PT1H")
-    fun minimumInterval(): Duration
-
-    @WithDefault("PT1H")
-    fun purgeInterval(): Duration
-
-    @WithDefault("PT6H")
-    fun stagedFileMaxAge(): Duration
-
-    @WithDefault("500")
-    fun pageSize(): Int
-}
+```properties
+exports.data_dir=/var/lib/pinry/exports
+exports.retention=P7D
+exports.minimum_interval=PT1H
+exports.purge_interval=PT1H
+exports.staged_file_max_age=PT6H
+exports.page_size=500
 ```
 
-`ExportProducers` (`api-application`) `@Produces` each use case, injecting the repositories and the config values. **Pitfall, learned the hard way in the worker-extraction sub-project:** a produced class must **not** also carry `@ApplicationScoped`, or the bean is ambiguous; and a discovered bean cannot have `Duration`/`Int`/`String` constructor parameters. So `UserDataExportRequester`, `UserDataExportBuilder`, `ReapExpiredUserDataExports` and `FilesystemZipExportArchiveStore` are plain classes, produced here, exactly like `PinDownloadTaskHandler`.
+This is a **new volume**: note it for the deployment documentation in Task 14.
 
-- [ ] **Step 4: Run the application module, then commit**
-
-Run: `./gradlew :api-application:test`
-Expected: PASS (CDI resolves at test boot; an ambiguous or unsatisfied bean fails here, not at compile time).
+- [ ] **Step 4: Run `./gradlew :api-application:test`** (CDI resolves at test boot; an ambiguous or
+unsatisfied bean fails here, not at compile time), **then commit**
 
 ```bash
-git add api-worker-quarkus api-application
 git commit -m "feat(worker): account.export task handler and export wiring"
 ```
 
@@ -1200,43 +1281,39 @@ git commit -m "feat(worker): account.export task handler and export wiring"
 
 ### Task 11: REST surface
 
-**Files:**
-- Create: `api-presentation-quarkus/.../controllers/MeExportController.kt`, `.../dtos/output/UserDataExportOutputDto.kt`, `.../mappers/UserDataExportDtoMapper.kt`, `.../http/RangeHeader.kt`, `.../http/ContentDispositionFileName.kt`
-- Modify: `api-presentation-quarkus/.../mappers/BaseErrorMapper.kt`
-- Create: the matching tests, including `BaseErrorMapperTest` arms
+**Files:** `api-presentation-quarkus/.../http/ContentDispositionFileName.kt`, `.../http/RangeHeader.kt`, `.../dtos/output/UserDataExportOutputDto.kt`, `.../mappers/UserDataExportDtoMapper.kt`, `.../controllers/MeExportController.kt` + tests
 
-- [ ] **Step 1: Write `ContentDispositionFileName` and its test first**
-
-```kotlin
-object ContentDispositionFileName {
-    private val SAFE = Regex("[^A-Za-z0-9._-]+")
-
-    /** `attachment; filename="..."; filename*=UTF-8''...` with a sanitized ASCII fallback. */
-    fun headerValue(rawName: String, fallback: String): String { ... }
-}
-```
-
-Tests, with hostile input, because usernames are only trimmed at registration:
+- [ ] **Step 1: Write `ContentDispositionFileName` test-first**
 
 ```kotlin
 @Test fun `Given a username with quotes and CRLF, Then the ASCII filename contains neither`()
 @Test fun `Given a username with path traversal, Then no slash or dot-dot survives`()
-@Test fun `Given a non-ASCII username, Then the ASCII name is sanitized and the UTF-8 form is percent-encoded`()
+@Test fun `Given a non-ASCII username, Then the ASCII form is sanitized and the UTF-8 form percent-encoded`()
 @Test fun `Given a username that sanitizes to nothing, Then the fallback is used`()
+@Test fun `Given an over-long username, Then the name is capped`()
 ```
-
-- [ ] **Step 2: Write `RangeHeader` and its test**
 
 ```kotlin
-internal data class ByteRange(val start: Long, val endInclusive: Long) {
-    val length: Long get() = endInclusive - start + 1
-}
+object ContentDispositionFileName {
+    private const val MAX_LENGTH = 100
+    private val UNSAFE = Regex("[^A-Za-z0-9._-]+")
+    private val ATTR_CHAR = Regex("[A-Za-z0-9!#$&+^_`{}~.-]")
 
-internal object RangeHeader {
-    /** Null when the header is absent or must be ignored (multi-range); throws on unsatisfiable. */
-    fun parse(header: String?, totalSize: Long): ByteRange?
+    fun headerValue(rawName: String, fallback: String): String {
+        val ascii = UNSAFE.replace(rawName, "-").trim('-').take(MAX_LENGTH).ifEmpty { fallback }
+        val encoded = rawName.take(MAX_LENGTH).toByteArray().joinToString("") { byte ->
+            val ch = byte.toInt().toChar()
+            if (ATTR_CHAR.matches(ch.toString())) ch.toString() else "%%%02X".format(byte)
+        }
+        return "attachment; filename=\"$ascii\"; filename*=UTF-8''$encoded"
+    }
 }
 ```
+
+Percent-encode by hand: `URLEncoder` emits `+` for space and leaves `*` and `'` unescaped, which RFC
+5987 forbids. Usernames are only `trim()`ed at registration, so treat them as hostile.
+
+- [ ] **Step 2: Write `RangeHeader` test-first**
 
 ```kotlin
 @Test fun `Given no header, Then the full body is served`()
@@ -1244,64 +1321,36 @@ internal object RangeHeader {
 @Test fun `Given a closed range, Then both bounds are honoured`()
 @Test fun `Given an end beyond the size, Then it is clamped`()
 @Test fun `Given a multi-range header, Then it is ignored and the full body is served`()
+@Test fun `Given a suffix range, Then it is ignored and the full body is served`()
 @Test fun `Given a start past the end of the file, Then it is unsatisfiable`()
 @Test fun `Given a malformed header, Then it is ignored`()
 ```
 
+`parse(header, totalSize)` returns `ByteRange?` (null = serve everything) and throws
+`RangeNotSatisfiableException` for an unsatisfiable start. The suffix form `bytes=-500` is legal HTTP
+but deliberately unsupported: pin that choice with the test above, because a naive `split("-")` would
+behave by accident.
+
 - [ ] **Step 3: Write the controller**
 
-```kotlin
-@Path("/api/v1/me/exports")
-@Authenticated
-class MeExportController(
-    private val securityIdentity: SecurityIdentity,
-    private val requester: UserDataExportRequester,
-    private val getter: UserDataExportGetter,
-    private val downloader: UserDataExportDownloader,
-    private val deleter: UserDataExportDeleter,
-) {
-    @POST
-    @APIResponse(responseCode = "202", description = "Export accepted")
-    fun requestExport(@HeaderParam(ReauthenticationHeader.HEADER) reauthHeader: String?): RestResponse<UserDataExportOutputDto> { ... }
+`download` builds its response entirely from `OpenedExport` (all non-nullable): `Content-Type` from
+`mediaType`, `Content-Length` from the slice length (or `totalByteSize`), `ETag` from `sha256`,
+`Accept-Ranges: bytes`, `Content-Disposition` from the completion date, the username and
+`fileExtension`. The copy into the `StreamingOutput` is **bounded** to the slice length: `copyTo`
+would stream to EOF and contradict the announced `Content-Length`. Write that bounded copy as a
+private helper with its own test.
 
-    @GET fun list(): List<UserDataExportOutputDto>
+`requestExport` parses the header with `ReauthenticationHeader.parsePasswordFactor(reauthHeader)` (as
+`MeController.deleteAccount` does) and passes the factor to `requester.request(user, factor)`.
 
-    @GET @Path("/{id}") fun get(id: UUID): UserDataExportOutputDto
+- [ ] **Step 4: Add the `Retry-After` mapper**
 
-    @GET @Path("/{id}/download")
-    fun download(id: UUID, @HeaderParam("Range") range: String?): RestResponse<StreamingOutput> { ... }
+`ExportTooSoonError` carries `retryAfterSeconds`; a dedicated `ExceptionMapper<ExportTooSoonError>`
+(more specific mappers win) sets the header. Test that it is present and numeric.
 
-    @DELETE @Path("/{id}") fun delete(id: UUID): RestResponse<Void>
-}
-```
-
-`download` serves `Content-Type` from `export.mediaType`, `Content-Length` from the slice length (or `export.byteSize` with no range), `ETag` from `export.sha256`, `Accept-Ranges: bytes`, and the `Content-Disposition` built from the completion date, the username and `export.fileExtension`. Follow `ImageController.serveOriginal` for the `StreamingOutput` shape.
-
-**Pitfall:** the copy into the output must be **bounded** to the range length. `copyTo` streams to EOF and would contradict the announced `Content-Length`. Write the bounded copy as a small private helper with its own test.
-
-- [ ] **Step 4: Add the error mapper arms**
-
-```kotlin
-ErrorCode.EXPORT_ALREADY_IN_PROGRESS -> Response.Status.CONFLICT.statusCode
-ErrorCode.EXPORT_TOO_SOON -> TOO_MANY_REQUESTS_STATUS_CODE
-ErrorCode.EXPORT_DOES_NOT_EXIST -> Response.Status.NOT_FOUND.statusCode
-ErrorCode.EXPORT_NOT_READY -> Response.Status.CONFLICT.statusCode
-ErrorCode.EXPORT_GONE -> Response.Status.GONE.statusCode
-ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
-```
-
-**Verify before writing:** `BaseErrorMapper` falls back to the literal title `"Unprocessable Entity"` for **any** status with no `Response.Status` constant. Check in a scratch test that `Response.Status.fromStatusCode(429)` and `(410)` are non-null on this Jakarta REST version. `GONE` certainly exists; `TOO_MANY_REQUESTS` was added in JAX-RS 2.1 but **confirm it**, because if it is absent, a `429` would be titled "Unprocessable Entity", and the fallback needs a proper title map instead of a single constant.
-
-Every new arm needs its own `BaseErrorMapperTest` case: each arm is a branch under the 100% gate.
-
-- [ ] **Step 5: `Retry-After` on 429**
-
-`ExportTooSoonError` carries `retryAfterSeconds`. `BaseErrorMapper` maps `BaseError` generically, so add a dedicated `ExceptionMapper<ExportTooSoonError>` (more specific mappers win in Jakarta REST) that sets the header, or set it in the controller by catching and rethrowing. Prefer the dedicated mapper; test that the header is present and numeric.
-
-- [ ] **Step 6: Run, then commit**
+- [ ] **Step 5: Run, then commit**
 
 ```bash
-git add api-presentation-quarkus
 git commit -m "feat(presentation): user data export endpoints with range-aware download"
 ```
 
@@ -1309,38 +1358,31 @@ git commit -m "feat(presentation): user data export endpoints with range-aware d
 
 ### Task 12: Account deletion erases exports
 
-Without this, deleting an account leaves a complete copy of its data on disk for up to seven days.
-
-**Files:**
-- Modify: `api-usecases/.../usecases/AccountDeletionCleaner.kt`
-- Modify: `api-usecases/src/test/kotlin/.../AccountDeletionCleanerTest.kt`
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
 
 ```kotlin
 @Test
-fun `Given a user with an export, Then its rows and bytes are erased`() {
+fun `Given a user with an export, Then its rows and derived bytes are erased`() {
     // Given
-    every { userDataExportRepository.findStorageKeysForUser(user.id) } returns listOf("exports/e1.zip")
+    val exportId = UUID.randomUUID()
+    every { userDataExportRepository.findAllExportIdsForUser(user.id) } returns listOf(exportId)
     // When
     cleaner.deleteAccountData(user.id)
     // Then
     verify { userDataExportRepository.deleteAllForUser(user.id) }
-    verify { exportArchiveStore.delete("exports/e1.zip") }
+    verify { exportArchiveStore.delete(storageKeyFor(exportId)) }
 }
 
-@Test
-fun `Given a user with no export, Then no archive delete is attempted`() { ... }
+@Test fun `Given a user with no export, Then no archive delete is attempted`()
 ```
 
-- [ ] **Step 2: Implement**
+Deleting the **derived** key, not the stored column, is what reclaims an archive promoted by a builder
+that died before writing its row.
 
-Collect the keys **before** the transaction (like the image keys), delete the rows **inside** it before the user row, and delete the bytes **after** the commit, next to the image bytes.
-
-- [ ] **Step 3: Run, then commit**
+- [ ] **Step 2: Implement** (ids collected before the transaction, rows deleted inside it before the
+user row, bytes deleted after the commit alongside the image bytes), **run, commit**
 
 ```bash
-git add api-usecases
 git commit -m "fix(usecases): erase export archives when an account is deleted"
 ```
 
@@ -1348,69 +1390,91 @@ git commit -m "fix(usecases): erase export archives when an account is deleted"
 
 ### Task 13: End-to-end integration tests
 
-The three tests that carry the real risk. The account-deletion sub-project proved that mocked unit tests and code review both miss what a real worker run catches.
+**Files:** `api-application/src/test/kotlin/.../MeExportIntegrationTest.kt`, `MeExportCompletionIntegrationTest.kt`, `MeExportTestProfile.kt`
 
-**Files:**
-- Create: `api-application/src/test/kotlin/.../MeExportIntegrationTest.kt`, `MeExportCompletionIntegrationTest.kt`
+- [ ] **Step 1: Write the test profile first**
 
-- [ ] **Step 1: Endpoint-level integration tests**
+```kotlin
+class MeExportTestProfile : QuarkusTestProfile {
+    override fun getConfigOverrides(): Map<String, String> = mapOf(
+        "exports.data_dir" to "build/test-export-data/${UUID.randomUUID()}",
+        "exports.minimum_interval" to "PT0S",
+    )
+}
+```
 
-`POST` without re-authentication → 403; with it → 202. Second `POST` while pending → 409. `GET` list and by id. Another user's export → 403. Download while pending → 409. `DELETE` → 204.
+Without it the tests write to `/var/lib/pinry/exports` and fail. Mirrors
+`MeDeleteCompletionTestProfile`.
 
-- [ ] **Step 2: The archive-content test, with a real worker**
+- [ ] **Step 2: Endpoint tests**
 
-Seed a user with two active pins, one recycle-bin pin, a board, a tag and one **real** image; request the export; poll `GET /api/v1/me/exports/{id}` until `READY` (bounded wait, like `MeDeleteCompletionIntegrationTest`); download the bytes; open them as a `ZipFile`; assert:
+`POST` with no re-authentication → 403; with a **wrong password** → 403 and no task enqueued; with the
+right one → 202. Second `POST` while pending → 409. `GET` list and by id. Another user's export → 403.
+Download while pending → 409. `DELETE` → 204.
 
-- `manifest.json` counts match what was seeded, and `formatVersion` is 1
-- `pins.jsonl` has one line per pin, recycle-bin pin included with a non-null `deletedAt`
-- the image entry exists at the `path` the pin points to, and its bytes are **byte-identical** to what was uploaded
-- every `entries[].sha256` matches a recomputed digest of that entry
+- [ ] **Step 3: The archive-content test, with a real worker**
 
-- [ ] **Step 3: The two erasure tests**
+Seed a user with two active pins, one recycled pin, an active board, **a recycled board holding a
+pin**, a tag and one real image. Request, poll until `READY` (bounded wait, like
+`MeDeleteCompletionIntegrationTest`), download, open as a `ZipFile`, and assert: manifest counts and
+`formatVersion`; one `pins.jsonl` line per pin with the recycled one carrying `deletedAt`; **the
+recycled board present in `boards.jsonl` and still listed in its pin's `boards`**; the image entry at
+the path the pin points to with **byte-identical** content; every `entries[].sha256` recomputed.
 
-Account deletion with a ready export: no row, and **no file on disk**. Purge: force `expiresAt` into the past, run the reaper, assert bytes gone, state `EXPIRED`, row present.
+**Write this test early in the task, not last.** Mocked repositories return shapes the real
+persistence never produces: that is exactly how `Pin.image` being always null would slip through.
 
-- [ ] **Step 4: The headers-come-from-the-row test**
+- [ ] **Step 4: The erasure and header tests**
 
-Persist an export whose `mediaType` / `fileExtension` differ from the adapter's current format; assert the response carries the stored values. This is the test that fails the day someone hardcodes `application/zip` in the controller.
+Account deletion with a ready export: no row, no file. Purge: bytes gone, state `EXPIRED`, row kept.
+Headers: persist an export whose `mediaType`/`fileExtension` differ from the adapter's format and
+assert the response carries the stored values.
 
 - [ ] **Step 5: Run the full gate, then commit**
 
 Run: `./gradlew check koverVerify`
-Expected: PASS, including 100% branch coverage per package.
 
 ```bash
-git add api-application
 git commit -m "test(application): end-to-end user data export coverage"
 ```
 
 ---
 
-### Task 14: OpenAPI and documentation
+### Task 14: OpenAPI, docs, backlog, handoff
 
 - [ ] **Step 1: Regenerate `docs/openapi.json`**
 
-Follow the repository's existing regeneration step (the same one used by the profile-management sub-project).
+It is produced by the `:api-application` build
+(`quarkus.smallrye-openapi.store-schema-directory=../docs`), so `./gradlew :api-application:build`
+refreshes it.
 
-- [ ] **Step 2: Refresh the backlog**
+- [ ] **Step 2: Document the new volume** in `deploy/` (the exports data dir is a second volume the
+current Dockerfile does not create).
 
-In `docs/backlog.md`, replace the "User data export / import (portability)" item with an **import-only** item, referencing this spec as the format contract. The export half is recorded by its handoff, git history and tag, not by the backlog.
+- [ ] **Step 3: Refresh `docs/backlog.md`** — replace the portability item with an **import-only**
+item pointing at this spec as the format contract, and remove nothing else.
 
-- [ ] **Step 3: Write the handoff**
+- [ ] **Step 4: Write the handoff** `docs/handoffs/2026-07-22 - handoff - user-data-export.md`,
+including the pitfalls learned here: `Pin.image` is never populated by the mapper; promoting
+timestamps turns the tombstoned-author NPE into an `UninitializedPropertyAccessException`; the queue
+re-claim bug and its three-part fix; and what is **not** validated (real hardware, very large
+accounts, ZIP64 beyond the synthetic test, resumed downloads through a real proxy).
 
-`docs/handoffs/2026-07-22 - handoff - user-data-export.md`: what shipped, the pitfalls learned, and what is **not** validated (real hardware, very large accounts, ZIP64 beyond the synthetic test, resumed downloads through a real proxy).
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add docs
-git commit -m "docs(export): openapi, backlog and handoff for user data export"
+git commit -m "docs(export): openapi, deploy volume, backlog and handoff"
 ```
 
 ---
 
 ## Self-review notes
 
-- **Spec coverage:** §4 format → Tasks 5 and 7; §5 domain → Tasks 2, 3, 5; §6 use cases → Tasks 6 to 9; §7 REST → Task 11; §8 worker → Tasks 7 and 10; §9 retention → Tasks 6, 9, 10; §10 account deletion → Task 12; §11 errors → Tasks 6, 8, 11; §12 persistence → Task 4; §13 testing → distributed, closed by Task 13.
-- **Two deviations from the spec, both deliberate and both explained in place:** the builder walks pins **twice** because a ZIP holds one open entry at a time (Task 7), and the export row needs a `task_id` column so a pending export can be cancelled (Task 8).
-- **Two things to verify while implementing rather than assume:** `Page`'s property names before writing `pinSequence` (Task 7), and whether `Response.Status.fromStatusCode(429)` is non-null on this Jakarta REST version (Task 11).
+- **Task order compiles at every step.** Error codes and their mapper arms land together in Task 6;
+  `ExportsConfig` exists before the lifecycle that uses it (Task 9); `taskId` exists from Task 3, so
+  no later task rewrites an earlier migration.
+- **Two pre-existing bugs are fixed first** (Tasks 0a, 0b), each in its own commit, because the export
+  is the first consumer that would trip them.
+- **Known accepted costs:** N+1 on very large accounts (spec §3), and the second pin walk.
+- **Verify while implementing, do not assume:** the exact Ebean exception type for the unique-index
+  violation (Task 4 Step 4), and that `generateDbMigration` emits the columns listed here.
