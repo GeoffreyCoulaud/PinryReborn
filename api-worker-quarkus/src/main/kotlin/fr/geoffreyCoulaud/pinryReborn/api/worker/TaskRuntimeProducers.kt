@@ -36,4 +36,14 @@ class TaskRuntimeProducers {
     @ApplicationScoped
     @Identifier(TASK_POLL_SCHEDULER)
     fun pollScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+
+    /**
+     * The export purge's own single thread, separate from [pollScheduler]: deleting
+     * multi-gigabyte archives must not block task claiming or the lease reaper, which share the
+     * task poll scheduler.
+     */
+    @Produces
+    @ApplicationScoped
+    @Identifier(EXPORT_PURGE_SCHEDULER)
+    fun exportPurgeScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 }
