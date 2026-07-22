@@ -426,8 +426,13 @@ the download.
    being erased must not produce an archive of the data being erased.
 3. `exportArchiveStore.stage { sink -> ... }`, writing in this order: `README.md`, `user.json`,
    `pins.jsonl` (two paginated passes: active pins, then recycle bin), `boards.jsonl`, `tags.jsonl`,
-   each image as it is met while walking the pins, and finally `manifest.json` built from the
-   accumulated digests and counts.
+   then the image entries, and finally `manifest.json` built from the accumulated digests and counts.
+
+   **The images are a second walk over the pins, not an inline write.** A ZIP holds exactly one open
+   entry at a time, so image bytes cannot be emitted while `pins.jsonl` is open. The alternatives were
+   to buffer the image keys in memory during the first walk (unbounded in the number of pins, which is
+   the one thing this design refuses to be) or to re-read the pin pages (bounded memory, one extra
+   paginated read). The second walk wins: an export is asynchronous and rare, memory is not.
 4. `promote(staged, storageKey)` where `storageKey` derives from the export id.
 5. In one transaction, set `READY`, `completedAt`, `expiresAt = now + retention`, `byteSize`, `sha256`,
    `storageKey`, and `mediaType` / `fileExtension` copied from `exportArchiveStore.format`.
