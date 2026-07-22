@@ -289,4 +289,68 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Then
         assertEquals(0, reaped)
     }
+
+    // --- attempts exhaustion ---
+
+    @Test
+    fun `Given a task that already used all its attempts, Then claimNext kills it instead of running it`() {
+        // Given
+        val enqueued = queue.enqueue(NewTask(kind = "test.kind", payload = "{}", availableAt = now, maxAttempts = 1))
+        queue.claimNext(now, Duration.ofMinutes(1))
+        queue.reapExpired(now.plusSeconds(120))
+
+        // When
+        val reclaimed = queue.claimNext(now.plusSeconds(121), Duration.ofMinutes(1))
+
+        // Then
+        assertNull(reclaimed)
+        val stored = queue.findById(enqueued.id)
+        assertEquals(TaskState.DEAD, stored?.state)
+        assertEquals(1, stored?.attempts)
+        assertNull(stored?.leaseId)
+    }
+
+    // --- renewLease ---
+
+    @Test
+    fun `Given a held lease, Then renewLease pushes the expiry back`() {
+        // Given
+        val claimed = claimFresh()
+        val extendedUntil = now.plusSeconds(600)
+
+        // When
+        val renewed = queue.renewLease(claimed.id, claimed.leaseId, extendedUntil)
+
+        // Then
+        assertTrue(renewed)
+        assertEquals(extendedUntil, queue.findById(claimed.id)?.leaseExpiresAt)
+        assertEquals(0, queue.reapExpired(now.plusSeconds(120)))
+    }
+
+    @Test
+    fun `Given a stale lease id, Then renewLease is fenced and changes nothing`() {
+        // Given
+        val claimed = claimFresh()
+
+        // When
+        val renewed = queue.renewLease(claimed.id, "wrong-lease", now.plusSeconds(600))
+
+        // Then
+        assertFalse(renewed)
+        assertEquals(1, queue.reapExpired(now.plusSeconds(120)))
+    }
+
+    @Test
+    fun `Given a settled task, Then renewLease refuses to revive its lease`() {
+        // Given
+        val claimed = claimFresh()
+        queue.markSucceeded(claimed.id, claimed.leaseId, now)
+
+        // When
+        val renewed = queue.renewLease(claimed.id, claimed.leaseId, now.plusSeconds(600))
+
+        // Then
+        assertFalse(renewed)
+        assertEquals(TaskState.SUCCEEDED, queue.findById(claimed.id)?.state)
+    }
 }

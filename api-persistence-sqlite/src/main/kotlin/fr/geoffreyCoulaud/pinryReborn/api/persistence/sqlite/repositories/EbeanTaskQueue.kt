@@ -97,6 +97,19 @@ class EbeanTaskQueue(
                 transaction.commit()
                 return@use null
             }
+            // A task whose handler never returns is never settled, so its attempts are only ever
+            // spent by the reaper putting it back to PENDING. Without this guard such a task is
+            // claimed again forever. Killing it here (rather than skipping to the next candidate)
+            // keeps the claim a single-row operation: the next poll picks up whatever follows.
+            if (model.attempts >= model.maxAttempts) {
+                model.state = TaskState.DEAD.name
+                model.lastError = "attempts exhausted"
+                model.leaseId = null
+                model.leaseExpiresAt = null
+                database.save(model)
+                transaction.commit()
+                return@use null
+            }
             val leaseId = randomUUID().toString()
             model.state = TaskState.RUNNING.name
             model.leaseId = leaseId
@@ -114,6 +127,18 @@ class EbeanTaskQueue(
                 cancelRequested = model.cancelRequested,
             )
         }
+
+    override fun renewLease(
+        id: UUID,
+        leaseId: String,
+        until: Instant,
+    ): Boolean =
+        leaseGuard(id, leaseId)
+            .state.equalTo(TaskState.RUNNING.name)
+            .asUpdate()
+            .set("leaseExpiresAt", until)
+            .setRaw("version = version + 1")
+            .update() > 0
 
     override fun markSucceeded(
         id: UUID,

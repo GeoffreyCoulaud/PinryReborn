@@ -22,6 +22,13 @@ interface TaskQueueInterface {
      */
     fun claimNext(now: Instant, leaseDuration: Duration): ClaimedTask?
 
+    /**
+     * Fenced lease extension: push the running task's lease expiry to [until] so a long handler is
+     * not reclaimed from under itself. Returns false if the task is no longer running under
+     * [leaseId], which tells the caller it has lost the task and must stop working on it.
+     */
+    fun renewLease(id: UUID, leaseId: String, until: Instant): Boolean
+
     /** Fenced settle to SUCCEEDED. Returns false if the lease no longer matches (fenced). */
     fun markSucceeded(id: UUID, leaseId: String, now: Instant): Boolean
 
