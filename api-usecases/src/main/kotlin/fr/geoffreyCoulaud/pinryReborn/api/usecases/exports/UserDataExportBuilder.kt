@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
+import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveEntryDigest
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveSink
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
@@ -19,7 +20,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import java.time.Duration
+import java.util.UUID
 
 /**
  * Builds a user data export archive (spec `docs/specs/2026-07-22-user-data-export.md` §3, §4, §8):
@@ -51,6 +54,83 @@ class UserDataExportBuilder(
     private val retention: Duration,
     private val minimumFreeBytes: Long,
 ) {
+
+    /**
+     * The worker's `account.export` task handler entry point (spec §8). Loads the export and its
+     * user, checks free space, stages and promotes the archive, then publishes the row with a
+     * compare-and-set so a build racing a cancellation or account deletion can never resurrect a
+     * row the user was told was gone. [isLastAttempt] controls whether a build failure marks the
+     * export `FAILED` (last attempt) or leaves it `PENDING` for a retry (earlier attempt); either
+     * way the original failure is rethrown so the task queue's own retry/dead-lettering still runs.
+     */
+    fun build(exportId: UUID, isLastAttempt: Boolean, renewLease: () -> Unit) {
+        val export = exportRepository.findById(exportId) ?: return
+        if (export.state != UserDataExportState.PENDING) return
+        val user = requireUser(export)
+        requireFreeSpace(export)
+        val storageKey = storageKeyFor(exportId)
+        // Referenced BEFORE it exists: the purge and the account cleaner both derive this same key
+        // from the export id (spec §10), so a build that dies right after promote() is still
+        // reclaimable even if this row never gets a further write.
+        exportRepository.save(export.copy(storageKey = storageKey))
+        val staged = stageOrFail(export, user, isLastAttempt, renewLease)
+        archiveStore.promote(staged, storageKey)
+        publish(exportId, storageKey, staged)
+    }
+
+    private fun requireUser(export: UserDataExport): User =
+        userRepository.findUserById(export.userId) ?: run {
+            markFailed(export, "USER_GONE")
+            throw PermanentTaskException("user no longer exists")
+        }
+
+    private fun requireFreeSpace(export: UserDataExport) {
+        if (archiveStore.hasFreeSpace(minimumFreeBytes)) return
+        markFailed(export, "DISK_FULL")
+        throw PermanentTaskException("not enough free space")
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun stageOrFail(export: UserDataExport, user: User, isLastAttempt: Boolean, renewLease: () -> Unit) =
+        try {
+            stageArchive(export, user, renewLease)
+        } catch (error: Throwable) {
+            if (isLastAttempt) markFailed(export, "BUILD_FAILED")
+            throw error
+        }
+
+    private fun storageKeyFor(exportId: UUID): String = "exports/$exportId.${archiveStore.format.fileExtension}"
+
+    private fun markFailed(export: UserDataExport, failureCode: String) {
+        exportRepository.save(export.copy(state = UserDataExportState.FAILED, failureCode = failureCode))
+    }
+
+    /**
+     * Re-reads the row inside a transaction and only publishes if it is still `PENDING`: cancelled
+     * (`DELETED`) or superseded by an account deletion in the meantime both leave it something else,
+     * in which case the just-promoted bytes are deleted instead of being resurrected as `READY`.
+     */
+    private fun publish(exportId: UUID, storageKey: String, staged: StagedFile) {
+        val published = transactionRunner.inTransaction { publishIfStillPending(exportId, staged) }
+        if (!published) archiveStore.delete(storageKey)
+    }
+
+    private fun publishIfStillPending(exportId: UUID, staged: StagedFile): Boolean {
+        val current = exportRepository.findById(exportId)
+        if (current?.state != UserDataExportState.PENDING) return false
+        exportRepository.save(
+            current.copy(
+                state = UserDataExportState.READY,
+                completedAt = clock.now(),
+                expiresAt = clock.now().plus(retention),
+                byteSize = staged.byteSize,
+                sha256 = staged.contentHash,
+                mediaType = archiveStore.format.mediaType,
+                fileExtension = archiveStore.format.fileExtension,
+            ),
+        )
+        return true
+    }
 
     /**
      * Writes every archive entry for [export]/[user] into a freshly staged file, in the load-bearing
