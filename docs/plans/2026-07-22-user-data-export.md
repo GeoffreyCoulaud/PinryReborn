@@ -981,6 +981,13 @@ git commit -m "feat(usecases): export archive content types, extension map and R
 **Writing order is load-bearing** (spec §3): `README.md`, `user.json`, `boards.jsonl`, `tags.jsonl`,
 **images first**, then `pins.jsonl` referencing only images actually written, then `manifest.json`.
 
+**Lease heartbeat (added 2026-07-23, during execution).** The lease-renewal plumbing is now in place:
+`TaskContext` carries a `renewLease: () -> Unit`, `TaskProcessor` fills it, and Task 10's handler
+passes `context.renewLease` down. `stageArchive` therefore takes a `renewLease: () -> Unit` parameter
+and calls it once per page of pins (both walks) and once per image entry, so an export that outruns
+the one-minute lease is never reaped mid-build and never runs concurrently with a second claim.
+Test it with a counting lambda: a multi-page walk must renew more than once.
+
 - [ ] **Step 1: Write the failing tests with a recording sink**
 
 ```kotlin
@@ -1081,8 +1088,11 @@ git commit -m "feat(usecases): walk user data into the export archive sink"
 
 - [ ] **Step 3: Implement**
 
+The `build` signature gains `renewLease: () -> Unit` (added 2026-07-23), threaded from the handler
+into `stageArchive` so the lease is extended while the archive is written:
+
 ```kotlin
-fun build(exportId: UUID, isLastAttempt: Boolean) {
+fun build(exportId: UUID, isLastAttempt: Boolean, renewLease: () -> Unit) {
     val export = exportRepository.findById(exportId) ?: return
     if (export.state != UserDataExportState.PENDING) return
     val user = userRepository.findUserById(export.userId) ?: run {
@@ -1094,7 +1104,7 @@ fun build(exportId: UUID, isLastAttempt: Boolean) {
     val storageKey = storageKeyFor(exportId)
     exportRepository.save(export.copy(storageKey = storageKey))   // referenced BEFORE it exists
     val staged = try {
-        stageArchive(export, user)
+        stageArchive(export, user, renewLease)
     } catch (error: Throwable) {
         if (isLastAttempt) markFailed(export, "BUILD_FAILED")
         throw error
@@ -1242,7 +1252,7 @@ fun `Given the final attempt, Then the builder is told it is the last one`() {
     // When
     UserDataExportTaskHandler(builder).handle(exportId.toString(), TaskContext(attempt = 3, maxAttempts = 3))
     // Then
-    verify { builder.build(exportId, isLastAttempt = true) }
+    verify { builder.build(exportId, isLastAttempt = true, any()) }
 }
 
 @Test
@@ -1256,7 +1266,11 @@ fun `Given an earlier attempt, Then the builder is told it is not the last one`(
 class UserDataExportTaskHandler(private val builder: UserDataExportBuilder) : TaskHandler {
     override val kind = UserDataExportTask.KIND
     override fun handle(payload: String, context: TaskContext) =
-        builder.build(UUID.fromString(payload), isLastAttempt = context.attempt >= context.maxAttempts)
+        builder.build(
+            UUID.fromString(payload),
+            isLastAttempt = context.attempt >= context.maxAttempts,
+            renewLease = context.renewLease,
+        )
 }
 ```
 
