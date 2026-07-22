@@ -10,6 +10,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID.randomUUID
 
@@ -18,6 +19,7 @@ class TaskProcessorTest {
     private val backoff: BackoffPolicy = mockk()
     private val clock: Clock = mockk()
     private val now = Instant.parse("2026-07-08T00:00:00Z")
+    private val leaseDuration = Duration.ofMinutes(1)
 
     private fun processorWith(handler: TaskHandler?) =
         TaskProcessor(
@@ -42,7 +44,7 @@ class TaskProcessorTest {
         val c = claimed()
         val p = processorWith(handler("k") { })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markSucceeded(c.id, "lease-1", now) }
     }
@@ -54,7 +56,7 @@ class TaskProcessorTest {
         val c = claimed(kind = "unknown")
         val p = processorWith(null)
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markDead(c.id, "lease-1", now, "no handler for kind unknown") }
     }
@@ -67,7 +69,7 @@ class TaskProcessorTest {
         val c = claimed(cancelRequested = true)
         val p = processorWith(handler("k") { ran = true })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markCancelledIfRequested(c.id, "lease-1", now) }
         assert(!ran)
@@ -81,7 +83,7 @@ class TaskProcessorTest {
         val c = claimed()
         val p = processorWith(handler("k") { })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify(exactly = 0) { queue.markSucceeded(any(), any(), any()) }
     }
@@ -96,7 +98,7 @@ class TaskProcessorTest {
         val c = claimed(attempts = 2, maxAttempts = 3)
         val p = processorWith(handler("k") { throw IllegalStateException("boom") })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markPendingRetry(c.id, "lease-1", retryAt, now, "boom") }
     }
@@ -109,7 +111,7 @@ class TaskProcessorTest {
         val c = claimed(attempts = 3, maxAttempts = 3)
         val p = processorWith(handler("k") { throw IllegalStateException("boom") })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markDead(c.id, "lease-1", now, "boom") }
     }
@@ -122,7 +124,7 @@ class TaskProcessorTest {
         val c = claimed(attempts = 1, maxAttempts = 3)
         val p = processorWith(handler("k") { throw PermanentTaskException("nope") })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markDead(c.id, "lease-1", now, "nope") }
     }
@@ -136,7 +138,7 @@ class TaskProcessorTest {
         val c = claimed(attempts = 1, maxAttempts = 3)
         val p = processorWith(handler("k") { throw IllegalStateException() })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
         verify { queue.markPendingRetry(c.id, "lease-1", now.plusSeconds(1), now, "transient failure") }
     }
@@ -152,8 +154,24 @@ class TaskProcessorTest {
             override fun handle(payload: String, context: TaskContext) { seen = context }
         })
         // When
-        p.execute(c)
+        p.execute(c, leaseDuration)
         // Then
-        assertEquals(TaskContext(2, 3), seen)
+        assertEquals(2, seen?.attempt)
+        assertEquals(3, seen?.maxAttempts)
+    }
+
+    @Test
+    fun `Given a handler that heartbeats, Then its lease is renewed by one duration from now`() {
+        // Given
+        every { clock.now() } returns now
+        val c = claimed()
+        val p = processorWith(object : TaskHandler {
+            override val kind = "k"
+            override fun handle(payload: String, context: TaskContext) { context.renewLease() }
+        })
+        // When
+        p.execute(c, Duration.ofMinutes(2))
+        // Then
+        verify { queue.renewLease(c.id, "lease-1", now.plus(Duration.ofMinutes(2))) }
     }
 }

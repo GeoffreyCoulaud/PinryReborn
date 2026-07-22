@@ -41,7 +41,7 @@ class TaskDispatcherTest {
         // Then
         verify(exactly = 1) { queue.claimNext(now, any()) }
         verify { executor.submit(any()) }
-        verify { processor.execute(a) }
+        verify { processor.execute(a, Duration.ofMinutes(1)) }
     }
 
     @Test
