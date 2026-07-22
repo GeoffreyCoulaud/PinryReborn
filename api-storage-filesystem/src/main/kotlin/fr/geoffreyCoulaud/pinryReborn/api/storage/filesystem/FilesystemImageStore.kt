@@ -2,7 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.file.Files

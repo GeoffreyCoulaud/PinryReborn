@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.domain.images
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.ImageFormat
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 
 data class ProbeResult(val format: ImageFormat, val width: Int, val height: Int, val animated: Boolean)
 
