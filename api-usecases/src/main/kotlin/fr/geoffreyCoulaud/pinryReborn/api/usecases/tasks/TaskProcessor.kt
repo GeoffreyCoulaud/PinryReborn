@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import jakarta.enterprise.context.ApplicationScoped
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -25,7 +26,7 @@ class TaskProcessor(
     private data class Retryable(val message: String) : Outcome
     private data class Permanent(val message: String) : Outcome
 
-    fun execute(claimed: ClaimedTask) {
+    fun execute(claimed: ClaimedTask, leaseDuration: Duration) {
         if (claimed.cancelRequested) {
             taskQueue.markCancelledIfRequested(claimed.id, claimed.leaseId, clock.now())
             return
@@ -34,7 +35,13 @@ class TaskProcessor(
         if (handler == null) {
             taskQueue.markDead(claimed.id, claimed.leaseId, clock.now(), "no handler for kind ${claimed.kind}")
         } else {
-            val outcome = runHandler(handler, claimed.payload, TaskContext(claimed.attempts, claimed.maxAttempts))
+            val context =
+                TaskContext(claimed.attempts, claimed.maxAttempts).apply {
+                    // The handler can push its lease back by one full duration; the fenced renewLease
+                    // no-ops if the task is no longer RUNNING under this lease (already reaped/settled).
+                    renewLease = { taskQueue.renewLease(claimed.id, claimed.leaseId, clock.now().plus(leaseDuration)) }
+                }
+            val outcome = runHandler(handler, claimed.payload, context)
             val now = clock.now()
             if (taskQueue.markCancelledIfRequested(claimed.id, claimed.leaseId, now)) {
                 return

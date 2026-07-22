@@ -46,7 +46,8 @@ class TaskDispatcher(
                 workerExecutor.release()
                 break
             }
-            workerExecutor.submit { taskProcessor.execute(claimed) }
+            val leaseDuration = config.leaseDuration()
+            workerExecutor.submit { taskProcessor.execute(claimed, leaseDuration) }
         }
     }
 }
