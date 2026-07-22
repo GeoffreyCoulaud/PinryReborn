@@ -1281,6 +1281,14 @@ class UserDataExportTaskHandler(private val builder: UserDataExportBuilder) : Ta
 values and `@ConfigProperty(name = "quarkus.application.version") applicationVersion` for the
 manifest's `generator.version`.
 
+**Correction (2026-07-23):** the original producer list forgot `UserDataExportDownloader` and
+`UserDataExportDeleter`, which also depend on `ExportArchiveStore`. `UserDataExportGetter` is already
+`@ApplicationScoped` (all its deps are beans). `UserDataExportDownloader` and `UserDataExportDeleter`
+take only beans too (the getter, `ExportArchiveStore`, `CancelTask`, the repository), so the simplest
+wiring is to annotate **both** `@ApplicationScoped` once `ExportArchiveStore` has this producer, and
+NOT `@Produces` them (a class must not be both discovered and produced). They were left un-annotated
+in Task 8 only because `ExportArchiveStore` had no producer yet; annotate them in this task.
+
 **Pitfall (learned in the worker-extraction sub-project):** a produced class must **not** also carry
 `@ApplicationScoped` (ambiguous bean), and a discovered bean cannot have `Duration`/`Int`/`String`
 constructor parameters. These four are plain classes, produced here, like `PinDownloadTaskHandler`.
