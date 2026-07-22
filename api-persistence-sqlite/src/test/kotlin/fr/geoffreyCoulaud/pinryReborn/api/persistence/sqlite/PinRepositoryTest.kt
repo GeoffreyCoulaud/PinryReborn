@@ -541,6 +541,7 @@ class PinRepositoryTest : RepositoryTest() {
         val user = createAndSaveUser()
         val firstPin = createAndSavePin(user)
         val secondPin = createAndSavePin(user)
+        forceCreationInstants("pins", listOf(firstPin.id, secondPin.id))
         val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
 
         // When
@@ -584,6 +585,7 @@ class PinRepositoryTest : RepositoryTest() {
         val user = createAndSaveUser()
         val firstPin = repository.softDeletePin(createAndSavePin(user))
         val secondPin = repository.softDeletePin(createAndSavePin(user))
+        forceCreationInstants("pins", listOf(firstPin.id, secondPin.id))
         val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
 
         // When
@@ -757,6 +759,7 @@ class PinRepositoryTest : RepositoryTest() {
         val board = createAndSaveBoard(name = "board1", user = user)
         val firstPin = repository.savePin(createPinWithBoards(board).copy(author = user))
         val secondPin = repository.savePin(createPinWithBoards(board).copy(author = user))
+        forceCreationInstants("pins", listOf(firstPin.id, secondPin.id))
         val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
 
         // When
