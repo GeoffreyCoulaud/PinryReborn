@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.domain.images
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.ImageFormat
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

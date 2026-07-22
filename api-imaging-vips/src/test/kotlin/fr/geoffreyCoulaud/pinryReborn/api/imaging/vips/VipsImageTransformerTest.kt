@@ -3,7 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.imaging.vips
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.ImageFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionSpec
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue

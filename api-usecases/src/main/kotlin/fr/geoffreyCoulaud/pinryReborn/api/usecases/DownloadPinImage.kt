@@ -18,7 +18,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.TooManyRedirectsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UnsupportedImageFormatException

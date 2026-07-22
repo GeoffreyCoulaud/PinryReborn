@@ -1,7 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException

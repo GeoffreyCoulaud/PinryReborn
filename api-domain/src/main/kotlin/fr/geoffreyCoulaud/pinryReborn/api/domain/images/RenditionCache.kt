@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.domain.images
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import java.io.InputStream
 import java.util.UUID
 

@@ -10,7 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbe
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UnsupportedImageFormatException
 import jakarta.enterprise.context.ApplicationScoped

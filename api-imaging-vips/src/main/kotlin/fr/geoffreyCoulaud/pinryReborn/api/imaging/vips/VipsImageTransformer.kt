@@ -5,7 +5,7 @@ import app.photofox.vipsffm.Vips
 import app.photofox.vipsffm.VipsOption
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTransformer
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionSpec
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import java.io.InputStream
 import java.lang.foreign.Arena
 import java.nio.file.Files

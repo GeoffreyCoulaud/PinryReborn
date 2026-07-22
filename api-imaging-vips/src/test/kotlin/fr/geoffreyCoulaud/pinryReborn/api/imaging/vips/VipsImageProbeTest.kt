@@ -2,7 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.imaging.vips
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.ImageFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
-import fr.geoffreyCoulaud.pinryReborn.api.domain.images.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UndecodableImageException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.UnsupportedImageFormatException
 import org.junit.jupiter.api.Assertions.assertEquals

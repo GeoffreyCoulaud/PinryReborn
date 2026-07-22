@@ -1,11 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.domain.images
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import java.io.InputStream
-
-/**
- * StagedFile: opaque local staging reference + measured size + content hash.
- */
-data class StagedFile(val path: String, val byteSize: Long, val contentHash: String)
 
 interface ImageStore {
     /**
