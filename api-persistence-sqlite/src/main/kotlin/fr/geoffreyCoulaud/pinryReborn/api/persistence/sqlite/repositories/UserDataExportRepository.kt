@@ -32,16 +32,29 @@ class UserDataExportRepository(
     private fun resolveUser(userId: UUID): UserModel =
         QUserModel().id.equalTo(userId).findOne() ?: throw UserModelDoesNotExistError()
 
-    // The unique-index violation on `user_data_exports (user_id) WHERE state = 'PENDING'` surfaces
-    // through this exact call as a plain `jakarta.persistence.PersistenceException` wrapping
-    // `org.sqlite.SQLiteException: [SQLITE_CONSTRAINT_UNIQUE] ...` (verified against a live SQLite
-    // database: Ebean/SQLite does NOT translate it to `io.ebean.DuplicateKeyException` here). The
-    // user lookup is deliberately outside the try block so UserModelDoesNotExistError is never
-    // mistaken for the unique-index violation.
+    private fun persist(model: UserDataExportModel): UserDataExport = sqlRepository.saveAndReturn(model).toDomain()
+
+    /**
+     * The only row this table refuses is a second `PENDING` export for one user, enforced by the
+     * partial unique index. It surfaces through this exact call as a plain
+     * `jakarta.persistence.PersistenceException` wrapping
+     * `org.sqlite.SQLiteException: [SQLITE_CONSTRAINT_UNIQUE] ...` (verified against a live SQLite
+     * database: Ebean/SQLite does NOT translate it to `io.ebean.DuplicateKeyException` here), and
+     * the exception carries no usable structured code, so the guard is scoped by what is being
+     * written rather than by inspecting the message.
+     *
+     * Only a `PENDING` write can hit that index, so only a `PENDING` write translates the failure.
+     * A state transition (READY, FAILED, EXPIRED, ...) that fails is a genuine persistence error and
+     * must keep its own type instead of being reported as "an export is already in progress".
+     *
+     * The user lookup stays outside the try block so `UserModelDoesNotExistError` is never mistaken
+     * for the unique-index violation.
+     */
     override fun save(export: UserDataExport): UserDataExport {
-        val user = resolveUser(export.userId)
+        val model = export.toModel(resolveUser(export.userId))
+        if (export.state != UserDataExportState.PENDING) return persist(model)
         return try {
-            sqlRepository.saveAndReturn(export.toModel(user)).toDomain()
+            persist(model)
         } catch (error: PersistenceException) {
             throw ExportAlreadyInProgressException(cause = error)
         }
