@@ -158,4 +158,34 @@ class BaseErrorMapperTest {
     fun `Given UNSUPPORTED_REAUTHENTICATION_FACTOR, Then status is BAD_REQUEST`() {
         assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.UNSUPPORTED_REAUTHENTICATION_FACTOR))
     }
+
+    @Test
+    fun `Given EXPORT_ALREADY_IN_PROGRESS, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.EXPORT_ALREADY_IN_PROGRESS))
+    }
+
+    @Test
+    fun `Given EXPORT_TOO_SOON, Then status is TOO_MANY_REQUESTS`() {
+        assertEquals(Response.Status.TOO_MANY_REQUESTS, statusFor(ErrorCode.EXPORT_TOO_SOON))
+    }
+
+    @Test
+    fun `Given EXPORT_DOES_NOT_EXIST, Then status is NOT_FOUND`() {
+        assertEquals(Response.Status.NOT_FOUND, statusFor(ErrorCode.EXPORT_DOES_NOT_EXIST))
+    }
+
+    @Test
+    fun `Given EXPORT_INSUFFICIENT_PERMISSIONS, Then status is FORBIDDEN`() {
+        assertEquals(Response.Status.FORBIDDEN, statusFor(ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS))
+    }
+
+    @Test
+    fun `Given EXPORT_NOT_READY, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.EXPORT_NOT_READY))
+    }
+
+    @Test
+    fun `Given EXPORT_GONE, Then status is GONE`() {
+        assertEquals(Response.Status.GONE, statusFor(ErrorCode.EXPORT_GONE))
+    }
 }

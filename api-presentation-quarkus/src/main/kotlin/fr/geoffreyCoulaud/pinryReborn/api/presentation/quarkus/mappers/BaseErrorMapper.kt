@@ -52,6 +52,12 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.REAUTHENTICATION_FAILED -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.PASSWORD_PREVIOUSLY_USED -> UNPROCESSABLE_ENTITY_STATUS_CODE
             ErrorCode.UNSUPPORTED_REAUTHENTICATION_FACTOR -> Response.Status.BAD_REQUEST.statusCode
+            ErrorCode.EXPORT_ALREADY_IN_PROGRESS -> Response.Status.CONFLICT.statusCode
+            ErrorCode.EXPORT_TOO_SOON -> Response.Status.TOO_MANY_REQUESTS.statusCode
+            ErrorCode.EXPORT_DOES_NOT_EXIST -> Response.Status.NOT_FOUND.statusCode
+            ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
+            ErrorCode.EXPORT_NOT_READY -> Response.Status.CONFLICT.statusCode
+            ErrorCode.EXPORT_GONE -> Response.Status.GONE.statusCode
         }
 
     private companion object {
