@@ -1,0 +1,22 @@
+package fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions
+
+open class UserDataExportError(message: String, code: ErrorCode, cause: Throwable? = null) :
+    BaseError(message, code, cause)
+
+// Thrown by the requester when it catches the domain ExportAlreadyInProgressException raised by the
+// repository's partial-unique-index guard (the ordinary case is caught earlier by
+// findPendingForUser, but this is what surfaces a lost race between two concurrent requests).
+class ExportAlreadyInProgressError(cause: Throwable? = null) :
+    UserDataExportError("An export is already in progress", ErrorCode.EXPORT_ALREADY_IN_PROGRESS, cause)
+
+class ExportTooSoonError(val retryAfterSeconds: Long) :
+    UserDataExportError("Another export was requested too recently", ErrorCode.EXPORT_TOO_SOON)
+
+class ExportDoesNotExistError : UserDataExportError("Export does not exist", ErrorCode.EXPORT_DOES_NOT_EXIST)
+
+class ExportPermissionError :
+    UserDataExportError("Export belongs to another user", ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS)
+
+class ExportNotReadyError : UserDataExportError("Export is not ready", ErrorCode.EXPORT_NOT_READY)
+
+class ExportGoneError : UserDataExportError("Export is no longer available", ErrorCode.EXPORT_GONE)
