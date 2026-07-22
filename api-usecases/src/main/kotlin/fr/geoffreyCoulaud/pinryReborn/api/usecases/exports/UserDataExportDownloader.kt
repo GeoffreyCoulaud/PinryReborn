@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportGoneError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportNotReadyError
+import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 
 /**
@@ -19,10 +20,8 @@ import java.util.UUID
  * below), instead of one null check per field: dereferencing each of them separately would create
  * branches whose "impossible" side no test could ever reach, which breaks the 100% branch gate. See
  * spec §5.
- *
- * Deliberately not `@ApplicationScoped` yet: [ExportArchiveStore] has no CDI producer until the
- * wiring task (`ExportProducers`). Same precedent as `UserDataExportRequester`/`UserDataExportBuilder`.
  */
+@ApplicationScoped
 @Suppress("UnsafeCallOnNullableType")
 class UserDataExportDownloader(
     private val getter: UserDataExportGetter,
