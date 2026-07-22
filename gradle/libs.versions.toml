@@ -64,6 +64,7 @@ resteasy-reactive = { module = "io.quarkus.resteasy.reactive:resteasy-reactive",
 
 # Jackson (version from Quarkus BOM)
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310" }
 
 # Logging
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
