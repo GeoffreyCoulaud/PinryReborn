@@ -126,6 +126,18 @@ importer ships here.
   Jackson serialization both live in `api-storage-filesystem`. `api-usecases` therefore gains **no**
   serialization dependency and the use case describes *what* goes into the archive, never *how* it is
   encoded. Switching to another container later is an adapter change.
+- **…which is precisely why the effective media type and size must travel through the layers.** If the
+  adapter owns the container format, the controller cannot hardcode `application/zip`: it would be
+  asserting something only the adapter knows, and it would start lying the day the adapter changes.
+  So the port **declares** its format (`ArchiveFormat(mediaType, fileExtension)`), the builder
+  **persists** that media type and extension on the export row, and the controller **reads them back**
+  from the row. An archive built as a ZIP is therefore still served as `application/zip` with a `.zip`
+  name years later, even if the adapter has moved on: the row records what was actually produced, not
+  what the current code would produce. The same rule governs the size: `byteSize` is measured at build
+  time, stored, exposed in the API representation, and sent as `Content-Length` so the browser shows a
+  real progress bar instead of an open-ended spinner. This mirrors `ImageController.serveOriginal`,
+  which already serves `Content-Type` and `Content-Length` from the stored `Image`, never from a
+  constant.
 - **Enumeration reuses the existing cursor pagination.** `findAllPinsForUser` returns a full `List<Pin>`
   and excludes the recycle bin, so it is unusable here: 50 000 pins would land in memory at once. Two
   paginated passes (`findPinsForUser`, then `findSoftDeletedPinsForUser`) give constant memory with no
@@ -249,9 +261,15 @@ data class UserDataExport(
     val storageKey: String? = null,
     val byteSize: Long? = null,
     val sha256: String? = null,
+    val mediaType: String? = null,
+    val fileExtension: String? = null,
     val failureCode: String? = null,
 ) : Identifiable
 ```
+
+`mediaType` and `fileExtension` are copied from the port's declared `ArchiveFormat` when the archive is
+promoted, and are the **only** source the download endpoint uses. They are stored rather than derived
+so an archive keeps being served as what it actually is, whatever the adapter produces later.
 
 `UserDataExportState`: `PENDING`, `READY`, `FAILED`, `EXPIRED`, `DELETED`, `SUPERSEDED`.
 
@@ -281,7 +299,12 @@ with exports. It moves to a neutral `domain.storage` package (`git mv` plus impo
 ### `ExportArchiveStore` port
 
 ```kotlin
+/** What the adapter actually produces, surfaced so no upper layer has to assume it. */
+data class ArchiveFormat(val mediaType: String, val fileExtension: String)
+
 interface ExportArchiveStore {
+    val format: ArchiveFormat
+
     /** Writes a new archive into a temp file, measuring size and SHA-256 in one pass. */
     fun stage(block: (ArchiveSink) -> Unit): StagedFile
     fun promote(staged: StagedFile, storageKey: String)
@@ -357,25 +380,38 @@ existing controllers.
 | `GET` | `/api/v1/me/exports/{id}/download` | `200` (or `206`) with the bytes |
 | `DELETE` | `/api/v1/me/exports/{id}` | `204`; cancels or destroys |
 
-Response DTO: `id`, `state`, `requestedAt`, `completedAt`, `expiresAt`, `byteSize`, `sha256`,
-`failureCode`, `formatVersion`.
+Response DTO: `id`, `state`, `requestedAt`, `completedAt`, `expiresAt`, `byteSize`, `mediaType`,
+`sha256`, `failureCode`, `formatVersion`. `byteSize` and `mediaType` are in the representation, not
+only in the download headers, so a client can announce "3.2 GB ZIP archive" before the user commits to
+the download.
 
 ### Download response
 
-- `Content-Type: application/zip`, `Content-Length` from the stored `byteSize`, `ETag: "<sha256>"`.
+- `Content-Type` and `Content-Length` come **from the export row** (`mediaType`, `byteSize`), never
+  from a constant in the controller, exactly as `ImageController.serveOriginal` serves `image.mimeType`
+  and `image.byteSize`. `ETag: "<sha256>"`, `Accept-Ranges: bytes`.
 - `Content-Disposition: attachment` with **both** an ASCII-sanitized `filename` and an RFC 6266
-  `filename*=UTF-8''<percent-encoded>`. **This is a security requirement, not cosmetics**: usernames
+  `filename*=UTF-8''<percent-encoded>`, whose extension is the row's `fileExtension` (§5), so the name
+  can never advertise a container the archive is not. **This is a security requirement, not cosmetics**: usernames
   are only trimmed and uniqueness-checked at registration (`UserCreator`), so a name can legitimately
   contain quotes, slashes, `..`, CR/LF or arbitrary Unicode. Unsanitized, that is header injection and
   a hostile file name on the client. Sanitization keeps `[A-Za-z0-9._-]`, replaces anything else with
   `-`, collapses repeats, and falls back to the user id if nothing survives.
-- **Range requests**: a single `bytes=start-` or `bytes=start-end` range is honoured (`206` plus
-  `Content-Range`, `416` on an unsatisfiable range), served through `openStream(key, skipBytes)`.
-  Multi-range requests are answered with the full body, which is legal. Rationale: without it, a
-  connection dropping at 90% of a 3 GB archive means starting over, which would undercut the whole
-  reason for choosing the asynchronous design. *This is the one item in this spec that can be cut to
-  shrink the batch;* if cut, `openStream` loses its offset parameter and the endpoint answers `200`
-  only.
+- **Range requests are implemented by hand, deliberately.** Quarkus REST does accept `Path`,
+  `PathPart`, `FilePart` and Vert.x `AsyncFile` as return types, but it documents **no automatic
+  `Range` handling**, and those types would require a real filesystem path in the controller, which
+  would defeat `ExportArchiveStore` (the port exposes `openStream`, never a path; where the bytes live
+  is the adapter's business). So the endpoint parses `Range` itself and returns a
+  `RestResponse<StreamingOutput>`, which is the pattern `ImageController.serveOriginal` already uses
+  successfully with a hand-set `Content-Length`. A single `bytes=start-` or `bytes=start-end` range is
+  honoured (`206` plus `Content-Range`, `Content-Length` = the slice length, `416` plus
+  `Content-Range: bytes */<total>` when unsatisfiable); a multi-range request is answered with the full
+  body, which is allowed. Without this, a connection dropping at 90% of a 3 GB archive means starting
+  over, which would undercut the very reason the design is asynchronous.
+- Two implementation traps for the plan: `InputStream.skip` may skip **fewer** bytes than asked, so
+  seeking must use `skipNBytes` or a positioned `SeekableByteChannel`; and the copy must be **bounded**
+  to the slice length, since `copyTo` would happily stream past `end` and contradict the announced
+  `Content-Length`.
 
 ## 8. The `account.export` task (worker path)
 
@@ -394,18 +430,23 @@ Response DTO: `id`, `state`, `requestedAt`, `completedAt`, `expiresAt`, `byteSiz
    accumulated digests and counts.
 4. `promote(staged, storageKey)` where `storageKey` derives from the export id.
 5. In one transaction, set `READY`, `completedAt`, `expiresAt = now + retention`, `byteSize`, `sha256`,
-   `storageKey`.
+   `storageKey`, and `mediaType` / `fileExtension` copied from `exportArchiveStore.format`.
 6. On any failure: `discard(staged)`, let the exception propagate so the queue retries. On the final
    attempt the export must end as `FAILED` rather than staying `PENDING` forever.
 
 **Point of attention inherited from account deletion.** `TaskProcessor` swallows a throwing handler
 into a retryable outcome without logging, so a task that exhausts its attempts and goes `DEAD` is
-invisible. An export must therefore never rely on the task state to tell the user what happened: the
-`FAILED` state and `failureCode` on the export row are the user-visible truth. Making the handler write
-`FAILED` on its last attempt requires the attempt counter, which `TaskContext` exposes; if it does not,
-the fallback is the purge sweep ageing out stale `PENDING` rows (older than the lease times the maximum
-attempts) into `FAILED`. **The plan must check `TaskContext` and pick one; a `PENDING` row that can
-never move is not acceptable.**
+invisible to operators. An export must therefore never rely on the task state to tell the user what
+happened: the `FAILED` state and `failureCode` on the export row are the user-visible truth.
+
+**Verified: the brick already exists.** `TaskContext(attempt, maxAttempts)` is handed to every handler,
+populated from `ClaimedTask.attempts` / `maxAttempts`, and `TaskProcessor.settle` marks a task `DEAD`
+on exactly `attempts >= maxAttempts`. The handler therefore passes `isLastAttempt =
+context.attempt >= context.maxAttempts` to the builder, using the same comparison as the processor, and
+the builder writes `FAILED` before rethrowing on that last attempt. The use case never learns anything
+about the queue beyond that boolean. `PermanentTaskException` is used for failures that must not be
+retried at all (the user is gone or tombstoned): it marks the task dead immediately, and the builder
+sets `FAILED` first.
 
 ## 9. Retention, quotas and purge
 
@@ -463,8 +504,9 @@ status code plus the `ProblemDetail` fields, mirroring the existing `IMAGE_INVAL
 
 Migration `1.10` creates `user_data_exports`: `id` (PK), `user_id` (FK, restrict), `state`,
 `format_version`, `requested_at`, `completed_at`, `expires_at`, `storage_key`, `byte_size`, `sha256`,
-`failure_code`, plus `when_created` / `when_modified` from `BaseModel`. Indexes on `(user_id, state)`
-and `(expires_at)`, plus the hand-added partial unique index of §9.
+`media_type`, `file_extension`, `failure_code`, plus `when_created` / `when_modified` from
+`BaseModel`. Indexes on `(user_id, state)` and `(expires_at)`, plus the hand-added partial unique
+index of §9.
 
 Archives live under the data directory next to images, via `DataDirPaths`, in their own subtree. **No
 blob ever goes into the database**: the row carries metadata and a storage key only.
@@ -496,14 +538,13 @@ malformed step-up header, cancellation of a `PENDING` export, a range request (`
 bytes, `416` when unsatisfiable), and **`Content-Disposition` sanitization with a hostile username**
 (quotes, CRLF, `../`, non-ASCII).
 
+One more that is cheap and guards the layering: **the download headers come from the row**. Persist an
+export whose `mediaType` / `fileExtension` differ from the current adapter's format and assert the
+response carries the stored values, not the adapter's. This is the test that fails the day someone
+"simplifies" the controller by hardcoding `application/zip`.
+
 ## 14. Risks / open points
 
-- **`TaskContext` may not expose the attempt number**, which the handler needs to write `FAILED` on its
-  last attempt (§8). The plan resolves this before implementation; the fallback is ageing stale
-  `PENDING` rows out in the purge sweep.
-- **Range support relies on Quarkus REST behaviour** around streamed entities and `Content-Length`. To
-  be validated against current documentation (context7) during implementation, and cut if it fights
-  the framework.
 - **The archive is built in one pass with no progress reporting.** A user watching a multi-gigabyte
   export sees only `PENDING`. Acceptable for v1; a percentage would require the worker to report
   progress, which the queue does not model.
