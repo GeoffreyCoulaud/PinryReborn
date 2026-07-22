@@ -35,6 +35,8 @@ dependencies {
     testImplementation(project(":api-utilities"))
     testImplementation(libs.bundles.integration.testing)
     testImplementation(libs.ebean)
+    // Konsist architecture guardrails (reads source across all modules)
+    testImplementation(libs.konsist)
 }
 
 allOpen {
