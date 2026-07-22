@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Proves the whole runtime -- real Quarkus boot, real background poller/worker pool
- * ([fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.tasks.TaskWorkerLifecycle]),
+ * ([fr.geoffreyCoulaud.pinryReborn.api.worker.TaskWorkerLifecycle]),
  * real SQLite -- processes a task end to end. Enqueues a task of an unknown kind (no
  * [fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskHandler] is registered for it in this
  * test app), so [fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskProcessor]'s no-handler

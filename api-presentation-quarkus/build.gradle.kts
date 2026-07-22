@@ -23,8 +23,6 @@ dependencies {
     compileOnly(libs.quarkus.security)
     compileOnly(libs.quarkus.smallrye.openapi)
     compileOnly(libs.quarkus.hibernate.validator)
-    compileOnly(libs.quarkus.core)
-    compileOnly(libs.quarkus.micrometer)
 
     // Tests
     testImplementation(testFixtures(project(":api-utilities")))
@@ -37,12 +35,10 @@ dependencies {
     // Base64JsonSerializer, Base64JsonParamConverter*) — compileOnly at main scope, not
     // inherited by the test source set.
     testImplementation(libs.jackson.databind)
-    // Needed to unit-test TaskWorkerLifecycle's onStart/onStop CDI event delegators
-    // (StartupEvent/ShutdownEvent) — compileOnly at main scope, not inherited by the test
-    // source set.
-    testImplementation(libs.quarkus.core)
-    // Needed to unit-test TaskQueueMetrics with a real SimpleMeterRegistry —
-    // compileOnly at main scope, not inherited by the test source set.
+    // Transitively provides io.vertx.* and io.quarkus.vertx.http.* on the test classpath, needed to
+    // compile the Bearer auth mechanism tests (BearerAuthenticationMechanism extends
+    // HttpAuthenticationMechanism; the tests mock RoutingContext/HttpServerRequest). On main these
+    // come via quarkus-smallrye-openapi, which the test source set does not depend on.
     testImplementation(libs.quarkus.micrometer)
     testImplementation(libs.bundles.testing)
     testRuntimeOnly(libs.bundles.testing.runtime)

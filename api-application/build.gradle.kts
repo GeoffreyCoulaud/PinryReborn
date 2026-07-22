@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":api-imaging-vips"))
     implementation(project(":api-fetch-http"))
     implementation(project(":api-system"))
+    implementation(project(":api-worker-quarkus"))
 
     // BOM
     implementation(enforcedPlatform(libs.quarkus.bom))

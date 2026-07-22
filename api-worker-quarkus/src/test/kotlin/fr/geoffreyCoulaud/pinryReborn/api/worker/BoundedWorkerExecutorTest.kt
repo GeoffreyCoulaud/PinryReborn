@@ -1,4 +1,4 @@
-package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.tasks
+package fr.geoffreyCoulaud.pinryReborn.api.worker
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
