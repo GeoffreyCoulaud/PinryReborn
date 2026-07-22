@@ -29,7 +29,10 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   (SHA-256 hash stored, `rememberMe` persistent/ephemeral TTL); `GET /me`, `GET /sessions/current`,
   `POST /sessions/current/renew` (atomic rotation), `DELETE /sessions/current` (logout),
   `DELETE /sessions` (logout-all); OpenAPI declares a bearer security scheme. Replaces HTTP Basic
-  entirely. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
+  entirely. Session use cases (`SessionCreator` / `SessionRenewer`) run their writes through the
+  `TransactionRunner` port; no `@Transactional` remains in `api-usecases` (migrated 2026-07-22).
+  See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md` and
+  `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
 - **Pins**: list (cursor pagination + sort strategy), get, create, update, soft-delete, tag.
 - **Recycle bin**: list recycled, restore, permanent delete, empty.
 - **Search**: pins (trigram similarity) + tags.
@@ -65,8 +68,9 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 
 **Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
 (merged to `main`, in Shipped above). **Profile management shipped 2026-07-21** (change password +
-async account deletion, in Shipped above). Scheduled next: an architecture correction, extracting the
-task worker runtime out of the presentation module (see P2).
+async account deletion, in Shipped above). **In progress: the architecture cleanup campaign** (four
+sequenced items A to D, see P2 and `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`).
+Item A (`Session*` use cases routed through the `TransactionRunner` port) shipped 2026-07-22; B, C, D remain.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -101,13 +105,6 @@ task worker runtime out of the presentation module (see P2).
   `api-application` composition root as a pragmatic temporary home. Gather them into a dedicated adapter
   module (e.g. `api-security` / `api-system`) depending on `api-domain`, mirroring the per-adapter-module
   convention. Companion to the `api-worker-quarkus` extraction (both move misplaced adapters out).
-
-- **Migrate the remaining `@Transactional` use cases to the `TransactionRunner` port.** *(Architecture
-  cleanup. Flagged 2026-07-21.)* `SessionCreator` and `SessionRenewer` still carry
-  `jakarta.transaction.@Transactional` — a persistence concern leaking into the application layer. Route
-  them through the existing `TransactionRunner` domain port (as the image use cases and the new
-  profile-management use cases do) and drop the annotation. `UserCreator` is migrated by profile
-  management; only the `Session*` pair is left.
 
 - **Enforce Clean Architecture boundaries with Konsist.** *(Architecture enforcement. Flagged 2026-07-21.)*
   Add Konsist (a Kotlin architecture-testing library) checks that fail the build when a layer imports what
