@@ -64,6 +64,13 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   dedicated `api-system` module depending on `api-domain` only, alongside the existing
   `api-storage-filesystem`, `api-imaging-vips`, and `api-fetch-http` adapter modules. On `main`.
   See `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
+- **Task-worker runtime**: the background poller/worker driving subsystem (`TaskDispatcher`,
+  `TaskWorkerLifecycle`, `TaskRuntimeProducers`, `WorkerExecutor`, `TaskQueueConfig`, `TaskQueueMetrics`,
+  and the `PinDownloadTaskHandler` / `AccountDeletionTaskHandler` handlers) lives in a dedicated
+  `api-worker-quarkus` module (`api-usecases` + `api-domain` only), not in the HTTP presentation module.
+  `PinDownloadTaskHandler`'s image limits are supplied by an `api-application` producer, so the worker
+  carries no presentation dependency. On `main`.
+  See `docs/specs/2026-07-22-worker-runtime-extraction.md`.
 
 ---
 
@@ -75,8 +82,9 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 (merged to `main`, in Shipped above). **Profile management shipped 2026-07-21** (change password +
 async account deletion, in Shipped above). **In progress: the architecture cleanup campaign** (four
 sequenced items A to D, see P2 and `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`).
-Item A (`Session*` use cases routed through the `TransactionRunner` port) and item B (misplaced adapters
-gathered into the new `api-system` module) shipped 2026-07-22; C and D remain.
+Items A (`Session*` use cases routed through the `TransactionRunner` port), B (misplaced adapters
+gathered into the new `api-system` module) and C (task-worker runtime extracted into the new
+`api-worker-quarkus` module) shipped 2026-07-22; only D (Konsist enforcement) remains.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -88,21 +96,6 @@ gathered into the new `api-system` module) shipped 2026-07-22; C and D remain.
   instance or another one, so they stay in control of their data and are never held hostage. Not yet specced.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
-
-- **Extract the task worker runtime into a dedicated adapter module.** *(Architecture correction —
-  scheduled as the next sub-project, right after profile management. Flagged 2026-07-21.)* An entire
-  task-worker **driving** subsystem currently lives in the HTTP presentation module
-  (`api-presentation-quarkus/.../tasks/`): `TaskDispatcher` (poll loop), `TaskWorkerLifecycle`,
-  `TaskRuntimeProducers` (CDI producers), `WorkerExecutor`, `TaskQueueConfig`, `TaskQueueMetrics`, and
-  the task handlers (`PinDownloadTaskHandler`, and the `AccountDeletionTaskHandler` added by profile
-  management — knowingly placed there temporarily). Tasks are a driving adapter, not HTTP presentation.
-  Extract them into a new **`api-worker-quarkus`** module (depends on `api-usecases` + `api-domain`),
-  mirroring the existing per-adapter modules (`api-storage-filesystem`, `api-imaging-vips`,
-  `api-fetch-http`). **Exception:** `SystemClock` (the `Clock` port impl) is app-wide, not
-  worker-specific; it already lives in `api-system` (item B) and must **not** move into the worker
-  module. `TaskProcessor`, the `TaskHandler` port, the registry, and
-  `EnqueueTask` / `CancelTask` / `ReapExpiredTasks` are correctly in `api-usecases` and stay. Watch the
-  Quarkus CDI bean-discovery wiring for the new module.
 
 - **Enforce Clean Architecture boundaries with Konsist.** *(Architecture enforcement. Flagged 2026-07-21.)*
   Add Konsist (a Kotlin architecture-testing library) checks that fail the build when a layer imports what

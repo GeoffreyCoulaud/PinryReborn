@@ -29,7 +29,7 @@ fresh `main`).
 
 - **A — DONE (merged to `main`, PR #25, 2026-07-22).**
 - **B — DONE (merged to `main`, PR #26, 2026-07-22).**
-- C — not started.
+- **C — DONE (merged to `main`, PR #27, 2026-07-22).**
 - D — not started.
 
 ## A — what was built
@@ -85,13 +85,36 @@ only `SystemClock` left it.
   invariant to preserve when item C adds the worker module.
 - `SystemClock` has no test and no branches, so per-package branch coverage is unaffected by the move.
 
+## C — what was built
+
+New `api-worker-quarkus` module (package `...api.worker`), `api-usecases` + `api-domain` only, holding
+the eight task-worker files + six tests (`git mv`, history preserved). Two commits: first decouple
+`PinDownloadTaskHandler` from `ImagesConfig` (Option 2b: plain class taking `maxBytes`/`maxPixels`,
+produced by a new `api-application` `TaskHandlerProducers`), then the pure module move. See
+`docs/specs/2026-07-22-worker-runtime-extraction.md` and the matching plan.
+
+### Learned pitfalls (C)
+
+- **Hidden transitive classpath coupling in presentation tests.** The plan trimmed presentation's
+  worker-only Quarkus deps. Removing `testImplementation(quarkus-micrometer)` broke the *pre-existing*
+  Bearer auth mechanism tests: `quarkus-micrometer` was the only thing transitively putting `io.vertx.*`
+  and `io.quarkus.vertx.http.*` on the **test** classpath (on main those arrive via
+  `quarkus-smallrye-openapi`, which the test source set does not depend on). Lesson: a build-dep trim
+  is only safe once the full gate is green, not once the changed module compiles;
+  `dependencyInsight --configuration testCompileClasspath` pinpoints the real provider. `quarkus-core`,
+  by contrast, was genuinely worker-only and stayed removed.
+- **Producer vs discovered bean:** dropping `@ApplicationScoped` from `PinDownloadTaskHandler` is
+  mandatory under Option 2b — a discovered bean with `Long` constructor params is unresolvable, and a
+  class must not be both discovered and produced.
+- The worker module reproduced the `api-system` invariant: only `api-application` (composition root)
+  depends on it; every other consumer references the use-case/domain ports.
+
 ## Suggested next step
 
-Start **C** off a fresh `main`: extract the task-worker runtime from `api-presentation-quarkus/tasks/`
-into a new `api-worker-quarkus` module (depends on `api-usecases` + `api-domain`). This is the big
-one and warrants a structured spec + plan. Key risks: it is a Quarkus-runtime module (CDI producers,
-`StartupEvent`/`ShutdownEvent` lifecycle, micrometer, smallrye-config), so watch bean discovery and
-the lifecycle wiring; the two task handlers (`PinDownloadTaskHandler`, `AccountDeletionTaskHandler`)
-move with it. `SystemClock` stays in `api-system` (already done) and must NOT move into the worker
-module. Confirm `api-application` still boots and the async flows (image download, account deletion)
-run end-to-end.
+Start **D** (the campaign capstone) off a fresh `main`: add Konsist checks that fail the build on layer
+violations — `api-usecases` importing `jakarta.transaction` / `io.ebean` / `jakarta.ws.rs` / a concrete
+crypto-random library; `api-domain` importing any I/O; and the module dependency DAG (now including
+`api-system` and `api-worker-quarkus`). Items A–C were done partly to make these rules pass cleanly, so
+D should go green with little churn. Use the context7 MCP for Konsist's current API. Decide where the
+Konsist test source set lives (a dedicated `api-architecture-tests` module is the usual pattern, so the
+rules can see every module on the classpath).
