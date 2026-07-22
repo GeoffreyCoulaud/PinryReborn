@@ -13,4 +13,7 @@ data class Pin(
     val boards: List<Board>,
     val softDeletedAt: Instant? = null,
     val image: Image? = null,
+    // Nullable: null means "not read from persistence". See User.createdAt for the rationale.
+    val createdAt: Instant? = null,
+    val updatedAt: Instant? = null,
 ) : Identifiable

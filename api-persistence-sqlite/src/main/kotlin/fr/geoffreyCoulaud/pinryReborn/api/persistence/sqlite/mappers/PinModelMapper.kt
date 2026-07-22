@@ -33,6 +33,8 @@ object PinModelMapper {
             tags = tags,
             boards = boards,
             softDeletedAt = softDeletedAt,
+            createdAt = whenCreated,
+            updatedAt = whenModified,
         )
 
     fun ModelCursor<PinModel>.toDomain(): Cursor =

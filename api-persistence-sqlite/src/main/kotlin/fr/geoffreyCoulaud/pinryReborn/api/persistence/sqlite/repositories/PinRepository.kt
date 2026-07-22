@@ -69,7 +69,11 @@ class PinRepository(
         val pinModel = sqlRepository.saveAndReturn(pin.toModel())
         savePinTags(pinModel, pin.tags)
         savePinBoards(pinModel, pin.boards)
-        return pinModel.toDomain(getTagsForPin(pinModel.id), getBoardsForPin(pinModel.id))
+        // Re-read by id rather than mapping `pinModel` directly: its `author` is still the bare
+        // placeholder built by `Pin.toModel()` (id + name only, no Ebean-managed timestamps), so
+        // mapping it straight would throw UninitializedPropertyAccessException on
+        // `UserModel.whenCreated`. A fresh query loads a genuine Ebean reference for the author.
+        return findPinById(pinModel.id)!!
     }
 
     private fun savePinTags(

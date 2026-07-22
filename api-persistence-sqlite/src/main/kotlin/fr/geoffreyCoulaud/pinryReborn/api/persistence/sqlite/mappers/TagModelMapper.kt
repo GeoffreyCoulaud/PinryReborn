@@ -18,5 +18,6 @@ object TagModelMapper {
             id = id,
             author = author.toDomain(),
             name = name,
+            createdAt = whenCreated,
         )
 }

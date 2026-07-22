@@ -9,4 +9,7 @@ data class Board(
     val name: String,
     val description: String,
     val softDeletedAt: Instant? = null,
+    // Nullable: null means "not read from persistence". See User.createdAt for the rationale.
+    val createdAt: Instant? = null,
+    val updatedAt: Instant? = null,
 ) : Identifiable

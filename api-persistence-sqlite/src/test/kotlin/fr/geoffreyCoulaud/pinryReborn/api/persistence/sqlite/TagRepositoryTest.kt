@@ -138,4 +138,19 @@ class TagRepositoryTest : RepositoryTest() {
         // Then
         assertEquals(emptyList<Tag>(), repository.findAllTagsForUser(user))
     }
+
+    // --- Creation timestamps ---
+
+    @Test
+    fun `Given a saved tag, Then reading it back exposes its creation timestamp`() {
+        // Given
+        val user = createAndSaveUser()
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = "landscape"))
+
+        // When
+        val found = repository.findUserTagByName(user = user, name = "landscape")
+
+        // Then
+        assertNotNull(found?.createdAt)
+    }
 }
