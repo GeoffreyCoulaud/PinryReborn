@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveEntryDigest
+import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveSink
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
@@ -24,9 +25,13 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.verify
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.security.MessageDigest
@@ -38,6 +43,7 @@ import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -108,7 +114,7 @@ class UserDataExportBuilderTest : BaseTest() {
     private val builder = UserDataExportBuilder(
         exportRepository, userRepository, pinRepository, imageRepository, boardRepository, tagRepository,
         imageStore, archiveStore, transactionRunner, clock, applicationVersion = "1.2.3", pageSize = pageSize,
-        retention = retention, minimumFreeBytes = 1024L,
+        retention = retention, minimumFreeBytes = MINIMUM_FREE_BYTES,
     )
 
     private lateinit var sink: RecordingSink
@@ -387,5 +393,209 @@ class UserDataExportBuilderTest : BaseTest() {
         )
         assertTrue(manifest.entries.all { it.sha256.isNotBlank() && it.byteSize > 0 })
         assertEquals(entryPaths.size, manifest.entries.map { it.sha256 }.toSet().size, "digests must not collide")
+    }
+
+    // -- build() / publish() -----------------------------------------------------------------
+
+    /** Stubs the full happy path through stageArchive: an empty archive, promotable and publishable. */
+    private fun stubHappyPathBuild() {
+        stubArchiveStore()
+        stubEmptyCollections()
+        every { archiveStore.hasFreeSpace(MINIMUM_FREE_BYTES) } returns true
+        every { archiveStore.format } returns ArchiveFormat("application/zip", "zip")
+        every { archiveStore.promote(any(), any()) } just runs
+        every { exportRepository.save(any()) } answers { firstArg() }
+        every { transactionRunner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
+    }
+
+    @Test
+    fun `Given an export that no longer exists, Then the build is a no-op`() {
+        // Given
+        every { exportRepository.findById(exportId) } returns null
+
+        // When
+        builder.build(exportId, isLastAttempt = false, renewLease = {})
+
+        // Then
+        verify(exactly = 0) { userRepository.findUserById(any()) }
+    }
+
+    @Test
+    fun `Given an export that is not pending, Then the build is a no-op`() {
+        // Given
+        every { exportRepository.findById(exportId) } returns anExport().copy(state = UserDataExportState.READY)
+
+        // When
+        builder.build(exportId, isLastAttempt = false, renewLease = {})
+
+        // Then
+        verify(exactly = 0) { userRepository.findUserById(any()) }
+        verify(exactly = 0) { archiveStore.hasFreeSpace(any()) }
+    }
+
+    @Test
+    fun `Given a missing user, Then the export is FAILED and a PermanentTaskException is thrown`() {
+        // Given
+        every { exportRepository.findById(exportId) } returns anExport()
+        every { userRepository.findUserById(userId) } returns null
+        every { exportRepository.save(any()) } answers { firstArg() }
+
+        // When / Then
+        val error = assertThrows(PermanentTaskException::class.java) {
+            builder.build(exportId, isLastAttempt = false, renewLease = {})
+        }
+        assertEquals("user no longer exists", error.reason)
+        verify {
+            exportRepository.save(match { it.state == UserDataExportState.FAILED && it.failureCode == "USER_GONE" })
+        }
+        verify(exactly = 0) { archiveStore.hasFreeSpace(any()) }
+    }
+
+    @Test
+    fun `Given insufficient free space, Then the export is FAILED with DISK_FULL and not built`() {
+        // Given
+        every { exportRepository.findById(exportId) } returns anExport()
+        every { userRepository.findUserById(userId) } returns user
+        every { archiveStore.hasFreeSpace(MINIMUM_FREE_BYTES) } returns false
+        every { exportRepository.save(any()) } answers { firstArg() }
+
+        // When / Then
+        val error = assertThrows(PermanentTaskException::class.java) {
+            builder.build(exportId, isLastAttempt = false, renewLease = {})
+        }
+        assertEquals("not enough free space", error.reason)
+        verify {
+            exportRepository.save(match { it.state == UserDataExportState.FAILED && it.failureCode == "DISK_FULL" })
+        }
+        verify(exactly = 0) { archiveStore.stage(any()) }
+    }
+
+    @Test
+    fun `Given a successful build, Then the row carries size, digest, media type and extension`() {
+        // Given
+        stubHappyPathBuild()
+        every { clock.now() } returns now
+        every { exportRepository.findById(exportId) } returns anExport()
+        every { userRepository.findUserById(userId) } returns user
+
+        // When
+        builder.build(exportId, isLastAttempt = false, renewLease = {})
+
+        // Then
+        verify {
+            exportRepository.save(
+                match {
+                    it.state == UserDataExportState.READY &&
+                        it.mediaType == "application/zip" &&
+                        it.fileExtension == "zip" &&
+                        it.completedAt == now &&
+                        it.expiresAt == now.plus(retention) &&
+                        it.byteSize == 0L &&
+                        it.sha256 == "unused"
+                },
+            )
+        }
+        verify { archiveStore.promote(any(), "exports/$exportId.zip") }
+    }
+
+    @Test
+    fun `Given an export cancelled during the build, Then READY is not written and the bytes are deleted`() {
+        // Given
+        stubHappyPathBuild()
+        every { clock.now() } returns now
+        val pendingExport = anExport()
+        val cancelledExport = pendingExport.copy(state = UserDataExportState.DELETED)
+        every { exportRepository.findById(exportId) } returnsMany listOf(pendingExport, cancelledExport)
+        every { userRepository.findUserById(userId) } returns user
+        every { archiveStore.delete(any()) } just runs
+
+        // When
+        builder.build(exportId, isLastAttempt = false, renewLease = {})
+
+        // Then
+        verify(exactly = 0) { exportRepository.save(match { it.state == UserDataExportState.READY }) }
+        verify { archiveStore.delete("exports/$exportId.zip") }
+    }
+
+    @Test
+    fun `Given the export row is gone before publishing, Then READY is not written and the bytes are deleted`() {
+        // Given: the row was hard-deleted between staging and publishing (account deletion, spec
+        // §10), so the re-read inside the transaction finds nothing at all -- not merely a
+        // non-PENDING row.
+        stubHappyPathBuild()
+        every { clock.now() } returns now
+        val pendingExport = anExport()
+        every { exportRepository.findById(exportId) } returnsMany listOf(pendingExport, null)
+        every { userRepository.findUserById(userId) } returns user
+        every { archiveStore.delete(any()) } just runs
+
+        // When
+        builder.build(exportId, isLastAttempt = false, renewLease = {})
+
+        // Then
+        verify(exactly = 0) { exportRepository.save(match { it.state == UserDataExportState.READY }) }
+        verify { archiveStore.delete("exports/$exportId.zip") }
+    }
+
+    /** Stubs everything reached before stageArchive is attempted, then makes staging itself fail. */
+    private fun stubBuildFailure() {
+        every { exportRepository.findById(exportId) } returns anExport()
+        every { userRepository.findUserById(userId) } returns user
+        every { archiveStore.hasFreeSpace(MINIMUM_FREE_BYTES) } returns true
+        every { archiveStore.format } returns ArchiveFormat("application/zip", "zip")
+        every { clock.now() } returns now
+        every { archiveStore.stage(any()) } throws IllegalStateException("boom")
+        every { exportRepository.save(any()) } answers { firstArg() }
+    }
+
+    @Test
+    fun `Given a failure on the last attempt, Then the export is FAILED and the staged file discarded`() {
+        // Given: stage() itself fails. The real adapter (FilesystemZipExportArchiveStore, Task 5)
+        // deletes its own temp file in that case before rethrowing, so there is no StagedFile here
+        // for the builder to hand to archiveStore.discard() -- the bytes are already reclaimed by
+        // the time build() observes the failure.
+        stubBuildFailure()
+
+        // When / Then
+        assertThrows(IllegalStateException::class.java) {
+            builder.build(exportId, isLastAttempt = true, renewLease = {})
+        }
+        verify {
+            exportRepository.save(
+                match { it.state == UserDataExportState.FAILED && it.failureCode == "BUILD_FAILED" },
+            )
+        }
+    }
+
+    @Test
+    fun `Given a failure on an earlier attempt, Then the export stays PENDING and the file discarded`() {
+        // Given
+        stubBuildFailure()
+
+        // When / Then
+        assertThrows(IllegalStateException::class.java) {
+            builder.build(exportId, isLastAttempt = false, renewLease = {})
+        }
+        verify(exactly = 0) { exportRepository.save(match { it.state == UserDataExportState.FAILED }) }
+    }
+
+    @Test
+    fun `Given entries being written, Then the task lease is renewed`() {
+        // Given
+        stubHappyPathBuild()
+        every { clock.now() } returns now
+        every { exportRepository.findById(exportId) } returns anExport()
+        every { userRepository.findUserById(userId) } returns user
+        var renewCount = 0
+
+        // When
+        builder.build(exportId, isLastAttempt = false, renewLease = { renewCount++ })
+
+        // Then
+        assertTrue(renewCount > 0, "the lease must be renewed while entries are written")
+    }
+
+    private companion object {
+        const val MINIMUM_FREE_BYTES = 1024L
     }
 }
