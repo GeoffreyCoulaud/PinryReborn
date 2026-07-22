@@ -1,96 +1,27 @@
 # Backlog
 
-**Living document.** A snapshot of what the API already ships and what is still open, ordered by priority.
-Keep it alive: update it at the end of every sub-project (Wrap phase), and whenever a scope decision is made.
-It is written in English (project language), like the specs, plans, and handoffs.
+**Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
+the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
 Last reviewed: 2026-07-22.
 
 ## How to use this file
 
-- **Shipped** records what exists so the backlog reads against a known baseline. Move an item there when it merges.
+- This file holds **open items only**. Do not keep a "shipped" log here: completed work is recorded by git
+  history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags.
 - **Open items** are grouped by priority band, not by module. Each item states the context and what must be
   decided or done, with a pointer to the relevant spec/handoff when one exists.
 - `P0` = product decisions that shape the data model and the UI; resolve these before building on top of them.
   `P1` = client ergonomics needed for the web UI and browser extension. `P2` = operational debt already flagged
   in handoffs (not UI blockers).
-- When an item is picked up, note the branch/sub-project next to it; when it merges, move it to **Shipped**.
-
----
-
-## Shipped (baseline)
-
-Six sub-projects merged (`v0.1.0-task-queue` → `v0.5.0-boards`, plus **session-token authentication**,
-now on `main`). CI green, 100% branch coverage, hexagonal layering, generated OpenAPI.
-
-- **Users**: registration (`POST /api/v1/users`, public). Authentication is session-token / Bearer
-  (see the Auth bullet); HTTP Basic has been removed.
-- **Auth (session tokens)**: `POST /api/v1/sessions` login issues an opaque revocable bearer token
-  (SHA-256 hash stored, `rememberMe` persistent/ephemeral TTL); `GET /me`, `GET /sessions/current`,
-  `POST /sessions/current/renew` (atomic rotation), `DELETE /sessions/current` (logout),
-  `DELETE /sessions` (logout-all); OpenAPI declares a bearer security scheme. Replaces HTTP Basic
-  entirely. Session use cases (`SessionCreator` / `SessionRenewer`) run their writes through the
-  `TransactionRunner` port; no `@Transactional` remains in `api-usecases` (migrated 2026-07-22).
-  See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md` and
-  `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
-- **Pins**: list (cursor pagination + sort strategy), get, create, update, soft-delete, tag.
-- **Recycle bin**: list recycled, restore, permanent delete, empty.
-- **Search**: pins (trigram similarity) + tags.
-- **Images**: direct upload (multipart, mode-A), download-from-URL (mode-B, async via the task queue), serve
-  original, delete, status, and disposable **renditions/thumbnails** (lazy WebP, on-disk cache, `?size` + `?animated`).
-  See `docs/handoffs/2026-07-16 - handoff - image-hosting-3-renditions.md`.
-- **Boards**: named owner-scoped collections; a pin belongs to 0..N boards (set-based membership via
-  `PUT /pins/{id}/boards`, mirroring tags); board CRUD, cursor-paginated board pins, `PinOutputDto.boards`
-  + board `pinCount`, and a recycle bin mirroring `PinRecycleBin`. On `main`.
-  See `docs/handoffs/2026-07-20 - handoff - boards.md`.
-- **CORS**: Quarkus CORS filter enabled with a whitelist policy for browser clients. Allowed origins
-  driven by `api.cors.origins` (typed on `ApiConfig`; dev default `http://localhost:5173`, prod via
-  `API_CORS_ORIGINS`); methods `GET,POST,PUT,DELETE`, request headers `Authorization,Content-Type`,
-  `Location` exposed, credentials off (Bearer only), 24 h preflight cache. On `main`.
-  See `docs/handoffs/2026-07-21 - handoff - cors.md`.
-- **Profile management**: self-service `PUT /me/password` (verify current password, reject any
-  previously-used password against the full history, revoke all sessions incl. the caller's, 204) and
-  `DELETE /me` (step-up via `X-Reauthentication: password <base64url>`, then an async hard delete: a
-  one-way Ebean `@SoftDelete` tombstone mirrored on `User.softDeleted`, revoke-all, enqueue
-  `account.delete`; the worker erases rows in FK order + on-disk image bytes and frees the username,
-  202). Password hashing inverted behind a `PasswordHasher` port (BCrypt adapter in `api-application`);
-  all writes on the `TransactionRunner` port; `UserCreator` migrated off `@Transactional`. Migration
-  1.9. Validated end-to-end (a real pin+image is seeded, the account deleted, and the username becomes
-  re-registerable only after the worker completes). On `main`.
-  See `docs/handoffs/2026-07-21 - handoff - profile-management.md`.
-- **Infrastructure**: generic task queue (enqueue/cancel/reap), Ebean migrations, git hooks, CI gate.
-- **System adapters**: the non-HTTP, non-persistence port adapters (`SystemClock` for `Clock`,
-  `SecureTokenGenerator` for `TokenGenerator`, `BcryptPasswordHasher` for `PasswordHasher`) live in a
-  dedicated `api-system` module depending on `api-domain` only, alongside the existing
-  `api-storage-filesystem`, `api-imaging-vips`, and `api-fetch-http` adapter modules. On `main`.
-  See `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
-- **Task-worker runtime**: the background poller/worker driving subsystem (`TaskDispatcher`,
-  `TaskWorkerLifecycle`, `TaskRuntimeProducers`, `WorkerExecutor`, `TaskQueueConfig`, `TaskQueueMetrics`,
-  and the `PinDownloadTaskHandler` / `AccountDeletionTaskHandler` handlers) lives in a dedicated
-  `api-worker-quarkus` module (`api-usecases` + `api-domain` only), not in the HTTP presentation module.
-  `PinDownloadTaskHandler`'s image limits are supplied by an `api-application` producer, so the worker
-  carries no presentation dependency. On `main`.
-  See `docs/specs/2026-07-22-worker-runtime-extraction.md`.
-- **Architecture enforcement (Konsist)**: `ArchitectureKonsistTest` (in `api-application`'s test source
-  set) fails the build on layer violations: the module dependency DAG, an `api-usecases` import ban
-  (`jakarta.transaction` / `io.ebean` / `jakarta.ws.rs` / `org.mindrot`), and a strict `api-domain`
-  import allowlist (own package + `java.time`, `java.util.UUID`, `java.io.InputStream`). The AGENTS.md
-  dependency table is now enforced in CI, not just by review. On `main`.
-  See `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
+- When an item is picked up, note the branch/sub-project next to it; when it merges, **delete it from this file**
+  (its record now lives in the handoff and the tag).
 
 ---
 
 ## Open items
 
-### P0 — (none open)
-
-**Client auth story shipped 2026-07-21** (session tokens; merged to `main`). **CORS shipped 2026-07-21**
-(merged to `main`, in Shipped above). **Profile management shipped 2026-07-21** (change password +
-async account deletion, in Shipped above). **The architecture cleanup campaign is complete** (all four
-sequenced items A–D shipped 2026-07-22, in Shipped above; see
-`docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`): `Session*` use cases on the
-`TransactionRunner` port, the `api-system` and `api-worker-quarkus` modules, and Konsist boundary
-enforcement in CI.
+### P0 — none open
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
