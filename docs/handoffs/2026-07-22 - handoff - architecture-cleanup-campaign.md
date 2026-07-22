@@ -28,7 +28,7 @@ fresh `main`).
 ## Status
 
 - **A — DONE (merged to `main`, PR #25, 2026-07-22).**
-- B — not started.
+- **B — DONE (merged to `main`, PR #26, 2026-07-22).**
 - C — not started.
 - D — not started.
 
@@ -62,11 +62,36 @@ Nothing hardware-specific in A. Full gate (all module tests + `api-application` 
 `koverVerify` 100% branch coverage + detekt) is green in CI (`validate / gate`) and locally under
 JDK 25.
 
+## B — what was built
+
+New `api-system` module (name chosen over `api-security`: it holds two security adapters plus the
+clock, so the neutral "system primitives" umbrella fits all three). It depends on `api-domain` only
+and carries the `jandex` plugin. The three adapters moved in with `git mv` (history preserved), each
+with a one-line package change to `fr.geoffreyCoulaud.pinryReborn.api.system`; their tests moved too.
+`api-application` gained `implementation(project(":api-system"))` and dropped its direct
+`libs.jbcrypt` dependency. `settings.gradle.kts` includes the module.
+
+Presentation keeps its genuine HTTP-security classes (`BearerAuthenticationMechanism`,
+`BearerTokenIdentityProvider`, `AuthRuntimeProducers`, ...) in its `security` package: only
+`SecureTokenGenerator` left. Presentation's `tasks` package keeps the worker runtime (that is item C);
+only `SystemClock` left it.
+
+### Learned pitfalls (B)
+
+- The settings file is `settings.gradle.kts` (Kotlin DSL), not `settings.gradle`.
+- No module needed a compile dependency on `api-system`: every consumer references the domain ports
+  (`Clock`, `TokenGenerator`, `PasswordHasher`), never the concrete adapters. Only `api-application`
+  (composition root) depends on it, purely so Quarkus discovers the beans at runtime. This is the
+  invariant to preserve when item C adds the worker module.
+- `SystemClock` has no test and no branches, so per-package branch coverage is unaffected by the move.
+
 ## Suggested next step
 
-Start **B** off a fresh `main`. Brainstorm/spec it (simple/inline is likely enough): pick the module
-name (`api-security` vs `api-system` vs a neutral `api-adapters-system`), create the Gradle module
-mirroring `api-fetch-http` (depends on `api-domain`, `compileOnly` CDI), move the three adapters with
-their tests, and watch Quarkus CDI bean discovery (the new module needs the `jandex` plugin so its
-beans are indexed). Confirm the `api-application` composition still resolves `Clock`, `TokenGenerator`,
-and `PasswordHasher` beans exactly once.
+Start **C** off a fresh `main`: extract the task-worker runtime from `api-presentation-quarkus/tasks/`
+into a new `api-worker-quarkus` module (depends on `api-usecases` + `api-domain`). This is the big
+one and warrants a structured spec + plan. Key risks: it is a Quarkus-runtime module (CDI producers,
+`StartupEvent`/`ShutdownEvent` lifecycle, micrometer, smallrye-config), so watch bean discovery and
+the lifecycle wiring; the two task handlers (`PinDownloadTaskHandler`, `AccountDeletionTaskHandler`)
+move with it. `SystemClock` stays in `api-system` (already done) and must NOT move into the worker
+module. Confirm `api-application` still boots and the async flows (image download, account deletion)
+run end-to-end.

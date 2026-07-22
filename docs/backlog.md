@@ -59,6 +59,11 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
   re-registerable only after the worker completes). On `main`.
   See `docs/handoffs/2026-07-21 - handoff - profile-management.md`.
 - **Infrastructure**: generic task queue (enqueue/cancel/reap), Ebean migrations, git hooks, CI gate.
+- **System adapters**: the non-HTTP, non-persistence port adapters (`SystemClock` for `Clock`,
+  `SecureTokenGenerator` for `TokenGenerator`, `BcryptPasswordHasher` for `PasswordHasher`) live in a
+  dedicated `api-system` module depending on `api-domain` only, alongside the existing
+  `api-storage-filesystem`, `api-imaging-vips`, and `api-fetch-http` adapter modules. On `main`.
+  See `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`.
 
 ---
 
@@ -70,7 +75,8 @@ now on `main`). CI green, 100% branch coverage, hexagonal layering, generated Op
 (merged to `main`, in Shipped above). **Profile management shipped 2026-07-21** (change password +
 async account deletion, in Shipped above). **In progress: the architecture cleanup campaign** (four
 sequenced items A to D, see P2 and `docs/handoffs/2026-07-22 - handoff - architecture-cleanup-campaign.md`).
-Item A (`Session*` use cases routed through the `TransactionRunner` port) shipped 2026-07-22; B, C, D remain.
+Item A (`Session*` use cases routed through the `TransactionRunner` port) and item B (misplaced adapters
+gathered into the new `api-system` module) shipped 2026-07-22; C and D remain.
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -93,18 +99,10 @@ Item A (`Session*` use cases routed through the `TransactionRunner` port) shippe
   Extract them into a new **`api-worker-quarkus`** module (depends on `api-usecases` + `api-domain`),
   mirroring the existing per-adapter modules (`api-storage-filesystem`, `api-imaging-vips`,
   `api-fetch-http`). **Exception:** `SystemClock` (the `Clock` port impl) is app-wide, not
-  worker-specific, so it moves to a shared home (the `api-application` composition root or a shared infra
-  module), **not** the worker module. `TaskProcessor`, the `TaskHandler` port, the registry, and
+  worker-specific; it already lives in `api-system` (item B) and must **not** move into the worker
+  module. `TaskProcessor`, the `TaskHandler` port, the registry, and
   `EnqueueTask` / `CancelTask` / `ReapExpiredTasks` are correctly in `api-usecases` and stay. Watch the
   Quarkus CDI bean-discovery wiring for the new module.
-
-- **Consolidate misplaced infra/security adapters into a dedicated module.** *(Architecture cleanup. Flagged
-  2026-07-21.)* Small, non-HTTP adapters are scattered: `SecureTokenGenerator` (the `TokenGenerator` /
-  SecureRandom impl) and `SystemClock` (the `Clock` impl) sit in `api-presentation-quarkus`, and
-  `BcryptPasswordHasher` (the `PasswordHasher` impl added by profile management) is placed in the
-  `api-application` composition root as a pragmatic temporary home. Gather them into a dedicated adapter
-  module (e.g. `api-security` / `api-system`) depending on `api-domain`, mirroring the per-adapter-module
-  convention. Companion to the `api-worker-quarkus` extraction (both move misplaced adapters out).
 
 - **Enforce Clean Architecture boundaries with Konsist.** *(Architecture enforcement. Flagged 2026-07-21.)*
   Add Konsist (a Kotlin architecture-testing library) checks that fail the build when a layer imports what
