@@ -1,0 +1,86 @@
+package fr.geoffreyCoulaud.pinryReborn.api.worker
+
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import io.quarkus.runtime.ShutdownEvent
+import io.quarkus.runtime.StartupEvent
+import org.junit.jupiter.api.Test
+import java.time.Duration
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
+
+class ExportRetentionLifecycleTest {
+    private val reap: ReapExpiredUserDataExports = mockk(relaxed = true)
+    private val scheduler: ScheduledExecutorService = mockk(relaxed = true)
+    private val config: ExportsConfig = mockk()
+
+    private fun lifecycle() = ExportRetentionLifecycle(reap, scheduler, config)
+
+    @Test
+    fun `Given startup, Then it sweeps immediately and schedules the periodic purge`() {
+        // Given
+        every { config.purgeInterval() } returns Duration.ofSeconds(1)
+        // When
+        lifecycle().start()
+        // Then
+        verify { reap.reap() }
+        verify { scheduler.scheduleWithFixedDelay(any(), 1000L, 1000L, TimeUnit.MILLISECONDS) }
+    }
+
+    @Test
+    fun `Given a purge interval shorter than 2ms, Then the interval is clamped to at least 1ms`() {
+        // Given
+        every { config.purgeInterval() } returns Duration.ZERO
+        // When
+        lifecycle().start()
+        // Then
+        verify { scheduler.scheduleWithFixedDelay(any(), 1L, 1L, TimeUnit.MILLISECONDS) }
+    }
+
+    @Test
+    fun `Given a reap failure, Then safeReap swallows it`() {
+        // Given
+        every { reap.reap() } throws RuntimeException("boom")
+        // When / Then (no exception escapes)
+        lifecycle().safeReap()
+        verify { reap.reap() }
+    }
+
+    @Test
+    fun `Given a clean reap, Then safeReap delegates once`() {
+        // Given
+        every { reap.reap() } returns 0
+        // When
+        lifecycle().safeReap()
+        // Then
+        verify(exactly = 1) { reap.reap() }
+    }
+
+    @Test
+    fun `Given shutdown, Then it shuts the scheduler down`() {
+        // When
+        lifecycle().stop()
+        // Then
+        verify { scheduler.shutdown() }
+    }
+
+    @Test
+    fun `Given the CDI startup event, Then onStart delegates to start`() {
+        // Given
+        every { config.purgeInterval() } returns Duration.ofSeconds(1)
+        // When
+        lifecycle().onStart(mockk<StartupEvent>())
+        // Then
+        verify { reap.reap() }
+    }
+
+    @Test
+    fun `Given the CDI shutdown event, Then onStop delegates to stop`() {
+        // When
+        lifecycle().onStop(mockk<ShutdownEvent>())
+        // Then
+        verify { scheduler.shutdown() }
+    }
+}
