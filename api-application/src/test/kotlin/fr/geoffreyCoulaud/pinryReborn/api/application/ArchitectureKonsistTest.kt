@@ -3,9 +3,11 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.architecture.KoArchitectureCreator.assertArchitecture
 import com.lemonappdev.konsist.api.architecture.Layer
-import com.lemonappdev.konsist.api.verify.assertFalse
+import com.lemonappdev.konsist.api.ext.list.withNameStartingWith
+import com.lemonappdev.konsist.api.ext.list.withoutName
+import com.lemonappdev.konsist.api.ext.list.withoutNameStartingWith
+import com.lemonappdev.konsist.api.verify.assertEmpty
 import com.lemonappdev.konsist.api.verify.assertNotEmpty
-import com.lemonappdev.konsist.api.verify.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -59,28 +61,37 @@ class ArchitectureKonsistTest {
 
     @Test
     fun `Given api-usecases, Then it imports no persistence, transaction, web, or crypto library`() {
-        val forbidden = listOf("jakarta.transaction", "io.ebean", "jakarta.ws.rs", "org.mindrot")
+        // Filter the imports down to the offending ones, then assert nothing survives: when the rule
+        // breaks, `assertEmpty` names every culprit import instead of a single opaque `false`.
+        // Trailing dots pin each prefix to a package boundary so a sibling like `io.ebeanx` cannot
+        // masquerade as `io.ebean`.
         Konsist
             .scopeFromProduction(moduleName = "api-usecases")
             .imports
-            .assertFalse { imp -> forbidden.any { imp.name == it || imp.name.startsWith("$it.") } }
+            .withNameStartingWith(
+                "jakarta.transaction.", // transaction
+                "io.ebean.", // persistence
+                "jakarta.ws.rs.", // web
+                "org.mindrot.", // crypto
+            )
+            .assertEmpty()
     }
 
     @Test
     fun `Given api-domain, Then it imports only its own package and pure value types`() {
-        val allowedExternal =
-            setOf(
+        // Drop the allowed imports (own package + pure value types); anything left is a violation,
+        // and `assertEmpty` reports each one by name.
+        Konsist
+            .scopeFromProduction(moduleName = "api-domain")
+            .imports
+            .withoutNameStartingWith("fr.geoffreyCoulaud.pinryReborn.api.domain.")
+            .withoutName(
                 "java.time.Instant",
                 "java.time.Duration",
                 "java.util.UUID",
                 // Byte-stream boundary type on the image ports; adapters perform the actual I/O.
                 "java.io.InputStream",
             )
-        Konsist
-            .scopeFromProduction(moduleName = "api-domain")
-            .imports
-            .assertTrue { imp ->
-                imp.name.startsWith("fr.geoffreyCoulaud.pinryReborn.api.domain.") || imp.name in allowedExternal
-            }
+            .assertEmpty()
     }
 }
