@@ -131,12 +131,17 @@ Surfaced by the first run of the workflow, the same day, and decided by the oper
    a session from re-litigating a subject already arbitrated, and it is where the out-of-scope items
    Discuss surfaces are meant to land. It was about to be written into `docs/project.md` until the
    operator ruled it belongs upstream.
-9. **A dated document freezes at delivery, not at commit.** The generic rule freezes a handoff "from
-   the moment it is committed", which makes it unrevisable while the branch carrying it is still
-   open, and demands a superseding document to correct one line of work that has not shipped. The
-   operator's reading, applied here: a handoff stays revisable until it is delivered, that is until
-   its branch is integrated. This handoff was revised under that reading, which is why points 8 to
-   10 are in it rather than in a successor.
+9. **A dated document freezes at delivery, not at commit, and this holds for every dated document,
+   not just handoffs.** The generic rule freezes a handoff "from the moment it is committed", which
+   makes it unrevisable while the branch carrying it is still open, and demands a superseding
+   document to correct one line of work that has not shipped. The operator's reading, applied here:
+   a dated document stays revisable until it is delivered, that is until the branch carrying it is
+   integrated, and the rule should say delivered wherever it says committed or accepted. Two
+   documents were revised under that reading: this handoff, which is why points 8 to 11 are in it
+   rather than in a successor, and `docs/adr/0001-adopt-agents-baseline.md`, whose inventory of
+   pre-existing em dashes counted 42 files where `git grep -l` counts 41, omitted
+   `api-presentation-quarkus/build.gradle.kts` from its breakdown, and reported three French
+   comments in `.gitignore` where there are two.
 10. **The Direct tier counts files where it should measure scope.** Its trigger is "one file, no
     design decision, no new dependency, no public surface added or changed". The correction that
     followed this handoff touched three files and settled nothing, so the file count alone pushed it
@@ -144,15 +149,23 @@ Surfaced by the first run of the workflow, the same day, and decided by the oper
     proxy fails in both directions: a one-file change can be a data migration, and a three-file
     change can be trivial. The trigger should rest on the absence of a decision and on the size of
     the change, with the file count as an indicator at most.
+11. **The Direct tier should run Wrap, exactly as it runs Improve.** It is defined as Act, Verify,
+    Improve, so a Direct change produces no backlog update, no handoff line and no integration step,
+    and its follow-ups have nowhere to land: the holistic review of this branch found that the
+    backlog had not been touched and that the branch of the adoption was still sitting behind its
+    remote. Skipping Spec and Plan is what makes a tier cheap; skipping the phase that closes the
+    work is what makes it leak. Wrap scales down on its own when there is little to wrap.
 
 ## Suggested next step
 
 1. Get `/context`, `/hooks` and `/permissions` confirmed by the operator. All three, since each is
    silent on failure.
-2. Let the PR's `validate / gate` go green and merge with squash or rebase. Do not merge locally:
+2. Push the branch first: the holistic review found the remote two commits behind, so an earlier PR
+   would have validated a diff nobody reviewed. Then let `validate / gate` go green and merge with
+   `gh pr merge --rebase`. Not squash, which this repository disables, and not locally:
    `enforce_admins` is false, so a local admin merge bypasses CI without a word.
 3. First real work under the new rules is the natural place to test the tier selection and the plan
    review. `docs/backlog.md` is unchanged and still holds the open items, the largest being **user
    data import**, the other half of the export that shipped as `v0.9.0-user-data-export`.
-4. The upstream list above is worth taking to `agents-baseline` as one task rather than seven
+4. The upstream list above is worth taking to `agents-baseline` as one task rather than eleven
    drive-by edits.
