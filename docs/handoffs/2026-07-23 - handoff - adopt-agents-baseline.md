@@ -155,6 +155,15 @@ Surfaced by the first run of the workflow, the same day, and decided by the oper
     backlog had not been touched and that the branch of the adoption was still sitting behind its
     remote. Skipping Spec and Plan is what makes a tier cheap; skipping the phase that closes the
     work is what makes it leak. Wrap scales down on its own when there is little to wrap.
+12. **The settings the baseline ships should pre-authorise spawning subagents.** Three of the seven
+    phases require a fresh one (plan review, task review, holistic review), and the baseline already
+    ships `.claude/settings.json`, so the permission belongs there rather than with each operator:
+    an adoption that installs the workflow without the means to run it leaves three reviews to be
+    authorised one call at a time, or quietly skipped. It happened here, on the only review this
+    branch ran. One caveat for whoever writes it: a permission entry removes the prompt, it does not
+    override an instruction given to the agent outside the repository. The session that performed
+    this adoption was told not to spawn subagents without an explicit request, and no project-level
+    permission would have lifted that.
 
 ## Suggested next step
 
@@ -167,5 +176,5 @@ Surfaced by the first run of the workflow, the same day, and decided by the oper
 3. First real work under the new rules is the natural place to test the tier selection and the plan
    review. `docs/backlog.md` is unchanged and still holds the open items, the largest being **user
    data import**, the other half of the export that shipped as `v0.9.0-user-data-export`.
-4. The upstream list above is worth taking to `agents-baseline` as one task rather than eleven
+4. The upstream list above is worth taking to `agents-baseline` as one task rather than twelve
    drive-by edits.
