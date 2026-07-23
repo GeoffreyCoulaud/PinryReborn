@@ -29,6 +29,17 @@ ENV DB_PATH=/data/pinry.db
 RUN mkdir -p /data && chown 1001:1001 /data
 VOLUME /data
 
+# On-disk bytes live outside the database (no blobs in SQLite): original image
+# bytes under images.data_dir, and user data export archives under
+# exports.data_dir. Both default to /var/lib/pinry/* (see application.properties)
+# and MUST be redirected to writable, persistent locations at deploy time, e.g.
+#   -e IMAGES_DATA_DIR=/data/images -e EXPORTS_DATA_DIR=/data/exports
+# so they share the /data volume above. exports.data_dir is a SEPARATE dataset
+# from images: export archives are large, short-lived (7-day retention) and
+# regenerable, so an operator may want it on its own volume with its own backup
+# and quota policy. The container does not create these paths; the app creates
+# them on first write, but only if their parent is writable by uid 1001.
+
 # Copy the Quarkus fast-jar layout. lib/ changes least often (better layer
 # caching), then the application classes, and the tiny runner jar last.
 COPY --chown=1001:1001 api-application/build/quarkus-app/lib/ /app/lib/

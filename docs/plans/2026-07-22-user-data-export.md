@@ -1440,11 +1440,13 @@ class MeExportTestProfile : QuarkusTestProfile {
     override fun getConfigOverrides(): Map<String, String> = mapOf(
         "exports.data_dir" to "build/test-export-data/${UUID.randomUUID()}",
         "exports.minimum_interval" to "PT0S",
+        // Also needed: the archive-content test uploads a real image to seed the export.
+        "images.data_dir" to "build/test-image-data/${UUID.randomUUID()}",
     )
 }
 ```
 
-Without it the tests write to `/var/lib/pinry/exports` and fail. Mirrors
+Without it the tests write to `/var/lib/pinry/exports` (and `/var/lib/pinry/images`) and fail. Mirrors
 `MeDeleteCompletionTestProfile`.
 
 - [ ] **Step 2: Endpoint tests**

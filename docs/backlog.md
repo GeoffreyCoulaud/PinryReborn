@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-22.
+Last reviewed: 2026-07-23.
 
 ## How to use this file
 
@@ -29,8 +29,13 @@ Last reviewed: 2026-07-22.
   does not exist yet and has no stable ID, so no origin is wired for it. When it ships, add its
   `chrome-extension://<id>` / `moz-extension://<id>` origin to `api.cors.origins`. See
   `docs/handoffs/2026-07-21 - handoff - cors.md`.
-- **User data export / import (portability).** Let a user export **all** their data and re-import it, on this
-  instance or another one, so they stay in control of their data and are never held hostage. Not yet specced.
+- **User data import (portability).** Export shipped (see `docs/handoffs/2026-07-22 - handoff - user-data-export.md`
+  and the `v*-user-data-export` tag); the remaining half is **import**: let a user re-create their pins, boards,
+  tags and images on this instance (or another one) from an export archive. The archive format is the contract:
+  `docs/specs/2026-07-22-user-data-export.md` §4 defines the layout (`manifest.json`, `pins.jsonl`, `boards.jsonl`,
+  `tags.jsonl`, `user.json`, `images/`), `formatVersion` is `1`, and every file's `sha256` is in the manifest.
+  Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
+  re-upload, and how much of the archive to trust (signature / manifest verification).
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
 
