@@ -122,6 +122,29 @@ Surfaced by this adoption and **not yet decided by anyone**:
    They were reworded rather than left, because a warning that is usually wrong stops being read, but
    the heuristic is what should change.
 
+Surfaced by the first run of the workflow, the same day, and decided by the operator then:
+
+8. **Discuss should open on the backlog.** The old file opened the phase with "start from
+   `docs/backlog.md`, it is the source of truth for what is left". The generic Discuss says to
+   understand the intent and ask questions; the backlog only reappears further down, under
+   Documentation, as a pressure valve. Opening the phase by reading it is generic: it is what keeps
+   a session from re-litigating a subject already arbitrated, and it is where the out-of-scope items
+   Discuss surfaces are meant to land. It was about to be written into `docs/project.md` until the
+   operator ruled it belongs upstream.
+9. **A dated document freezes at delivery, not at commit.** The generic rule freezes a handoff "from
+   the moment it is committed", which makes it unrevisable while the branch carrying it is still
+   open, and demands a superseding document to correct one line of work that has not shipped. The
+   operator's reading, applied here: a handoff stays revisable until it is delivered, that is until
+   its branch is integrated. This handoff was revised under that reading, which is why points 8 to
+   10 are in it rather than in a successor.
+10. **The Direct tier counts files where it should measure scope.** Its trigger is "one file, no
+    design decision, no new dependency, no public surface added or changed". The correction that
+    followed this handoff touched three files and settled nothing, so the file count alone pushed it
+    to Spec, which would have bought six declarative sentences a spec, a plan review and a wrap. The
+    proxy fails in both directions: a one-file change can be a data migration, and a three-file
+    change can be trivial. The trigger should rest on the absence of a decision and on the size of
+    the change, with the file count as an indicator at most.
+
 ## Suggested next step
 
 1. Get `/context`, `/hooks` and `/permissions` confirmed by the operator. All three, since each is
