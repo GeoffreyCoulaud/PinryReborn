@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createIndex indexName="uq_user_data_exports_pending" tableName="user_data_exports" columns="user_id" unique="true" definition="create unique index uq_user_data_exports_pending on user_data_exports (user_id) where state = 'PENDING'"/>
+    </changeSet>
+</migration>

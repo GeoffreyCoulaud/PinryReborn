@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
+import io.ebean.annotation.Index
 import jakarta.persistence.Entity
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
@@ -10,6 +11,18 @@ import java.util.UUID
 @Suppress("LongParameterList")
 @Entity
 @Table(name = "user_data_exports")
+// Enforces "at most one PENDING export per user" in the database. A plain unique index on user_id
+// would forbid a second export forever, so the index must be partial; `definition` carries the raw
+// DDL Ebean cannot express with columnNames alone, while `columnNames` keeps the index in the
+// migration model so a later diff drops and recreates it correctly.
+@Index(
+    name = "uq_user_data_exports_pending",
+    columnNames = ["user_id"],
+    unique = true,
+    definition =
+        "create unique index uq_user_data_exports_pending " +
+            "on user_data_exports (user_id) where state = 'PENDING'",
+)
 class UserDataExportModel(
     id: UUID,
     @ManyToOne var user: UserModel,
