@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Konsist guardrails that fail the build when a module breaks the Clean / Hexagonal boundaries
- * documented in AGENTS.md, so the dependency rules are enforced in CI rather than by review
+ * documented in docs/project.md, so the dependency rules are enforced in CI rather than by review
  * discipline. Konsist reads source files, so `scopeFromProduction` sees every module's main code
  * regardless of where this test runs; it is placed in `api-application` (the only module without
  * the Kover branch-coverage gate) to avoid a near-empty dedicated module.
