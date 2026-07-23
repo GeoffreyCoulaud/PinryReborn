@@ -3,6 +3,8 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveFormat
+import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
@@ -11,6 +13,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInter
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
@@ -35,9 +38,12 @@ class AccountDeletionCleanerTest : BaseTest() {
     private val clearDownload = mockk<ClearPinDownload>(relaxed = true)
     private val imageStore = mockk<ImageStore>(relaxed = true)
     private val renditions = mockk<RenditionCache>(relaxed = true)
+    private val exports = mockk<UserDataExportRepositoryInterface>(relaxed = true)
+    private val exportArchiveStore = mockk<ExportArchiveStore>(relaxed = true)
     private val tx = mockk<TransactionRunner>()
     private val cleaner = AccountDeletionCleaner(
-        users, pins, boards, tags, images, sessions, passwords, clearDownload, imageStore, renditions, tx,
+        users, pins, boards, tags, images, sessions, passwords, clearDownload, imageStore, renditions,
+        exports, exportArchiveStore, tx,
     )
 
     private val userId = randomUUID()
@@ -107,6 +113,45 @@ class AccountDeletionCleanerTest : BaseTest() {
 
         // When / Then
         assertDoesNotThrow { cleaner.deleteAccountData(userId) } // committed DB, disk best-effort
+    }
+
+    @Test
+    fun `Given a user with an export, Then its rows are deleted and its derived bytes erased after the commit`() {
+        // Given
+        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { users.findUserByIdIncludingDeleted(userId) } returns user
+        every { pins.findAllPinIdsForUser(user) } returns emptyList()
+        val exportId = randomUUID()
+        every { exports.findAllExportIdsForUser(userId) } returns listOf(exportId)
+        every { exportArchiveStore.format } returns ArchiveFormat(mediaType = "application/zip", fileExtension = "zip")
+
+        // When
+        cleaner.deleteAccountData(userId)
+
+        // Then
+        verifyOrder {
+            exports.deleteAllForUser(userId)
+            users.permanentlyDeleteUser(user)
+        }
+        // The key is DERIVED from the id, not read from the row, so a build that died before writing
+        // its row (leaving a promoted file with no storageKey column) is still reclaimed.
+        verify { exportArchiveStore.delete("exports/$exportId.zip") }
+    }
+
+    @Test
+    fun `Given a user with no export, Then no archive delete is attempted`() {
+        // Given
+        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { users.findUserByIdIncludingDeleted(userId) } returns user
+        every { pins.findAllPinIdsForUser(user) } returns emptyList()
+        every { exports.findAllExportIdsForUser(userId) } returns emptyList()
+
+        // When
+        cleaner.deleteAccountData(userId)
+
+        // Then
+        verify { exports.deleteAllForUser(userId) }
+        verify(exactly = 0) { exportArchiveStore.delete(any()) }
     }
 
     @Test
