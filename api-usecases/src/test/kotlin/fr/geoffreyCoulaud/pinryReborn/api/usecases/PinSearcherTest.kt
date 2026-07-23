@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SearchEmptyQueryError
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -16,7 +17,7 @@ class PinSearcherTest {
     private val pinRepository = mockk<PinRepositoryInterface>()
     private val useCase = PinSearcher(pinRepository = pinRepository)
 
-    private fun createUser() = User(id = randomUUID(), name = "John Doe")
+    private fun createUser() = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
 
     private fun createPin(user: User, description: String) = Pin(
         id = randomUUID(),
@@ -25,7 +26,9 @@ class PinSearcherTest {
         sourceMediaUrl = "https://example.com/image.jpg",
         description = description,
         tags = emptyList(),
-        boards = emptyList()
+        boards = emptyList(),
+        createdAt = Instant.now(),
+        updatedAt = Instant.now(),
     )
 
     @Test

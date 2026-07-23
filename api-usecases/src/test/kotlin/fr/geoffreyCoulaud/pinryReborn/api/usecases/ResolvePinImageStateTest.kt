@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePermissionErr
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePinDoesNotExistError
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -18,7 +19,7 @@ class ResolvePinImageStateTest {
     private val pins: PinRepositoryInterface = mockk()
     private val images: ImageRepositoryInterface = mockk()
     private val downloads: ImageDownloadRepositoryInterface = mockk()
-    private val owner = User(randomUUID(), "o")
+    private val owner = User(randomUUID(), "o", createdAt = Instant.now())
     private val pinId = randomUUID()
     private val subject = ResolvePinImageState(pins, images, downloads)
 
@@ -28,13 +29,15 @@ class ResolvePinImageStateTest {
     }
 
     @Test fun `Given a non-owner, Then it throws ImagePermissionError`() {
-        val otherUser = User(randomUUID(), "x")
-        every { pins.findPinById(pinId) } returns Pin(pinId, otherUser, "c", null, "d", emptyList(), emptyList())
+        val otherUser = User(randomUUID(), "x", createdAt = Instant.now())
+        every { pins.findPinById(pinId) } returns Pin(pinId, otherUser, "c", null, "d", emptyList(), emptyList(),
+            createdAt = Instant.now(), updatedAt = Instant.now())
         assertThrows(ImagePermissionError::class.java) { subject.resolve(pinId, owner) }
     }
 
     @Test fun `Given an owner with no image and no download, Then NONE`() {
-        every { pins.findPinById(pinId) } returns Pin(pinId, owner, "c", null, "d", emptyList(), emptyList())
+        every { pins.findPinById(pinId) } returns Pin(pinId, owner, "c", null, "d", emptyList(), emptyList(),
+            createdAt = Instant.now(), updatedAt = Instant.now())
         every { images.findByPinId(pinId) } returns null
         every { downloads.findByPinId(pinId) } returns null
         assertEquals(PinImageStatus.NONE, subject.resolve(pinId, owner).status)

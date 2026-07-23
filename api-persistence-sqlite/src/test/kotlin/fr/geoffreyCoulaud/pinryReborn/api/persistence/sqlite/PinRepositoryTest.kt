@@ -32,6 +32,7 @@ class PinRepositoryTest : RepositoryTest() {
             User(
                 id = randomUUID(),
                 name = createRandomString(),
+                createdAt = storableNow(),
             ),
         )
 
@@ -44,6 +45,7 @@ class PinRepositoryTest : RepositoryTest() {
                 id = randomUUID(),
                 author = user,
                 name = name,
+                createdAt = storableNow(),
             ),
         )
 
@@ -56,6 +58,8 @@ class PinRepositoryTest : RepositoryTest() {
             author = user,
             name = name,
             description = "",
+            createdAt = storableNow(),
+            updatedAt = storableNow(),
         )
         database.save(board.toModel())
         return board
@@ -63,7 +67,7 @@ class PinRepositoryTest : RepositoryTest() {
 
     private fun softDeleteBoardModel(board: Board) {
         val model = database.find(BoardModel::class.java, board.id)!!
-        model.softDeletedAt = Instant.now()
+        model.softDeletedAt = storableNow()
         database.save(model)
     }
 
@@ -82,6 +86,8 @@ class PinRepositoryTest : RepositoryTest() {
             description = "Something",
             tags = emptyList(),
             boards = emptyList(),
+            createdAt = storableNow(),
+            updatedAt = storableNow(),
         )
 
     private fun createPinWithTags(vararg tags: Tag): Pin =
@@ -144,11 +150,8 @@ class PinRepositoryTest : RepositoryTest() {
         val actual = repository.findPinById(pin.id)
 
         // Then
-        // createdAt/updatedAt are populated on read but absent on the never-persisted `pin`
-        // reference (it was constructed in memory and never reassigned from savePin's return),
-        // so they are normalized away rather than compared.
         assertNotNull(actual)
-        assertEquals(pin, actual!!.copy(createdAt = null, updatedAt = null))
+        assertEquals(pin, actual)
     }
 
     @Test
@@ -264,7 +267,10 @@ class PinRepositoryTest : RepositoryTest() {
 
     // --- Soft delete tests ---
 
-    private fun createAndSavePin(author: User): Pin {
+    private fun createAndSavePin(
+        author: User,
+        createdAt: Instant = storableNow(),
+    ): Pin {
         val pin = Pin(
             id = randomUUID(),
             author = author,
@@ -273,9 +279,17 @@ class PinRepositoryTest : RepositoryTest() {
             description = "Something",
             tags = emptyList(),
             boards = emptyList(),
+            createdAt = createdAt,
+            updatedAt = createdAt,
         )
         return repository.savePin(pin)
     }
+
+    // Cursor pagination breaks ties on the id, which is random, so a test asserting a
+    // deterministic order stamps the pins itself rather than hoping two saves land on
+    // different milliseconds.
+    private val firstInstant = Instant.parse("2026-01-01T00:00:00Z")
+    private val secondInstant = firstInstant.plusSeconds(1)
 
     @Test
     fun `Given soft-deleted pin, Then findPinsForUser excludes it`() {
@@ -545,9 +559,8 @@ class PinRepositoryTest : RepositoryTest() {
     fun `Given a cursor pointing to an existing pin, Then findPinsForUser resumes from it`() {
         // Given
         val user = createAndSaveUser()
-        val firstPin = createAndSavePin(user)
-        val secondPin = createAndSavePin(user)
-        forceCreationInstants("pins", listOf(firstPin.id, secondPin.id))
+        val firstPin = createAndSavePin(user, createdAt = firstInstant)
+        val secondPin = createAndSavePin(user, createdAt = secondInstant)
         val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
 
         // When
@@ -589,9 +602,8 @@ class PinRepositoryTest : RepositoryTest() {
     fun `Given a cursor pointing to an existing soft-deleted pin, Then findSoftDeletedPinsForUser resumes from it`() {
         // Given
         val user = createAndSaveUser()
-        val firstPin = repository.softDeletePin(createAndSavePin(user))
-        val secondPin = repository.softDeletePin(createAndSavePin(user))
-        forceCreationInstants("pins", listOf(firstPin.id, secondPin.id))
+        val firstPin = repository.softDeletePin(createAndSavePin(user, createdAt = firstInstant))
+        val secondPin = repository.softDeletePin(createAndSavePin(user, createdAt = secondInstant))
         val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
 
         // When
@@ -763,9 +775,10 @@ class PinRepositoryTest : RepositoryTest() {
         // Given
         val user = createAndSaveUser()
         val board = createAndSaveBoard(name = "board1", user = user)
-        val firstPin = repository.savePin(createPinWithBoards(board).copy(author = user))
-        val secondPin = repository.savePin(createPinWithBoards(board).copy(author = user))
-        forceCreationInstants("pins", listOf(firstPin.id, secondPin.id))
+        val firstPin =
+            repository.savePin(createPinWithBoards(board).copy(author = user, createdAt = firstInstant))
+        val secondPin =
+            repository.savePin(createPinWithBoards(board).copy(author = user, createdAt = secondInstant))
         val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
 
         // When

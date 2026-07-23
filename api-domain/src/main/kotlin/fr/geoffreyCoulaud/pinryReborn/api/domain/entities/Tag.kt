@@ -7,6 +7,5 @@ data class Tag(
     override val id: UUID,
     val author: User,
     val name: String,
-    // Nullable: null means "not read from persistence". See User.createdAt for the rationale.
-    val createdAt: Instant? = null,
+    val createdAt: Instant,
 ) : Identifiable

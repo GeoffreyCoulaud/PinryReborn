@@ -221,8 +221,8 @@ class ExportContentGoldenJsonTest {
                 description = "A pin",
                 sourceContextUrl = "https://example.org/article",
                 sourceMediaUrl = null,
-                createdAt = null,
-                updatedAt = null,
+                createdAt = Instant.parse("2026-01-06T00:00:00Z"),
+                updatedAt = Instant.parse("2026-01-07T00:00:00Z"),
                 deletedAt = Instant.parse("2026-01-08T00:00:00Z"),
                 tags = emptyList(),
                 boards = emptyList(),
@@ -236,7 +236,8 @@ class ExportContentGoldenJsonTest {
         assertEquals(
             """{"id":"66666666-6666-6666-6666-666666666666","description":"A pin",""" +
                 """"sourceContextUrl":"https://example.org/article","sourceMediaUrl":null,""" +
-                """"createdAt":null,"updatedAt":null,"deletedAt":"2026-01-08T00:00:00Z",""" +
+                """"createdAt":"2026-01-06T00:00:00Z","updatedAt":"2026-01-07T00:00:00Z",""" +
+                """"deletedAt":"2026-01-08T00:00:00Z",""" +
                 """"tags":[],"boards":[],"image":null}""",
             json,
         )

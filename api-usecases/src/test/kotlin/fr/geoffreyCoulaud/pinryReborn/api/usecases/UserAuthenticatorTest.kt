@@ -13,6 +13,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -31,7 +32,7 @@ class UserAuthenticatorTest : BaseTest() {
     @Test
     fun `When authenticating with basic auth, then should work`() {
         // Given
-        val user = User(id = UUID.randomUUID(), name = createRandomString())
+        val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val password = createRandomString()
         val hashedPassword = HashedPassword(hash = createRandomString(), algorithm = PasswordHashAlgorithm.BCRYPT)
         val login = BasicAuthLogin(user.name, password)
@@ -49,7 +50,7 @@ class UserAuthenticatorTest : BaseTest() {
     @Test
     fun `When authenticating with basic auth and no saved password, then should throw`() {
         // Given
-        val user = User(id = UUID.randomUUID(), name = createRandomString())
+        val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val password = createRandomString()
         val login = BasicAuthLogin(user.name, password)
         every { userRepository.findUserByName(any()) } returns user
@@ -66,7 +67,7 @@ class UserAuthenticatorTest : BaseTest() {
     @Test
     fun `When authenticating with basic auth with a bad username, then should throw`() {
         // Given
-        val user = User(id = UUID.randomUUID(), name = createRandomString())
+        val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val login = BasicAuthLogin(user.name, createRandomString())
         every { userRepository.findUserByName(any()) } returns null
         every { passwordHasher.hash(any()) } returns HashedPassword("dummy", PasswordHashAlgorithm.BCRYPT)
@@ -81,7 +82,7 @@ class UserAuthenticatorTest : BaseTest() {
     @Test
     fun `When authenticating with basic auth with a bad password, then should throw`() {
         // Given
-        val user = User(id = UUID.randomUUID(), name = createRandomString())
+        val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val login = BasicAuthLogin(user.name, createRandomString())
         val hashedPassword = HashedPassword(hash = createRandomString(), algorithm = PasswordHashAlgorithm.BCRYPT)
         every { userRepository.findUserByName(any()) } returns user

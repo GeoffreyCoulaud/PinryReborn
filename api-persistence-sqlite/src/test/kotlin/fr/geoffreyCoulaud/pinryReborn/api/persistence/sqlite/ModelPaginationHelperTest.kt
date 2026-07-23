@@ -28,7 +28,10 @@ class ModelPaginationHelperTest : RepositoryTest() {
     private val helper = ModelPaginationHelper<PinModel, QPinModel>()
     private val strategy = PinModelSortStrategy.CreatedAtAsc()
 
-    private fun createUser(): User = userRepository.saveUser(User(id = randomUUID(), name = createRandomString()))
+    private fun createUser(): User =
+        userRepository.saveUser(
+            User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()),
+        )
 
     private fun baseQueryFor(user: User) = QPinModel().author.id.equalTo(user.id)
 
@@ -44,17 +47,17 @@ class ModelPaginationHelperTest : RepositoryTest() {
     )
 
     /**
-     * Persist [count] pins for [user] with strictly increasing `whenCreated` timestamps
-     * (index 0 is the oldest). Ebean's `@WhenCreated` only applies on insert, so the manually
-     * assigned timestamp is set via a follow-up update to guarantee deterministic ordering
-     * (two inserts within the same test can otherwise land on the same millisecond).
+     * Persist [count] pins for [user] with strictly increasing creation timestamps (index 0 is the
+     * oldest), so the ordering under test is deterministic rather than dependent on two inserts
+     * landing on different milliseconds.
      */
     private fun seedPins(
         user: User,
         count: Int,
     ): List<PinModel> {
-        val base = Instant.now()
+        val base = Instant.parse("2026-01-01T00:00:00Z")
         return (0 until count).map { index ->
+            val createdAt = base.plusSeconds(index.toLong())
             val pin =
                 Pin(
                     id = randomUUID(),
@@ -64,10 +67,10 @@ class ModelPaginationHelperTest : RepositoryTest() {
                     description = "Pin $index",
                     tags = emptyList(),
                     boards = emptyList(),
+                    createdAt = createdAt,
+                    updatedAt = createdAt,
                 )
             val model = pin.toModel()
-            database.save(model)
-            model.whenCreated = base.plusSeconds(index.toLong())
             database.save(model)
             model
         }

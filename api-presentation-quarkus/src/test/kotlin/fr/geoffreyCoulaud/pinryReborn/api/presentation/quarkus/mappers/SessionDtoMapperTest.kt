@@ -24,7 +24,8 @@ class SessionDtoMapperTest {
 
     @Test
     fun `Given a SessionToken, Then toExistingDto exposes expiry, renewAfter and persistent but no token`() {
-        val token = SessionToken(randomUUID(), User(randomUUID(), "alice"), expiresAt, persistent = true)
+        val token = SessionToken(randomUUID(), User(randomUUID(), "alice",
+            createdAt = Instant.now()), expiresAt, persistent = true)
         val dto = token.toExistingDto(renewAfter)
         assertEquals(expiresAt, dto.expiresAt)
         assertEquals(renewAfter, dto.renewAfter)

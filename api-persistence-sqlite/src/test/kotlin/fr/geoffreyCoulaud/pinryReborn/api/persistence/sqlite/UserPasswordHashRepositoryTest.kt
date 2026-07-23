@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.exceptions.UserMode
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserPasswordHashRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -17,7 +18,7 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
     private val users = UserRepository(database = database)
     private val repository = UserPasswordHashRepository(database = database)
 
-    private fun user() = users.saveUser(User(id = randomUUID(), name = createRandomString()))
+    private fun user() = users.saveUser(User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()))
 
     private fun hash(h: String) = HashedPassword(hash = h, algorithm = PasswordHashAlgorithm.BCRYPT)
 
@@ -48,7 +49,7 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
     @Test
     fun `Given a nonexistent user, Then saveUserPasswordHash throws UserModelDoesNotExistError`() {
         // Given
-        val nonexistentUser = User(id = randomUUID(), name = createRandomString())
+        val nonexistentUser = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
         val hashedPassword = hash("hash")
 
         // When, Then

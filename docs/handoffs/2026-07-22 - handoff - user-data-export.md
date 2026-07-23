@@ -36,10 +36,12 @@ Then the feature, layer by layer:
   `isGone`), `UserDataExportRepositoryInterface`, `ExportArchiveStore` port (`ArchiveSink`,
   `ArchiveFormat`, `ArchiveEntryDigest`), `ExportAlreadyInProgressException`. `StagedFile` moved from
   `domain.images` to `domain.storage` (shared by images and exports). Creation timestamps promoted onto
-  `User/Pin/Board/Tag` (nullable; `null` = "not read from persistence"). `findBoardsForPinIncludingRecycled`
+  `User/Pin/Board/Tag`, **non-nullable and stamped by the creating/updating use case** from the `Clock`
+  port (see "Timestamps are domain data" below). `findBoardsForPinIncludingRecycled`
   added so the export sees recycled-board memberships.
-- **Persistence:** `user_data_exports` table (migrations 1.10 + hand-written 1.11 partial unique index
-  `WHERE state = 'PENDING'`), model, mapper, repository (`state` stored as `String`, never an ordinal;
+- **Persistence:** `user_data_exports` table (migrations 1.10 + 1.11, the latter a partial unique index
+  `WHERE state = 'PENDING'` declared on the model with `@Index(definition = ...)` so it lives in the
+  migration model rather than in hand-written SQL), model, mapper, repository (`state` stored as `String`, never an ordinal;
   the mapper never dereferences the associated user, which may be a tombstone).
 - **Storage adapter:** `FilesystemZipExportArchiveStore` (stage into a temp file, measure size + SHA-256,
   fsync, promote by atomic rename), `ZipArchiveSink`, `CountingDigestOutputStream`. Jackson is
@@ -70,10 +72,22 @@ Then the feature, layer by layer:
   images via `imageRepository.findByPinId`. Reading `pin.image` would silently produce an archive with
   zero images and unit tests that pass. This is exactly why the archive-content integration test downloads
   real bytes instead of trusting mocked shapes.
-- **Promoting timestamps turned the tombstoned-author NPE into `UninitializedPropertyAccessException`.**
-  `BaseModel.whenCreated` is `lateinit`; mapping a bare placeholder `UserModel` (built by `User.toModel()`,
-  id + name only) throws. The repositories' `save*` now re-read the saved row by id so the author is a
-  genuine Ebean reference. Do NOT add a defensive `isInitialized` check (uncoverable branch).
+- **Timestamps are domain data, not a persistence concern.** `createdAt`/`updatedAt` are non-nullable on
+  `User/Pin/Board/Tag` and stamped by the use case (`UserCreator`, `TagCreator`, `BoardCreator`,
+  `PinCreator`, `PinTagger`, `PinBoardSetter`, `BoardUpdater`) from the `Clock` port, mirroring
+  `Image.createdAt`. The models must therefore NOT inherit Ebean's `@WhenCreated`/`@WhenModified`:
+  `GeneratedInsertJavaTime` returns the clock unconditionally and would silently discard the domain
+  value. `AuditedBaseModel` keeps the generated columns for the entities whose domain type has no
+  timestamp (tasks, session tokens, password hashes, exports); the others declare ordinary columns
+  keeping the historical `when_created`/`when_modified` names via `@Column(name = ...)`, so the change
+  costs no migration. Because `User.toModel()` now carries a real `createdAt`, the author placeholder is
+  complete and `save*` maps the merged model directly instead of re-reading it by id.
+- **`SystemClock` truncates to the millisecond, deliberately.** The SQLite store round-trips instants at
+  millisecond resolution. A nanosecond-precision `Instant.now()` written into an entity comes back
+  *different* on the next read, and since entities are compared by value, an authorization check as
+  blunt as `pin.author != user` starts rejecting the legitimate owner. Matching the clock's resolution
+  to the store's kills that class of bug at the source; `RepositoryTest.storableNow()` is the test-side
+  equivalent for entities built by hand.
 - **The queue re-claim bug** (0b) is subtle: without lease renewal, two concurrent builds share one
   deterministic storage key and the compare-and-set loser deletes the winner's bytes, leaving a READY row
   pointing at a missing file. Lease renewal is the primary defense; the CAS is the backstop.

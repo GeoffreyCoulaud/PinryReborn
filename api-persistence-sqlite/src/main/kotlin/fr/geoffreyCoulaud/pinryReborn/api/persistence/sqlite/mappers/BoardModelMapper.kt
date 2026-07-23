@@ -12,6 +12,8 @@ object BoardModelMapper {
             author = author.toModel(),
             name = name,
             description = description,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
             softDeletedAt = softDeletedAt,
         )
 
@@ -21,8 +23,8 @@ object BoardModelMapper {
             author = author.toDomain(),
             name = name,
             description = description,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
             softDeletedAt = softDeletedAt,
-            createdAt = whenCreated,
-            updatedAt = whenModified,
         )
 }

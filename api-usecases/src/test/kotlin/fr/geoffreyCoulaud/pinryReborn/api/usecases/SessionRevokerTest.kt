@@ -12,7 +12,7 @@ import java.util.UUID.randomUUID
 class SessionRevokerTest {
     private val repository = mockk<SessionTokenRepositoryInterface>(relaxed = true)
     private val revoker = SessionRevoker(repository)
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
 
     @Test
     fun `Given a current token, Then revokeCurrent deletes it by id`() {

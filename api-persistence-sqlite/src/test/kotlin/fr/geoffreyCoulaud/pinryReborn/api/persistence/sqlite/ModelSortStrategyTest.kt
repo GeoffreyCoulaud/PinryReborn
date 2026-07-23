@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelSortStrategy
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -55,10 +56,12 @@ class ModelSortStrategyTest : RepositoryTest() {
     private fun createPivot(): PinModel =
         PinModel(
             id = randomUUID(),
-            author = UserModel(id = randomUUID(), name = "author"),
+            author = UserModel(id = randomUUID(), name = "author", createdAt = storableNow()),
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/image.jpeg",
             description = "d",
+            createdAt = storableNow(),
+            updatedAt = storableNow(),
         )
 
     // --- filterCursorAndNeighbors ---

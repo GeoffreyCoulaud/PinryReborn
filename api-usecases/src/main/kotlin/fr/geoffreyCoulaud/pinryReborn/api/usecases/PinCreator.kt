@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID.randomUUID
 
@@ -10,6 +11,7 @@ import java.util.UUID.randomUUID
 class PinCreator(
     private val tagCreator: TagCreator,
     private val pinRepository: PinRepositoryInterface,
+    private val clock: Clock,
 ) {
     fun createPin(
         author: User,
@@ -20,6 +22,7 @@ class PinCreator(
     ): Pin {
 
         val tags = tags.map { tagCreator.findOrCreate(name = it, user = author) }
+        val now = clock.now()
         val pin = Pin(
             id = randomUUID(),
             author = author,
@@ -28,6 +31,8 @@ class PinCreator(
             description = description,
             tags = tags,
             boards = emptyList(),
+            createdAt = now,
+            updatedAt = now,
         )
         return pinRepository.savePin(pin)
     }

@@ -17,14 +17,7 @@ class TagRepository(
 ) : TagRepositoryInterface {
     private val sqlRepository = ModelRepository(entityClass = TagModel::class, database = database)
 
-    override fun saveTag(tag: Tag): Tag {
-        val model = sqlRepository.saveAndReturn(tag.toModel())
-        // Re-read by id rather than mapping `model` directly: its `author` is still the bare
-        // placeholder built by `Tag.toModel()` (id + name only, no Ebean-managed timestamps), so
-        // mapping it straight would throw UninitializedPropertyAccessException on
-        // `UserModel.whenCreated`. A fresh query loads a genuine Ebean reference for the author.
-        return QTagModel().id.equalTo(model.id).findOne()!!.toDomain()
-    }
+    override fun saveTag(tag: Tag): Tag = sqlRepository.saveAndReturn(tag.toModel()).toDomain()
 
     override fun findUserTagByName(
         user: User,

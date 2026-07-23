@@ -32,10 +32,10 @@ internal data class ExportedRef(val id: UUID, val name: String)
 internal data class ExportExclusion(val what: String, val why: String)
 
 /** `user.json`: the exporting user's own account, in full (unlike the [ExportedRef] used elsewhere). */
-internal data class ExportedUser(val id: UUID, val name: String, val createdAt: Instant?)
+internal data class ExportedUser(val id: UUID, val name: String, val createdAt: Instant)
 
 /** One `tags.jsonl` line. */
-internal data class ExportedTag(val id: UUID, val name: String, val createdAt: Instant?)
+internal data class ExportedTag(val id: UUID, val name: String, val createdAt: Instant)
 
 /**
  * One `boards.jsonl` line. Active *and* recycled boards are written; `deletedAt` carries the state, so
@@ -46,8 +46,8 @@ internal data class ExportedBoard(
     val id: UUID,
     val name: String,
     val description: String,
-    val createdAt: Instant?,
-    val updatedAt: Instant?,
+    val createdAt: Instant,
+    val updatedAt: Instant,
     val deletedAt: Instant?,
 )
 
@@ -79,8 +79,8 @@ internal data class ExportedPin(
     val description: String,
     val sourceContextUrl: String,
     val sourceMediaUrl: String?,
-    val createdAt: Instant?,
-    val updatedAt: Instant?,
+    val createdAt: Instant,
+    val updatedAt: Instant,
     val deletedAt: Instant?,
     val tags: List<ExportedRef>,
     val boards: List<ExportedRef>,

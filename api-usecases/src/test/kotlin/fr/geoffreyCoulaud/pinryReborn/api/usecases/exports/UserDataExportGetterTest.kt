@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test
 class UserDataExportGetterTest : BaseTest() {
     private val repository = mockk<UserDataExportRepositoryInterface>()
     private val getter = UserDataExportGetter(repository)
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 
     private fun exportFor(userId: UUID, state: UserDataExportState = UserDataExportState.PENDING) =

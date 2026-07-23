@@ -30,7 +30,7 @@ class SessionRenewerTest {
     private val renewer = SessionRenewer(repository, tokenGenerator, clock, policy, transactionRunner)
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
     private val current = SessionToken(randomUUID(), user, expiresAt = now.plusSeconds(10), persistent = true)
 
     // Passthrough so the transactional block runs in the behavioral tests; overridden where a test

@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRep
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.TagRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -21,7 +22,7 @@ class TagRepositoryTest : RepositoryTest() {
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(
-            User(id = randomUUID(), name = createRandomString()),
+            User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()),
         )
 
     private fun createPinWithTag(
@@ -37,6 +38,8 @@ class TagRepositoryTest : RepositoryTest() {
                 description = "Something",
                 tags = listOf(tag),
                 boards = emptyList(),
+                createdAt = storableNow(),
+                updatedAt = storableNow(),
             ),
         )
 
@@ -44,7 +47,7 @@ class TagRepositoryTest : RepositoryTest() {
     fun `Given a new tag, Then saveTag persists it`() {
         // Given
         val user = createAndSaveUser()
-        val tag = Tag(id = randomUUID(), author = user, name = "landscape")
+        val tag = Tag(id = randomUUID(), author = user, name = "landscape", createdAt = storableNow())
 
         // When
         val saved = repository.saveTag(tag)
@@ -58,7 +61,10 @@ class TagRepositoryTest : RepositoryTest() {
     fun `Given a tag owned by the user, Then findUserTagByName returns it`() {
         // Given
         val user = createAndSaveUser()
-        val tag = repository.saveTag(Tag(id = randomUUID(), author = user, name = "landscape"))
+        val tag =
+            repository.saveTag(
+                Tag(id = randomUUID(), author = user, name = "landscape", createdAt = storableNow()),
+            )
 
         // When
         val found = repository.findUserTagByName(user = user, name = "landscape")
@@ -84,8 +90,8 @@ class TagRepositoryTest : RepositoryTest() {
     fun `Given tags owned by the user, Then findAllTagsForUser returns them`() {
         // Given
         val user = createAndSaveUser()
-        val tag1 = repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1"))
-        val tag2 = repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag2"))
+        val tag1 = repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1", createdAt = storableNow()))
+        val tag2 = repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag2", createdAt = storableNow()))
 
         // When
         val tags = repository.findAllTagsForUser(user)
@@ -98,8 +104,8 @@ class TagRepositoryTest : RepositoryTest() {
     fun `Given tags owned by the user, Then deleteAllTagsForUser removes them`() {
         // Given
         val user = createAndSaveUser()
-        repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1"))
-        repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag2"))
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1", createdAt = storableNow()))
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag2", createdAt = storableNow()))
 
         // When
         repository.deleteAllTagsForUser(user)
@@ -112,7 +118,7 @@ class TagRepositoryTest : RepositoryTest() {
     fun `Given a tag used by a pin, Then deleteAllTagsForUser removes it and its pin_tag junction row`() {
         // Given
         val user = createAndSaveUser()
-        val tag = repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1"))
+        val tag = repository.saveTag(Tag(id = randomUUID(), author = user, name = "tag1", createdAt = storableNow()))
         val pin = createPinWithTag(author = user, tag = tag)
 
         // When
@@ -145,7 +151,7 @@ class TagRepositoryTest : RepositoryTest() {
     fun `Given a saved tag, Then reading it back exposes its creation timestamp`() {
         // Given
         val user = createAndSaveUser()
-        repository.saveTag(Tag(id = randomUUID(), author = user, name = "landscape"))
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = "landscape", createdAt = storableNow()))
 
         // When
         val found = repository.findUserTagByName(user = user, name = "landscape")

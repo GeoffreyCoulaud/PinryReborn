@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.BoardR
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -24,6 +25,7 @@ class BoardRepositoryTest : RepositoryTest() {
             User(
                 id = randomUUID(),
                 name = createRandomString(),
+                createdAt = storableNow(),
             ),
         )
 
@@ -37,6 +39,8 @@ class BoardRepositoryTest : RepositoryTest() {
                 author = user,
                 name = name,
                 description = "",
+                createdAt = storableNow(),
+                updatedAt = storableNow(),
             ),
         )
 
@@ -53,6 +57,8 @@ class BoardRepositoryTest : RepositoryTest() {
                 description = "Something",
                 tags = emptyList(),
                 boards = boards,
+                createdAt = storableNow(),
+                updatedAt = storableNow(),
             ),
         )
 

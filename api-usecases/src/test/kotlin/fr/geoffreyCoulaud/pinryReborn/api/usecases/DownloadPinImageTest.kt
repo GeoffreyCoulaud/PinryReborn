@@ -53,7 +53,7 @@ class DownloadPinImageTest {
     private val renditionCache: RenditionCache = mockk()
     private val now = Instant.parse("2026-07-10T00:00:00Z")
     private val pinId = randomUUID()
-    private val user = User(randomUUID(), "u")
+    private val user = User(randomUUID(), "u", createdAt = Instant.now())
 
     private val subject =
         DownloadPinImage(pins, images, downloads, store, probe, fetcher, runner, clock, renditionCache)
@@ -69,7 +69,8 @@ class DownloadPinImageTest {
     private fun failedRow() = ImageDownload(
         pinId, "https://x/i.png", DownloadStatus.FAILED, DownloadReason.NOT_FOUND, null, randomUUID(), now, now,
     )
-    private fun pin() = Pin(pinId, user, "https://ctx", "https://x/i.png", "d", emptyList(), emptyList())
+    private fun pin() = Pin(pinId, user, "https://ctx", "https://x/i.png", "d", emptyList(), emptyList(),
+        createdAt = Instant.now(), updatedAt = Instant.now())
     private fun ctx(attempt: Int = 1, max: Int = 3) = TaskContext(attempt, max)
     private fun staged() = StagedFile("tmp/x", 3, "hash")
 

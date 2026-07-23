@@ -42,7 +42,7 @@ class MeExportControllerTest {
         securityIdentity = securityIdentity,
     )
 
-    private fun aUser() = User(id = randomUUID(), name = createRandomString())
+    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
 
     private fun pendingExport(userId: java.util.UUID) = UserDataExport(
         id = randomUUID(),

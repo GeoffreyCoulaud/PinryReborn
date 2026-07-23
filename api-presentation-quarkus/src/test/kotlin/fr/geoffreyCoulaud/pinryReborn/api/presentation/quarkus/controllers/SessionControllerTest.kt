@@ -29,7 +29,7 @@ class SessionControllerTest {
     private val identity = mockk<SecurityIdentity>()
     private val controller = SessionController(creator, renewer, revoker, policy, identity)
 
-    private val user = User(randomUUID(), "alice")
+    private val user = User(randomUUID(), "alice", createdAt = Instant.now())
     private val issued = IssuedSession(
         "tok",
         Instant.parse("2026-08-01T00:00:00Z"),
