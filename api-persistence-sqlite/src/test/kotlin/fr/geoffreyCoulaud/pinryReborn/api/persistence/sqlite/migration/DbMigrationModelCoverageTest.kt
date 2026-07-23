@@ -20,9 +20,9 @@ class DbMigrationModelCoverageTest {
 
     private val handWritten =
         setOf(
-            // Case-insensitive unique index on users.name. Predates this rule and is already applied
-            // on live databases, so rewriting the file would change its checksum and break startup.
-            // `@Index(definition = ...)` on UserModel would express it today.
+            // Case-insensitive unique index on users.name. Predates this rule; `@Index(definition = ...)`
+            // on UserModel would express it today, but rewriting an applied migration changes its
+            // checksum and breaks startup. Cleared when the history is flattened at beta (backlog).
             "1.2",
         )
 

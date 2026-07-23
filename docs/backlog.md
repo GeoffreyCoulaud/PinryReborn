@@ -88,6 +88,14 @@ Last reviewed: 2026-07-23.
   mismatch until the file is deleted by hand, and any leftover row can leak into a later run. Making the
   producer honour the configured URL (or pointing tests at a per-run temporary file) would isolate them. New
   2026-07-23.
+- **Flatten the migration history at beta.** The project is alpha (see AGENTS.md): breaking changes and data loss are
+  acceptable, nobody should be running it yet. The migration history is nonetheless append-only, and that already
+  constrains fixes: `1.2` is a hand-written case-insensitive unique index that `@Index(definition = ...)` would
+  express today (`DbMigrationModelCoverageTest` lists it), and `users`/`pins`/`boards`/`tags` keep `when_created` /
+  `when_modified` column names that no longer match the domain's `createdAt` / `updatedAt`, both kept only because
+  rewriting an applied migration changes its checksum and breaks startup. At beta, collapse `1.0` to `1.n` into a
+  single generated baseline and take both fixes with it. Until then, when a fix is blocked only by an already-applied
+  migration, prefer the clean design and record the debt here rather than contorting around it. New 2026-07-23.
 - **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
   Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
 

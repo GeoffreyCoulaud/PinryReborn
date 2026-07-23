@@ -1,31 +1,35 @@
 This file provides guidance to AI Agents when working with code in this repository.
 
+## Project status: alpha
+
+Breaking changes and data loss are acceptable, and **nobody should be running Pinry Reborn yet**. Treat this as a
+decision input, not a disclaimer: when the only thing standing in the way of the clean fix is "a database somewhere
+already applied this", take the clean fix and note the consequence. The migration history is append-only for now and
+will be flattened into a single baseline at beta (see `docs/backlog.md`).
+
 ## Hard rules (enforced, non-negotiable — do not relax)
 
-- **100% branch coverage on unit tests, per package**, gated in CI and the pre-push hooks. Never lower the unit-test
-  threshold; add the missing test (exercise *both* sides of every conditional).
-- **Strict TDD**: tests are the spec; write the failing test first, watch it fail, then the minimal implementation. Code
-  review judges the tests first.
-- **Clean / Hexagonal**: `api-domain/` is **pure** — no I/O, no config/DB/network/clock/logging imports. All I/O lives
-  in `api-persistence-sqlite/` and `api-presentation-quarkus/`. The dependency graph is a DAG.
-- **Conventional commits** (`feat(domain):`, `fix(domain):`, `test:`, `chore:`, `docs:`).
+- **Tests are the spec.** Strict TDD: write the failing test first, watch it fail, then the minimal implementation;
+  review judges the tests first. **100% branch coverage per package**, gated in CI and the pre-push hooks. Never lower
+  the threshold; add the missing test (exercise *both* sides of every conditional).
+- **Clean / Hexagonal.** `api-domain/` is **pure** — no I/O, no config/DB/network/clock/logging imports. All I/O lives
+  in the adapters, and the dependency graph is a DAG (`ArchitectureKonsistTest` enforces both). Corollary: **domain
+  data is stamped by use cases, never invented by adapters** — creation and update instants, ids and state transitions
+  are business facts, so the use case sets them (from a port such as `Clock`) and the adapter stores what it is given.
+- **Fix the design, don't work around it.** Three smells mean the design is wrong, not the call site: the same
+  explanatory comment repeated in several places for one workaround; a domain type widened to nullable or optional so
+  existing call sites need not change (a migration-cost argument, not a design one); a workaround for a tool
+  limitation nobody verified.
+- **Verify before working around.** For library/framework/CLI questions use the **context7 MCP** (current docs) or the
+  library's own source, not recalled knowledge — above all before concluding a tool cannot do something. Put the
+  evidence in the commit message, never an unchecked claim in a comment.
 - **Language: all code is English** (decided 2026-07-07) — identifiers AND prose: comments, docstrings, runtime-emitted
   messages/logs, CI step names, and commit messages. **New docs under `docs/specs/`, `docs/plans/` and `docs/handoffs/`
   are written in English** ; past docs keep their original language (no retro-translation). Conversational replies to
   the operator stay their chosen language.
+- **Conventional commits** (`feat(domain):`, `fix(domain):`, `test:`, `chore:`, `docs:`).
 - **Subagent-driven execution** (Act phase) + **holistic review** (Verify phase): the cross-cutting review regularly
   catches bugs — don't skip it.
-- For library/framework/CLI questions, use the **context7 MCP** (current docs), not recalled knowledge.
-- **Domain data is stamped by use cases, never invented by adapters.** Creation and update instants, ids and state
-  transitions are business facts: the use case sets them (from a port such as `Clock`), and the adapter stores what
-  it is given. An adapter that generates a value the domain exposes puts a business decision in the wrong layer, and
-  the value it returns is not the value the domain asked for. Enforced for the clock by `ArchitectureKonsistTest`.
-- **Fix the design, don't work around it.** Three smells mean the design is wrong, not the call site: (1) the same
-  explanatory comment repeated in several places to justify the same workaround; (2) a domain type widened to
-  nullable or optional so existing call sites don't have to change (that is a migration-cost argument, not a design
-  argument, and it pushes the cost onto every future reader); (3) a workaround for a tool limitation nobody
-  verified. For (3), read the library's source or its current docs (context7 MCP) *before* working around it, and
-  put the evidence in the commit message rather than an unchecked claim in a comment.
 
 ## Architecture
 
@@ -152,11 +156,16 @@ Use the `finishing-a-development-branch` skill to guide this phase.
 ### 6. Improve
 
 **Not optional, and not skippable because the work "went fine".** Once the sub-project is integrated, turn what
-went wrong into something the build catches next time. The question to answer is: *what did a human have to
-notice that the gate should have noticed?* Review the session for corrections the operator made, bugs the
-holistic review caught, and assumptions that turned out false.
+went wrong into something the build catches next time. A lesson that stays in the conversation is lost when the
+session ends.
 
-For each lesson, pick the cheapest durable form:
+**This phase opens with a discussion, exactly like Discuss. Never act alone in it.** Start by stating, in free-form
+text: the **failures met** during the sub-project, and the **remedy proposed** for each. The question to answer is
+*what did a human have to notice that the gate should have noticed?* — so review the session for corrections the
+operator made, bugs the holistic review caught, and assumptions that turned out false. **The operator validates both
+the list of failures and the remedies retained**; write, commit and push nothing before that.
+
+Once validated, give each retained remedy the cheapest durable form:
 
 - **Hard rule in this file** when it is a judgement call a tool cannot check.
 - **Konsist test** (`ArchitectureKonsistTest`) when it is a structural invariant over the source.
@@ -164,8 +173,8 @@ For each lesson, pick the cheapest durable form:
 - **Plain test** when the invariant is about repository content (see `DbMigrationModelCoverageTest`).
 - **Backlog item** when the fix is real work rather than a rule.
 
-Record nothing the gate already enforces, and prefer one precise rule over three vague ones. Commit separately
-(`docs(agents):`, `test(architecture):`). A lesson that stays in the conversation is lost when the session ends.
+Record nothing the gate already enforces, prefer one precise rule over three vague ones, and keep this file dense:
+a rule nobody finishes reading enforces nothing. Commit separately (`docs(agents):`, `test(architecture):`).
 
 ## Build Commands
 
