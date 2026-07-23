@@ -78,6 +78,24 @@ class ArchitectureKonsistTest {
     }
 
     @Test
+    fun `Given api-domain and api-usecases, Then they read the wall clock only through the Clock port`() {
+        // `java.time.Instant` is an allowed import (entities carry instants), so the import rules above
+        // cannot catch a direct `Instant.now()`. It matters twice over: a hidden clock makes a use case
+        // untestable, and it bypasses SystemClock, whose truncation keeps a stamped instant equal to
+        // itself across a save-then-read. Matched on file text because the offence is a call, not an
+        // import.
+        val wallClockReads =
+            listOf("Instant.now(", "LocalDate.now(", "LocalDateTime.now(", "System.currentTimeMillis(")
+        listOf("api-domain", "api-usecases").forEach { module ->
+            Konsist
+                .scopeFromProduction(moduleName = module)
+                .files
+                .filter { file -> wallClockReads.any { file.text.contains(it) } }
+                .assertEmpty()
+        }
+    }
+
+    @Test
     fun `Given api-domain, Then it imports only its own package and pure value types`() {
         // Drop the allowed imports (own package + pure value types); anything left is a violation,
         // and `assertEmpty` reports each one by name.
