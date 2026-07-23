@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
@@ -15,6 +16,7 @@ class UserCreator(
     private val userPasswordRepository: UserPasswordHashRepositoryInterface,
     private val passwordHasher: PasswordHasher,
     private val transactionRunner: TransactionRunner,
+    private val clock: Clock,
 ) {
     fun createUser(name: String): User = transactionRunner.inTransaction { createUserInternal(name) }
 
@@ -37,7 +39,7 @@ class UserCreator(
         val existingUser = userRepository.findUserByNameIncludingDeleted(normalizedName)
         if (existingUser != null) throw UsernameAlreadyTakenError()
         // Create the user
-        val user = User(id = UUID.randomUUID(), name = normalizedName)
+        val user = User(id = UUID.randomUUID(), name = normalizedName, createdAt = clock.now())
         return userRepository.saveUser(user)
     }
 }

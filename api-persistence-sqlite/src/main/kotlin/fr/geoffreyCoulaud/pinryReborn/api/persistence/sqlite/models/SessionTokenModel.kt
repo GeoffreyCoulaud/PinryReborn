@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.AuditedBaseModel
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.ManyToOne
@@ -16,4 +16,4 @@ class SessionTokenModel(
     @Column(unique = true) var tokenHash: String,
     var expiresAt: Instant,
     var persistent: Boolean,
-) : BaseModel(id = id)
+) : AuditedBaseModel(id = id)

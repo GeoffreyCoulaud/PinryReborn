@@ -20,7 +20,7 @@ class SessionTokenAuthenticatorTest {
     private val authenticator = SessionTokenAuthenticator(repository, clock)
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
     private val plaintext = "the-token"
     private val hash = TokenHasher.sha256(plaintext)
 

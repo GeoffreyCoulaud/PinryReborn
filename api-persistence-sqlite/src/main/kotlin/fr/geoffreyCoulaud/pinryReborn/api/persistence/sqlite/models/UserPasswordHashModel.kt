@@ -1,7 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.AuditedBaseModel
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -15,4 +15,4 @@ class UserPasswordHashModel(
     var hash: String,
     @Enumerated(EnumType.STRING)
     var algorithm: PasswordHashAlgorithm,
-) : BaseModel()
+) : AuditedBaseModel()

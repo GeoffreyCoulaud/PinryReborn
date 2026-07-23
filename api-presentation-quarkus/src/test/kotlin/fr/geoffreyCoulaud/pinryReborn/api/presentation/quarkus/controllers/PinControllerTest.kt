@@ -16,6 +16,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.quarkus.security.identity.SecurityIdentity
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
@@ -38,7 +39,7 @@ class PinControllerTest {
     @Test
     fun `Given no cursor, no page size and no sort, Then listPins uses defaults`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val page = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every {
@@ -60,7 +61,7 @@ class PinControllerTest {
     @Test
     fun `Given cursor, page size and sort provided, Then listPins uses the provided values`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val pivotId = randomUUID()
         val cursorInput = CursorDto(pivotId = pivotId, direction = CursorDirectionDto.FORWARD)
         val pageSizeInput = 5
@@ -90,7 +91,7 @@ class PinControllerTest {
     @Test
     fun `Given board ids, Then setBoards sets them and returns the updated pin`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val pinId = randomUUID()
         val boardIds = listOf(randomUUID(), randomUUID())
         val dto = PinBoardsInputDto(boardIds = boardIds)
@@ -102,6 +103,8 @@ class PinControllerTest {
             description = createRandomString(),
             tags = emptyList(),
             boards = emptyList(),
+            createdAt = Instant.now(),
+            updatedAt = Instant.now(),
         )
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { pinBoardSetter.setBoards(pinId = pinId, boardIds = boardIds, user = user) } returns pin

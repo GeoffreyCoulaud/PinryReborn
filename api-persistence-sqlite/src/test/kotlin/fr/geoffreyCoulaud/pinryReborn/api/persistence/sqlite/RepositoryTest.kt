@@ -4,31 +4,20 @@ import io.ebean.DB
 import io.ebean.Database
 import org.junit.jupiter.api.BeforeEach
 import java.time.Instant
-import java.util.UUID
+import java.time.temporal.ChronoUnit
 
 abstract class RepositoryTest {
     protected val database: Database get() = DB.getDefault()
 
     /**
-     * Rows saved in the same clock tick share a creation instant, and cursor pagination breaks such
-     * ties on the id, which is random. Tests that need a *deterministic* order therefore stamp the
-     * rows themselves, one second apart, in the order given. `@WhenCreated` is Ebean-managed, hence
-     * the raw update; the parameters still go through Ebean's binder, so the stored representation
-     * matches what the mapped entity would write.
+     * An instant an entity can carry across a save-then-read unchanged.
+     *
+     * The store round-trips instants at millisecond resolution, so a nanosecond-precision
+     * `Instant.now()` comes back as a *different* value and every equality assertion on a re-read
+     * entity fails. [fr.geoffreyCoulaud.pinryReborn.api.system.SystemClock] truncates for the same
+     * reason; tests that build entities by hand must match it.
      */
-    protected fun forceCreationInstants(
-        table: String,
-        ids: List<UUID>,
-    ) {
-        val base = Instant.parse("2026-01-01T00:00:00Z")
-        ids.forEachIndexed { index, id ->
-            database
-                .sqlUpdate("update $table set when_created = ? where id = ?")
-                .setParameter(1, base.plusSeconds(index.toLong()))
-                .setParameter(2, id)
-                .execute()
-        }
-    }
+    protected fun storableNow(): Instant = Instant.now().truncatedTo(ChronoUnit.MILLIS)
 
     /**
      * Truncate all non-internal tables in the database.

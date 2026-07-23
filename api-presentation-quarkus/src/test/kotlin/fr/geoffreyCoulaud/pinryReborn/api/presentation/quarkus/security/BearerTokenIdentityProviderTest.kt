@@ -23,7 +23,7 @@ import java.util.function.Supplier
 class BearerTokenIdentityProviderTest {
     private val authenticator = mockk<SessionTokenAuthenticator>()
     private val provider = BearerTokenIdentityProvider(authenticator)
-    private val user = User(randomUUID(), "alice")
+    private val user = User(randomUUID(), "alice", createdAt = Instant.now())
 
     // Execute the runBlocking supplier synchronously.
     private val context = mockk<AuthenticationRequestContext> {

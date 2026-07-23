@@ -24,7 +24,7 @@ class UserDataExportRepositoryTest : RepositoryTest() {
     private val userRepository = UserRepository(database)
 
     private fun createAndSaveUser(): User =
-        userRepository.saveUser(User(id = randomUUID(), name = createRandomString()))
+        userRepository.saveUser(User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()))
 
     private fun pendingExport(
         userId: UUID,

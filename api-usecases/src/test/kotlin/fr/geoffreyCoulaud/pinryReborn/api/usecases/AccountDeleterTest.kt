@@ -11,6 +11,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import java.time.Instant
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
@@ -22,7 +23,7 @@ class AccountDeleterTest : BaseTest() {
     private val enqueue = mockk<EnqueueTask>(relaxed = true)
     private val tx = mockk<TransactionRunner>()
     private val deleter = AccountDeleter(reauth, users, sessionRevoker, enqueue, tx)
-    private val user = User(id = randomUUID(), name = "u")
+    private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
 
     @Test
     fun `Given a valid factor, Then it tombstones, revokes and enqueues`() {

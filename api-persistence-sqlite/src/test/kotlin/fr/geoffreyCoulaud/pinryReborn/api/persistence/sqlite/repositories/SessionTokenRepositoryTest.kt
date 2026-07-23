@@ -20,19 +20,19 @@ class SessionTokenRepositoryTest : RepositoryTest() {
     private val userRepository = UserRepository(database = database)
 
     private fun createUser(): User =
-        userRepository.saveUser(User(id = randomUUID(), name = createRandomString()))
+        userRepository.saveUser(User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()))
 
     private fun sessionToken(
         user: User,
         persistent: Boolean = false,
-        expiresAt: Instant = Instant.now().plusSeconds(3600),
+        expiresAt: Instant = storableNow().plusSeconds(3600),
     ) = SessionToken(id = randomUUID(), user = user, expiresAt = expiresAt, persistent = persistent)
 
     @Test
     fun `Given a saved token, Then findByTokenHash returns it with its user and fields`() {
         // Given
         val user = createUser()
-        val expiresAt = Instant.now().plus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MILLIS)
+        val expiresAt = storableNow().plus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MILLIS)
         val token = sessionToken(user, persistent = true, expiresAt = expiresAt)
 
         // When
@@ -54,7 +54,7 @@ class SessionTokenRepositoryTest : RepositoryTest() {
     @Test
     fun `Given a nonexistent user, Then saveSessionToken throws UserModelDoesNotExistError`() {
         // Given
-        val nonexistentUser = User(id = randomUUID(), name = createRandomString())
+        val nonexistentUser = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
         val token = sessionToken(nonexistentUser)
 
         // When, Then

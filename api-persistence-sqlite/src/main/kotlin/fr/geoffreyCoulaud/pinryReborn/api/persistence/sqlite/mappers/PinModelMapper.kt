@@ -17,6 +17,8 @@ object PinModelMapper {
             sourceContextUrl = sourceContextUrl,
             sourceMediaUrl = sourceMediaUrl,
             description = description,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
             softDeletedAt = softDeletedAt,
         )
 
@@ -32,9 +34,9 @@ object PinModelMapper {
             description = description,
             tags = tags,
             boards = boards,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
             softDeletedAt = softDeletedAt,
-            createdAt = whenCreated,
-            updatedAt = whenModified,
         )
 
     fun ModelCursor<PinModel>.toDomain(): Cursor =

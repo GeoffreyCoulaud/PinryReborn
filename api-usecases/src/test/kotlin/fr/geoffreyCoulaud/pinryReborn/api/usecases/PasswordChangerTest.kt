@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.time.Instant
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
@@ -23,7 +24,7 @@ class PasswordChangerTest : BaseTest() {
     private val tx = mockk<TransactionRunner>()
     private val changer = PasswordChanger(passwords, hasher, sessionRevoker, tx)
 
-    private val user = User(id = randomUUID(), name = "u")
+    private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
     private val current = HashedPassword("current-hash", PasswordHashAlgorithm.BCRYPT)
 
     @Test

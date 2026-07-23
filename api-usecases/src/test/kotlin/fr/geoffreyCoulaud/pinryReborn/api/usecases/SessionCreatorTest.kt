@@ -33,7 +33,7 @@ class SessionCreatorTest {
         SessionCreator(userAuthenticator, repository, tokenGenerator, clock, policy, transactionRunner)
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
 
     // Passthrough so the transactional block runs in the behavioral tests; overridden where a test
     // needs to prove the writes live inside the block.

@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ReauthenticationEr
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
@@ -18,7 +19,7 @@ class ReauthenticatorTest : BaseTest() {
     private val passwords = mockk<UserPasswordHashRepositoryInterface>()
     private val hasher = mockk<PasswordHasher>()
     private val reauth = Reauthenticator(passwords, hasher)
-    private val user = User(id = randomUUID(), name = "u")
+    private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
     private val hash = HashedPassword("h", PasswordHashAlgorithm.BCRYPT)
 
     @Test

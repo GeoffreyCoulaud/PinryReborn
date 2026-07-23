@@ -12,6 +12,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.quarkus.security.identity.SecurityIdentity
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
@@ -26,10 +27,11 @@ class BoardRecycleBinControllerTest {
         securityIdentity = securityIdentity,
     )
 
-    private fun aUser() = User(id = randomUUID(), name = createRandomString())
+    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
 
     private fun aBoard(author: User) =
-        Board(id = randomUUID(), author = author, name = createRandomString(), description = createRandomString())
+        Board(id = randomUUID(), author = author, name = createRandomString(), description = createRandomString(),
+            createdAt = Instant.now(), updatedAt = Instant.now())
 
     @Test
     fun `Given recycled boards for the user, Then listRecycledBoards returns them without pin count`() {

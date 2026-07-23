@@ -11,6 +11,7 @@ object TagModelMapper {
             id = id,
             author = author.toModel(),
             name = name,
+            createdAt = createdAt,
         )
 
     fun TagModel.toDomain() =
@@ -18,6 +19,6 @@ object TagModelMapper {
             id = id,
             author = author.toDomain(),
             name = name,
-            createdAt = whenCreated,
+            createdAt = createdAt,
         )
 }

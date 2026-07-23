@@ -10,13 +10,14 @@ object UserModelMapper {
         UserModel(
             id = id,
             name = name,
+            createdAt = createdAt,
         )
 
     fun UserModel.toDomain() =
         User(
             id = id,
             name = name,
+            createdAt = createdAt,
             softDeleted = deleted,
-            createdAt = whenCreated,
         )
 }

@@ -21,9 +21,12 @@ class EbeanImageRepositoryTest : RepositoryTest() {
     private val pinRepository = PinRepository(database)
 
     private fun savedPin(): Pin {
-        val user = userRepository.saveUser(User(randomUUID(), createRandomString()))
+        val user = userRepository.saveUser(User(randomUUID(), createRandomString(), createdAt = storableNow()))
         return pinRepository.savePin(
-            Pin(randomUUID(), user, "https://ctx", null, "desc", emptyList(), emptyList()),
+            Pin(
+                randomUUID(), user, "https://ctx", null, "desc", emptyList(), emptyList(),
+                createdAt = storableNow(), updatedAt = storableNow(),
+            ),
         )
     }
 

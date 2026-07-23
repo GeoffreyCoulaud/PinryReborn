@@ -46,8 +46,9 @@ class SetPinImageTest : BaseTest() {
     private val renditionCache = mockk<RenditionCache>()
     private val useCase = SetPinImage(pins, images, store, probe, clock, clearPinDownload, renditionCache)
 
-    private val owner = User(randomUUID(), createRandomString())
-    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList())
+    private val owner = User(randomUUID(), createRandomString(), createdAt = Instant.now())
+    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList(),
+        createdAt = Instant.now(), updatedAt = Instant.now())
     private fun upload() = ByteArrayInputStream(byteArrayOf(1, 2, 3))
     private val staged = StagedFile("/tmp/s", 3, "hash")
 
@@ -129,7 +130,7 @@ class SetPinImageTest : BaseTest() {
     }
 
     @Test fun `Given a non-owner, Then it throws ImagePermissionError`() {
-        val p = pin(author = User(randomUUID(), createRandomString()))
+        val p = pin(author = User(randomUUID(), createRandomString(), createdAt = Instant.now()))
         every { pins.findPinById(p.id) } returns p
         assertThrows(ImagePermissionError::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
     }

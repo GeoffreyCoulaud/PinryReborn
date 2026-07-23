@@ -11,6 +11,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -21,13 +22,15 @@ class BoardPinListerTest {
     private val pinRepository: PinRepositoryInterface = mockk()
     private val useCase = BoardPinLister(boardGetter = boardGetter, pinRepository = pinRepository)
 
-    private val reader = User(id = randomUUID(), name = createRandomString())
+    private val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
     private val boardId = randomUUID()
     private val board = Board(
         id = boardId,
         author = reader,
         name = createRandomString(),
         description = createRandomString(),
+        createdAt = Instant.now(),
+        updatedAt = Instant.now(),
     )
     private val sort = PinSortStrategy.CREATED_AT_ASC
 

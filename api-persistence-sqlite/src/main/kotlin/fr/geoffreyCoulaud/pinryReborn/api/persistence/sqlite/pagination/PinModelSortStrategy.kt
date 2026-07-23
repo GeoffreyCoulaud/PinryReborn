@@ -58,17 +58,17 @@ sealed class PinModelSortStrategy : ModelSortStrategy<PinModel, QPinModel>() {
         override fun filterCursorAndForwardNeighbors(
             cursor: ModelCursor<PinModel>,
             query: QPinModel,
-        ): QPinModel = filterUpFrom(query, { it.whenCreated }, cursor.pivot.whenCreated, cursor.pivot.id)
+        ): QPinModel = filterUpFrom(query, { it.createdAt }, cursor.pivot.createdAt, cursor.pivot.id)
 
         override fun filterCursorAndBackwardNeighbors(
             cursor: ModelCursor<PinModel>,
             query: QPinModel,
-        ): QPinModel = filterDownFrom(query, { it.whenCreated }, cursor.pivot.whenCreated, cursor.pivot.id)
+        ): QPinModel = filterDownFrom(query, { it.createdAt }, cursor.pivot.createdAt, cursor.pivot.id)
 
         override fun sortCursorAndForwardNeighbors(query: QPinModel): QPinModel =
             query
                 .orderBy()
-                .whenCreated
+                .createdAt
                 .asc()
                 .id
                 .asc()
@@ -76,7 +76,7 @@ sealed class PinModelSortStrategy : ModelSortStrategy<PinModel, QPinModel>() {
         override fun sortCursorAndBackwardNeighbors(query: QPinModel): QPinModel =
             query
                 .orderBy()
-                .whenCreated
+                .createdAt
                 .desc()
                 .id
                 .desc()
@@ -89,17 +89,17 @@ sealed class PinModelSortStrategy : ModelSortStrategy<PinModel, QPinModel>() {
         override fun filterCursorAndForwardNeighbors(
             cursor: ModelCursor<PinModel>,
             query: QPinModel,
-        ): QPinModel = filterDownFrom(query, { it.whenCreated }, cursor.pivot.whenCreated, cursor.pivot.id)
+        ): QPinModel = filterDownFrom(query, { it.createdAt }, cursor.pivot.createdAt, cursor.pivot.id)
 
         override fun filterCursorAndBackwardNeighbors(
             cursor: ModelCursor<PinModel>,
             query: QPinModel,
-        ): QPinModel = filterUpFrom(query, { it.whenCreated }, cursor.pivot.whenCreated, cursor.pivot.id)
+        ): QPinModel = filterUpFrom(query, { it.createdAt }, cursor.pivot.createdAt, cursor.pivot.id)
 
         override fun sortCursorAndForwardNeighbors(query: QPinModel): QPinModel =
             query
                 .orderBy()
-                .whenCreated
+                .createdAt
                 .desc()
                 .id
                 .desc()
@@ -107,7 +107,7 @@ sealed class PinModelSortStrategy : ModelSortStrategy<PinModel, QPinModel>() {
         override fun sortCursorAndBackwardNeighbors(query: QPinModel): QPinModel =
             query
                 .orderBy()
-                .whenCreated
+                .createdAt
                 .asc()
                 .id
                 .asc()

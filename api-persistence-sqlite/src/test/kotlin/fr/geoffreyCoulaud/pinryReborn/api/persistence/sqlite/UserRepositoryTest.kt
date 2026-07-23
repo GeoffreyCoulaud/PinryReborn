@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import jakarta.persistence.PersistenceException
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -16,12 +17,12 @@ class UserRepositoryTest : RepositoryTest() {
     private val repository = UserRepository(database)
 
     private fun saveUser(name: String = createRandomString()) =
-        repository.saveUser(User(id = randomUUID(), name = name))
+        repository.saveUser(User(id = randomUUID(), name = name, createdAt = storableNow()))
 
     @Test
     fun `saveUser should persist user and return it with same id`() {
         // Given
-        val user = User(id = randomUUID(), name = "Test User")
+        val user = User(id = randomUUID(), name = "Test User", createdAt = storableNow())
 
         // When
         val savedUser = repository.saveUser(user)
@@ -34,7 +35,7 @@ class UserRepositoryTest : RepositoryTest() {
     @Test
     fun `findUser should return user when exists`() {
         // Given
-        val user = User(id = randomUUID(), name = "Findable User")
+        val user = User(id = randomUUID(), name = "Findable User", createdAt = storableNow())
         repository.saveUser(user)
 
         // When
@@ -95,7 +96,7 @@ class UserRepositoryTest : RepositoryTest() {
     @Test
     fun `Given a never-saved user, Then markPendingDeletion is a no-op`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
 
         // When / Then
         repository.markPendingDeletion(user)
@@ -104,7 +105,7 @@ class UserRepositoryTest : RepositoryTest() {
     @Test
     fun `Given a never-saved user, Then permanentlyDeleteUser is a no-op`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
 
         // When / Then
         repository.permanentlyDeleteUser(user)
@@ -123,7 +124,7 @@ class UserRepositoryTest : RepositoryTest() {
     @Test
     fun `saveUser should update existing user`() {
         // Given
-        val originalUser = User(id = randomUUID(), name = "Original Name")
+        val originalUser = User(id = randomUUID(), name = "Original Name", createdAt = storableNow())
         repository.saveUser(originalUser)
 
         // When
@@ -139,7 +140,7 @@ class UserRepositoryTest : RepositoryTest() {
     @Test
     fun `findUserByName is case-insensitive`() {
         // Given
-        val user = User(id = randomUUID(), name = "Bob")
+        val user = User(id = randomUUID(), name = "Bob", createdAt = storableNow())
         repository.saveUser(user)
 
         // When
@@ -153,11 +154,11 @@ class UserRepositoryTest : RepositoryTest() {
     @Test
     fun `saving two users whose names differ only by case is rejected`() {
         // Given
-        repository.saveUser(User(id = randomUUID(), name = "Alice"))
+        repository.saveUser(User(id = randomUUID(), name = "Alice", createdAt = storableNow()))
 
         // When, Then
         assertThrows<PersistenceException> {
-            repository.saveUser(User(id = randomUUID(), name = "alice"))
+            repository.saveUser(User(id = randomUUID(), name = "alice", createdAt = storableNow()))
         }
     }
 

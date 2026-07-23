@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.quarkus.security.identity.SecurityIdentity
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
@@ -28,7 +29,7 @@ class PinRecycleBinControllerTest {
     @Test
     fun `Given no cursor, no page size and no sort, Then listRecycledPins uses defaults`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val page = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every {
@@ -50,7 +51,7 @@ class PinRecycleBinControllerTest {
     @Test
     fun `Given cursor, page size and sort provided, Then listRecycledPins uses the provided values`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val pivotId = randomUUID()
         val cursorInput = CursorDto(pivotId = pivotId, direction = CursorDirectionDto.BACKWARD)
         val pageSizeInput = 7

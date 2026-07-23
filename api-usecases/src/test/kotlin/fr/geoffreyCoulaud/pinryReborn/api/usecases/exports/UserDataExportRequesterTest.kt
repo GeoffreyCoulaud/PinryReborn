@@ -37,7 +37,7 @@ class UserDataExportRequesterTest : BaseTest() {
     private val clock = mockk<Clock>()
     private val transactionRunner = mockk<TransactionRunner>()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
     private val factor = "good-password"
     private val requester =
         UserDataExportRequester(

@@ -138,8 +138,8 @@ class UserDataExportBuilderTest : BaseTest() {
         id: UUID = randomUUID(),
         tags: List<Tag> = emptyList(),
         softDeletedAt: Instant? = null,
-        createdAt: Instant? = now,
-        updatedAt: Instant? = now,
+        createdAt: Instant = now,
+        updatedAt: Instant = now,
     ) = Pin(
         id = id, author = user, sourceContextUrl = "https://example.org/a", sourceMediaUrl = null,
         description = "desc", tags = tags, boards = emptyList(), softDeletedAt = softDeletedAt,

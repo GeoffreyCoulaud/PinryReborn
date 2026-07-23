@@ -294,8 +294,13 @@ technically respecting the one-pending-export rule.
 ### Domain entities gain timestamps
 
 `User.createdAt`; `Pin.createdAt`/`updatedAt`; `Board.createdAt`/`updatedAt`; `Tag.createdAt`. All
-nullable with a `null` default, meaning "not read from persistence"; the columns already exist
-(`BaseModel`), so no migration is needed for them.
+**non-nullable**, stamped by the use case that creates or updates the entity (from the `Clock`
+port), exactly as `Image.createdAt` already was: a timestamp is domain data, not a persistence
+concern. The models therefore declare these as ordinary columns rather than inheriting Ebean's
+`@WhenCreated`/`@WhenModified`, which overwrite unconditionally on write; `AuditedBaseModel` keeps
+the generated columns for the entities whose domain type carries no timestamp (tasks, session
+tokens, password hashes, exports). The columns keep their historical `when_created`/`when_modified`
+names via `@Column(name = ...)`, so no migration is needed for them.
 
 ## 6. Use cases
 

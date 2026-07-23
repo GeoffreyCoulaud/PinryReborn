@@ -32,7 +32,7 @@ class RequestPinImageDownloadTest {
     private val runner: TransactionRunner = mockk()
     private val clock: Clock = mockk()
     private val now = Instant.parse("2026-07-10T00:00:00Z")
-    private val owner = User(randomUUID(), "o")
+    private val owner = User(randomUUID(), "o", createdAt = Instant.now())
     private val pinId = randomUUID()
 
     private val subject = RequestPinImageDownload(pins, downloads, enqueue, runner, clock)
@@ -42,7 +42,8 @@ class RequestPinImageDownloadTest {
         every { runner.inTransaction<ImageDownload>(any()) } answers { firstArg<() -> ImageDownload>().invoke() }
     }
 
-    private fun pin(author: User = owner) = Pin(pinId, author, "https://ctx", null, "d", emptyList(), emptyList())
+    private fun pin(author: User = owner) = Pin(pinId, author, "https://ctx", null, "d", emptyList(), emptyList(),
+        createdAt = Instant.now(), updatedAt = Instant.now())
     private fun aTask(id: java.util.UUID) = Task(
         id, PinDownloadTask.KIND, pinId.toString(), TaskState.PENDING, 0, now, 0, 5, null, null, false,
         "${PinDownloadTask.KIND}:$pinId", null,
@@ -56,7 +57,7 @@ class RequestPinImageDownloadTest {
 
     @Test
     fun `Given a non-owner, Then it throws ImagePermissionError`() {
-        every { pins.findPinById(pinId) } returns pin(author = User(randomUUID(), "other"))
+        every { pins.findPinById(pinId) } returns pin(author = User(randomUUID(), "other", createdAt = Instant.now()))
         assertThrows(ImagePermissionError::class.java) { subject.request(pinId, owner, "https://x/i.png") }
     }
 

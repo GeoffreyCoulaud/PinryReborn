@@ -23,7 +23,7 @@ class UserDataExportDownloaderTest : BaseTest() {
     private val getter = mockk<UserDataExportGetter>()
     private val archiveStore = mockk<ExportArchiveStore>()
     private val downloader = UserDataExportDownloader(getter, archiveStore)
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 

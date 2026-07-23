@@ -3,8 +3,10 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
@@ -12,16 +14,19 @@ import java.util.UUID.randomUUID
 class PinCreatorTest {
     private val pinRepository: PinRepositoryInterface = mockk()
     private val tagCreator: TagCreator = mockk()
+    private val clockInstant = Instant.parse("2026-07-23T10:00:00Z")
+    private val clock = mockk<Clock> { every { now() } returns clockInstant }
     private val useCase =
         PinCreator(
             tagCreator = tagCreator,
             pinRepository = pinRepository,
+            clock = clock,
         )
 
     @Test
     fun `When creating a pin, then should succeed`() {
         // Given
-        val user = User(randomUUID(), "John Doe")
+        val user = User(randomUUID(), "John Doe", createdAt = Instant.now())
         val sourceUrl = "https://example.com/article"
         val mediaUrl = "https://example.com/image.jpeg"
         val description = "some description"
@@ -30,7 +35,8 @@ class PinCreatorTest {
             Tag(
                 id = randomUUID(),
                 name = firstArg(),
-                author = secondArg()
+                author = secondArg(),
+                createdAt = Instant.now(),
             )
         }
         every { pinRepository.savePin(any()) } answers { firstArg() }

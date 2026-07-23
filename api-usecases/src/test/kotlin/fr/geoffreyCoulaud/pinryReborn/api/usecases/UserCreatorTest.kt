@@ -7,11 +7,14 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -23,12 +26,15 @@ class UserCreatorTest : BaseTest() {
     private val userPasswordRepository = mockk<UserPasswordHashRepositoryInterface>()
     private val passwordHasher = mockk<PasswordHasher>()
     private val transactionRunner = mockk<TransactionRunner>()
+    private val clock = mockk<Clock>()
+    private val clockInstant = Instant.parse("2026-07-23T10:00:00Z")
     private val useCase =
         UserCreator(
             userRepository = userRepository,
             userPasswordRepository = userPasswordRepository,
             passwordHasher = passwordHasher,
             transactionRunner = transactionRunner,
+            clock = clock,
         )
 
     // Runs after BaseTest's beforeEachClearMocks(), so the passthrough stub survives into each test
@@ -41,14 +47,16 @@ class UserCreatorTest : BaseTest() {
     fun `When creating a user, then should succeed`() {
         // Given
         val name = "John Doe"
+        every { clock.now() } returns clockInstant
         every { userRepository.findUserByNameIncludingDeleted(any()) } returns null
         every { userRepository.saveUser(any()) } answers { firstArg() }
 
         // When
+        val created = useCase.createUser(name)
+
         // Then
-        assertDoesNotThrow {
-            useCase.createUser(name)
-        }
+        assertEquals(name, created.name)
+        assertEquals(clockInstant, created.createdAt)
     }
 
     @Test
@@ -68,7 +76,7 @@ class UserCreatorTest : BaseTest() {
         // Given
         val name = createRandomString()
         every { userRepository.findUserByNameIncludingDeleted(name) } returns
-            User(id = randomUUID(), name = name, softDeleted = true)
+            User(id = randomUUID(), name = name, softDeleted = true, createdAt = Instant.now())
         // When / Then
         assertThrows<UsernameAlreadyTakenError> { useCase.createUser(name) }
     }
@@ -89,6 +97,7 @@ class UserCreatorTest : BaseTest() {
         // Given
         val name = "John Doe"
         val password = createRandomString()
+        every { clock.now() } returns clockInstant
         every { userRepository.findUserByNameIncludingDeleted(any()) } returns null
         every { userRepository.saveUser(any()) } answers { firstArg() }
         every { passwordHasher.hash(any()) } returns HashedPassword("h", PasswordHashAlgorithm.BCRYPT)

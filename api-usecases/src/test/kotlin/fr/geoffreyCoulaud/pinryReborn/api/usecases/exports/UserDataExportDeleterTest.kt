@@ -23,7 +23,7 @@ class UserDataExportDeleterTest : BaseTest() {
     private val archiveStore = mockk<ExportArchiveStore>()
     private val cancelTask = mockk<CancelTask>()
     private val deleter = UserDataExportDeleter(getter, repository, archiveStore, cancelTask)
-    private val user = User(id = randomUUID(), name = "alice")
+    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 

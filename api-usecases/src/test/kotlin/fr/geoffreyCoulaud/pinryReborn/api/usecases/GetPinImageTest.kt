@@ -24,8 +24,9 @@ class GetPinImageTest : BaseTest() {
     private val images = mockk<ImageRepositoryInterface>()
     private val useCase = GetPinImage(pins, images)
 
-    private val owner = User(randomUUID(), createRandomString())
-    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList())
+    private val owner = User(randomUUID(), createRandomString(), createdAt = Instant.now())
+    private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList(),
+        createdAt = Instant.now(), updatedAt = Instant.now())
     private fun imageFor(pinId: UUID, hash: String = "h") = Image(
         id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1, animated = false,
         byteSize = 1, contentHash = hash, storageKey = "originals/x/$pinId/i.png",
@@ -45,7 +46,7 @@ class GetPinImageTest : BaseTest() {
     }
 
     @Test fun `Given a non-owner, Then get throws ImagePermissionError`() {
-        val p = pin(author = User(randomUUID(), createRandomString()))
+        val p = pin(author = User(randomUUID(), createRandomString(), createdAt = Instant.now()))
         every { pins.findPinById(p.id) } returns p
         assertThrows(ImagePermissionError::class.java) { useCase.get(p.id, owner) }
     }

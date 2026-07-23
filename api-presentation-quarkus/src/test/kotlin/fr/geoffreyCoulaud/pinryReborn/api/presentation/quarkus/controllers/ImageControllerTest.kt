@@ -80,7 +80,7 @@ class ImageControllerTest {
         createdAt = Instant.EPOCH,
     )
 
-    private fun aUser() = User(id = randomUUID(), name = createRandomString())
+    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
 
     @Test
     fun `Given a pin with no existing image, Then setImage returns 201 with the created image`() {

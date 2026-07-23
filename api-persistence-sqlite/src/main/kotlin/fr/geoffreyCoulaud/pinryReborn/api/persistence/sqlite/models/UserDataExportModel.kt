@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.AuditedBaseModel
 import io.ebean.annotation.Index
 import jakarta.persistence.Entity
 import jakarta.persistence.ManyToOne
@@ -38,4 +38,4 @@ class UserDataExportModel(
     var mediaType: String? = null,
     var fileExtension: String? = null,
     var failureCode: String? = null,
-) : BaseModel(id = id)
+) : AuditedBaseModel(id = id)

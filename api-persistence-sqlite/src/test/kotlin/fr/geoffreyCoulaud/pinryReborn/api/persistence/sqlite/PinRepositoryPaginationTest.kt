@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -33,6 +34,7 @@ class PinRepositoryPaginationTest : RepositoryTest() {
             User(
                 id = randomUUID(),
                 name = createRandomString(),
+                createdAt = storableNow(),
             ),
         )
 
@@ -46,6 +48,8 @@ class PinRepositoryPaginationTest : RepositoryTest() {
                 description = "Something",
                 tags = emptyList(),
                 boards = emptyList(),
+                createdAt = storableNow(),
+                updatedAt = storableNow(),
             ),
         )
 
