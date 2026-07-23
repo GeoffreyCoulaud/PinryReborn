@@ -16,6 +16,16 @@ This file provides guidance to AI Agents when working with code in this reposito
 - **Subagent-driven execution** (Act phase) + **holistic review** (Verify phase): the cross-cutting review regularly
   catches bugs — don't skip it.
 - For library/framework/CLI questions, use the **context7 MCP** (current docs), not recalled knowledge.
+- **Domain data is stamped by use cases, never invented by adapters.** Creation and update instants, ids and state
+  transitions are business facts: the use case sets them (from a port such as `Clock`), and the adapter stores what
+  it is given. An adapter that generates a value the domain exposes puts a business decision in the wrong layer, and
+  the value it returns is not the value the domain asked for. Enforced for the clock by `ArchitectureKonsistTest`.
+- **Fix the design, don't work around it.** Three smells mean the design is wrong, not the call site: (1) the same
+  explanatory comment repeated in several places to justify the same workaround; (2) a domain type widened to
+  nullable or optional so existing call sites don't have to change (that is a migration-cost argument, not a design
+  argument, and it pushes the cost onto every future reader); (3) a workaround for a tool limitation nobody
+  verified. For (3), read the library's source or its current docs (context7 MCP) *before* working around it, and
+  put the evidence in the commit message rather than an unchecked claim in a comment.
 
 ## Architecture
 
@@ -62,9 +72,9 @@ entity models:
 ./gradlew :api-persistence-sqlite:generateDbMigration
 ```
 
-## Workflow — Discuss → Spec → Act → Verify → Wrap
+## Workflow — Discuss → Spec → Act → Verify → Wrap → Improve
 
-Five phases, always in order. **Committing is cheap** — you're allowed to commit autonomously.
+Six phases, always in order. **Committing is cheap** — you're allowed to commit autonomously.
 
 ### 1. Discuss
 
@@ -138,6 +148,24 @@ Once the gate is green and code reviewed:
 4. **Clean up** branch and/or worktree if applicable.
 
 Use the `finishing-a-development-branch` skill to guide this phase.
+
+### 6. Improve
+
+**Not optional, and not skippable because the work "went fine".** Once the sub-project is integrated, turn what
+went wrong into something the build catches next time. The question to answer is: *what did a human have to
+notice that the gate should have noticed?* Review the session for corrections the operator made, bugs the
+holistic review caught, and assumptions that turned out false.
+
+For each lesson, pick the cheapest durable form:
+
+- **Hard rule in this file** when it is a judgement call a tool cannot check.
+- **Konsist test** (`ArchitectureKonsistTest`) when it is a structural invariant over the source.
+- **detekt rule** when it is a local code pattern.
+- **Plain test** when the invariant is about repository content (see `DbMigrationModelCoverageTest`).
+- **Backlog item** when the fix is real work rather than a rule.
+
+Record nothing the gate already enforces, and prefer one precise rule over three vague ones. Commit separately
+(`docs(agents):`, `test(architecture):`). A lesson that stays in the conversation is lost when the session ends.
 
 ## Build Commands
 
