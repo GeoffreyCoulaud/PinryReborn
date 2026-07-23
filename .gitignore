@@ -15,7 +15,12 @@ docs/openapi.yaml
 !.idea/ktlint-plugin.xml
 !.idea/vcs.xml
 *.iml
-.claude
+# Claude Code: ignore the personal and generated parts, share the rest.
+# settings.json and the hook are team-wide (a hook only on one machine enforces
+# nothing); settings.local.json and the worktrees stay local.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # Superpowers SDD scratch workspace (task briefs, implementer reports, review packages, progress ledger)
 .superpowers/
