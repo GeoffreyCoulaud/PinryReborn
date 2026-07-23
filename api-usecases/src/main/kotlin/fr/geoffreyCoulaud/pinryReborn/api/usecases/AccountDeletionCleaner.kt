@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
@@ -8,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInter
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import jakarta.enterprise.context.ApplicationScoped
@@ -15,8 +17,10 @@ import java.util.UUID
 
 /**
  * Async worker erasure for a tombstoned account: loads the user, deletes all its rows in FK order
- * inside one transaction, then does best-effort on-disk image cleanup after the commit.
+ * inside one transaction, then does best-effort on-disk cleanup (image bytes and export archives)
+ * after the commit.
  */
+@Suppress("LongParameterList")
 @ApplicationScoped
 class AccountDeletionCleaner(
     private val userRepository: UserRepositoryInterface,
@@ -29,11 +33,16 @@ class AccountDeletionCleaner(
     private val clearPinDownload: ClearPinDownload,
     private val imageStore: ImageStore,
     private val renditionCache: RenditionCache,
+    private val userDataExportRepository: UserDataExportRepositoryInterface,
+    private val exportArchiveStore: ExportArchiveStore,
     private val transactionRunner: TransactionRunner,
 ) {
     fun deleteAccountData(userId: UUID) {
         val user = userRepository.findUserByIdIncludingDeleted(userId) ?: return
         val toEvict = mutableListOf<Pair<String, UUID>>() // storageKey to imageId
+        // Collected before the transaction: the rows are deleted inside it, but the archive keys are
+        // derived from the ids (not read from the rows), so they must be captured while the rows exist.
+        val exportIds = userDataExportRepository.findAllExportIdsForUser(user.id)
         transactionRunner.inTransaction {
             val pinIds = pinRepository.findAllPinIdsForUser(user)
             for (pinId in pinIds) {
@@ -46,11 +55,20 @@ class AccountDeletionCleaner(
             tagRepository.deleteAllTagsForUser(user)
             sessionTokenRepository.deleteAllForUser(user.id)
             userPasswordRepository.deleteForUser(user)
+            userDataExportRepository.deleteAllForUser(user.id)
             userRepository.permanentlyDeleteUser(user)
         }
         for ((storageKey, imageId) in toEvict) {
             imageStore.delete(storageKey)
             runCatching { renditionCache.evictImage(imageId) }
         }
+        // Derive each archive key from its id, not from the (now-deleted) row: this reclaims an
+        // archive promoted by a builder that died before writing its storageKey column.
+        for (exportId in exportIds) {
+            exportArchiveStore.delete(exportStorageKey(exportId))
+        }
     }
+
+    private fun exportStorageKey(exportId: UUID): String =
+        "exports/$exportId.${exportArchiveStore.format.fileExtension}"
 }

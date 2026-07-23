@@ -467,6 +467,67 @@
         "format" : "uuid",
         "pattern" : "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
       },
+      "UserDataExportListOutputDto" : {
+        "type" : "object",
+        "required" : [ "exports", "pagination" ],
+        "properties" : {
+          "exports" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UserDataExportOutputDto"
+            }
+          },
+          "pagination" : {
+            "$ref" : "#/components/schemas/PaginationOutputDto"
+          }
+        }
+      },
+      "UserDataExportOutputDto" : {
+        "type" : "object",
+        "required" : [ "id", "state", "requestedAt", "completedAt", "expiresAt", "byteSize", "mediaType", "sha256", "failureCode", "formatVersion" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "$ref" : "#/components/schemas/Instant"
+          },
+          "completedAt" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Instant"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "expiresAt" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Instant"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "byteSize" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "mediaType" : {
+            "type" : [ "string", "null" ]
+          },
+          "sha256" : {
+            "type" : [ "string", "null" ]
+          },
+          "failureCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "formatVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "UserInputDto" : {
         "type" : "object",
         "required" : [ "name", "password" ],
@@ -890,6 +951,187 @@
         },
         "summary" : "Delete Account",
         "tags" : [ "Me Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/exports" : {
+      "post" : {
+        "parameters" : [ {
+          "name" : "X-Reauthentication",
+          "in" : "header",
+          "schema" : {
+            "type" : [ "string", "null" ]
+          },
+          "required" : true
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataExportOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Request Export",
+        "tags" : [ "Me Export Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "get" : {
+        "parameters" : [ {
+          "name" : "cursor",
+          "in" : "query",
+          "schema" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CursorDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataExportListOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "List Exports",
+        "tags" : [ "Me Export Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/exports/{id}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataExportOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Get Export",
+        "tags" : [ "Me Export Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "delete" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Delete Export",
+        "tags" : [ "Me Export Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/exports/{id}/download" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        }, {
+          "name" : "Range",
+          "in" : "header",
+          "schema" : {
+            "type" : [ "string", "null" ]
+          },
+          "required" : true
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StreamingOutput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Download Export",
+        "tags" : [ "Me Export Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
         } ]
