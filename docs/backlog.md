@@ -63,6 +63,31 @@ Last reviewed: 2026-07-23.
   clock tick make the current-password determination nondeterministic. Practically unreachable for the human
   register-then-change flow, but a latent fragility on a security-critical read; a monotonic sequence column
   would remove it. New 2026-07-22.
+- **`softDeletedAt` is still stamped inside the persistence adapter.** `PinRepository.softDeletePin` and
+  `BoardRepository.softDeleteBoard` call `Instant.now()` themselves instead of taking the instant from the
+  caller. That is the same layering problem that was just fixed for `createdAt`/`updatedAt`: when an entity
+  was recycled is business data, so the use case should stamp it from the `Clock` port, as the creators now
+  do. Fixing it means changing the repository interfaces (either passing the instant, or letting the recycle
+  bin use cases go through `savePin`/`saveBoard` with an updated copy) and touching `PinRecycleBin` and
+  `BoardRecycleBin`. Deliberately left out of the timestamps refactor to keep that change scoped. New
+  2026-07-23.
+- **Soft delete and restore no longer bump `updatedAt`.** Before the timestamps refactor, `pins.when_modified`
+  and `boards.when_modified` were Ebean-generated, so recycling or restoring a row bumped them as a side
+  effect. Those columns are now written by the mapper from the domain entity, and the four repository methods
+  (`softDeletePin`, `restorePin`, `softDeleteBoard`, `restoreBoard`) mutate the model directly without
+  touching `updatedAt`, so it now means "last content change" and no longer moves on a state change. Nothing
+  reads it today except the export, and `deletedAt` carries the recycling state there, so this is a semantic
+  decision to confirm rather than a bug: either accept the narrower meaning and document it in the export
+  format, or bump `updatedAt` on those transitions (which the item above would make natural). New 2026-07-23.
+- **`api-application` integration tests share a real on-disk database.** `EbeanDatabaseProducer` builds its
+  DataSource from `System.getenv("DB_PATH")`, falling back to `data.db`, and ignores the `datasource.db.url`
+  property that `api-application/src/test/resources/application.properties` sets to `jdbc:sqlite::memory:`.
+  The `@QuarkusTest`s therefore all run against one gitignored file at the repo root that survives between
+  runs, unlike `api-persistence-sqlite`, whose `RepositoryTest` truncates every table before each test. The
+  practical symptom: editing an already-applied migration makes the whole suite fail with a checksum
+  mismatch until the file is deleted by hand, and any leftover row can leak into a later run. Making the
+  producer honour the configured URL (or pointing tests at a per-run temporary file) would isolate them. New
+  2026-07-23.
 - **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
   Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
 
