@@ -85,11 +85,12 @@ The generic file governs work done from the moment it entered the repository. Wh
 counted once, here, and left alone. A frozen dated document is never rewritten to satisfy a rule
 adopted after it.
 
-- Em dashes and en dashes, which the generic file forbids: 42 tracked files. 33 are frozen dated
+- Em dashes and en dashes, which the generic file forbids: 41 tracked files. 33 are frozen dated
   documents under `docs/specs/`, `docs/plans/` and `docs/handoffs/`; one is `docs/backlog.md`
   (living, so it cleans up as it is edited); the others are `SECURITY.md`, two files under
-  `.github/` and three `.kt` files. No commit message among the last 50 carries one.
-- `.gitignore` holds three comments in French without accents, predating the 2026-07-07 decision
+  `.github/`, three `.kt` files and `api-presentation-quarkus/build.gradle.kts`. No commit message
+  among the last 50 carries one.
+- `.gitignore` holds two comments in French without accents, predating the 2026-07-07 decision
   that all code is English.
 - Commit granularity: of the last 50 commits, 24 change `src/main` and `src/test` together and 5
   are test-only.

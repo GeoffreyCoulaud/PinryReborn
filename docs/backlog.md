@@ -88,7 +88,7 @@ Last reviewed: 2026-07-23.
   mismatch until the file is deleted by hand, and any leftover row can leak into a later run. Making the
   producer honour the configured URL (or pointing tests at a per-run temporary file) would isolate them. New
   2026-07-23.
-- **Flatten the migration history at beta.** The project is alpha (see AGENTS.md): breaking changes and data loss are
+- **Flatten the migration history at beta.** The project is alpha (see docs/project.md): breaking changes and data loss are
   acceptable, nobody should be running it yet. The migration history is nonetheless append-only, and that already
   constrains fixes: `1.2` is a hand-written case-insensitive unique index that `@Index(definition = ...)` would
   express today (`DbMigrationModelCoverageTest` lists it), and `users`/`pins`/`boards`/`tags` keep `when_created` /
