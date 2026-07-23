@@ -1,4 +1,4 @@
-<!-- agents-baseline v2.1.0 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v2.2.0 | generic file, identical in every project | do not edit in place -->
 
 # Review mandate: plan
 

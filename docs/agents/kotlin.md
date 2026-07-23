@@ -1,4 +1,4 @@
-<!-- agents-baseline v2.1.0 | generic module | do not edit in place -->
+<!-- agents-baseline v2.2.0 | generic module | do not edit in place -->
 
 # Module: Kotlin
 
@@ -52,7 +52,9 @@ frameworks) are declared in `docs/project.md`.
 
 ## Tests and coverage
 
-- **JUnit 5.** Test names describe the behaviour and the condition, not the method under test.
+- **JUnit is the test framework**, at whatever major version the version catalog pins. This module
+  states no number: a generic file naming one only ages, and the catalog is where the answer
+  already lives. Test names describe the behaviour and the condition, not the method under test.
 - **Prefer fakes over mocks** for ports you own. When mocking is genuinely needed (MockK), assert
   on outcomes rather than on the interactions you just configured: a test that verifies its own
   stubbing passes against a broken implementation.

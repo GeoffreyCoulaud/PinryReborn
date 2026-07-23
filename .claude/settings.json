@@ -2,9 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(./gradlew:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Agent",
+      "Task"
     ],
-    "deny": ["AskUserQuestion", "EnterPlanMode"]
+    "deny": [
+      "AskUserQuestion",
+      "EnterPlanMode"
+    ]
   },
   "hooks": {
     "PreToolUse": [
