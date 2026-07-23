@@ -45,15 +45,21 @@ graph and by `ArchitectureKonsistTest`, not by this table.
   bound). Measured green on 2026-07-23. **It is not everything CI runs**: `validate.yml` also
   builds the multi-arch container image behind the same `validate / gate` check, and no local
   command covers that. Building one would change the pre-push hook for every contributor, so it is
-  its own task, not a side effect of another.
+  its own task, not a side effect of another. `.githooks/pre-push` runs exactly this command, so a
+  push runs the gate locally once `core.hooksPath` is set.
 - **One test**: `./gradlew :api-usecases:test --tests "UserCreatorTest"`. The coverage bound lives
   in its own task, so running `test` alone never trips it: there is nothing to bypass.
+- **New migration**: `./gradlew :api-persistence-sqlite:generateDbMigration`, after changing an
+  entity model. It writes the next `dbmigration/<version>.sql` and its `model/<version>.model.xml`.
+  An applied migration is never edited, only followed by a new one (see Gotchas).
 
 ## Gate perimeter
 
 - **Inside (100% branch coverage)**: the ten modules other than `api-application`. Kover is applied
   per module and measures each module from its own tests, with no aggregation, so
-  `api-application`'s end-to-end tests never inflate another module's figure.
+  `api-application`'s end-to-end tests never inflate another module's figure. **The bound is
+  verified per package**, not per module (`groupBy = PACKAGE` in `build.gradle.kts`): a module
+  averaging 100% still fails the gate when one of its packages does not reach it.
 - **Outside (not measured)**:
   - `api-application/`, because it is the composition root and its tests are end to end. It has no
     unit tests by design, so Kover is not applied to it at all.
@@ -83,6 +89,29 @@ place where an agent must not decide alone.
 | `docs/backlog.md` | living |
 | `docs/openapi.json` | generated: rewritten by the `pre-commit` hook, never edited by hand |
 | `docs/specs/`, `docs/plans/`, `docs/adr/`, `docs/handoffs/` | dated, append-only |
+
+## API contract
+
+The three values `agents/backend.md` expects this file to declare.
+
+- **Error format**: RFC 7807 Problem Details, served as `application/problem+json`
+  (`mappers/MediaTypes.kt`). One shape everywhere, `dtos/output/ProblemDetail.kt`: `type`, `title`,
+  `status`, `detail`, `instance`, plus a `code` extension member carrying the applicative error
+  code. Every payload is built through `mappers/ProblemResponses.kt`, which is what keeps a single
+  endpoint from drifting back to the framework default.
+- **Status codes** come from one table, `BaseErrorMapper.statusFor`, a `when` over `ErrorCode` with
+  no `else`, so an unmapped new code fails to compile rather than falling through. The convention it
+  encodes: 400 for a request that is malformed or ill-formed (`SEARCH_EMPTY_QUERY`,
+  `IMAGE_SOURCE_URL_INVALID`, and every Bean Validation failure through
+  `ConstraintViolationExceptionMapper`), 422 for a well-formed request the domain refuses on its
+  merits (`IMAGE_INVALID`, `PASSWORD_PREVIOUSLY_USED`), 401 unauthenticated, 403 authenticated but
+  not allowed, 409 for a state conflict.
+- **Authentication**: opaque session tokens sent as `Authorization: Bearer <token>`, issued by
+  `POST /api/v1/sessions` and validated by `SessionTokenAuthenticator` behind
+  `security/BearerTokenIdentityProvider`. They are not JWTs, which is why the OpenAPI security
+  scheme is declared by hand in `openapi/OpenApiApplication.kt` instead of through
+  `quarkus.smallrye-openapi.security-scheme`, whose shortcut would stamp them `bearerFormat: JWT`.
+  HTTP Basic is gone; the old `AGENTS.md` still announced it.
 
 ## Design invariants
 
@@ -128,6 +157,9 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   claim in a comment.
 - **Tags** are annotated and not pushed, one per subsystem, named `vX.Y.Z-` followed by the
   subsystem's name (the latest is `v0.9.0-user-data-export`).
+- **Merging is rebase only.** `AGENTS.md` offers "squash or rebase"; here only rebase exists.
+  `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed` returns
+  `false`, `true`, `false`, so the PR is merged with `gh pr merge --rebase`.
 - **The backlog holds open items only.** It has no shipped section: completed work is recorded by
   its handoff, git history and tag. On wrap, delete or narrow the item just finished, add the newly
   discovered ones, and update the `Last reviewed` line. After the merge, reconcile it on `main`: if

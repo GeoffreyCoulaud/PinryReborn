@@ -76,8 +76,10 @@ subprojects {
 
     // Branch-coverage gate (Kover). Applied to every module EXCEPT api-application,
     // which is the composition root + end-to-end tests and has no unit tests by design.
-    // Coverage is measured per-module from that module's own tests (no aggregation):
-    // integration tests in api-application must NOT count toward other modules.
+    // Two grains, easy to conflate: coverage is MEASURED per-module from that module's own
+    // tests (no aggregation, so api-application's integration tests must NOT count toward
+    // other modules), while the 100% bound is VERIFIED per package (see the rule below), so
+    // a module averaging 100% still fails when one of its packages does not.
     if (project.name != "api-application") {
         apply(plugin = "org.jetbrains.kotlinx.kover")
 
