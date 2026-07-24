@@ -8,31 +8,31 @@ SQLite store, filesystem-backed image storage, and a task worker for the long op
 
 ## Orientation
 
-- `../docs/handoffs` : one continuation guide per milestone. **The newest is the entry point**:
+- `docs/handoffs` : one continuation guide per milestone. **The newest is the entry point**:
   current state, what was just built, pitfalls learned, next step, what is not yet validated.
-- `../docs/specs` : the authoritative design per subsystem, dated.
-- `../docs/adr` : the architectural decisions, with their context and consequences.
-- `../docs/plans` : the execution plans derived from specs.
-- `../docs/backlog.md` : what is queued, out of session.
+- `docs/specs` : the authoritative design per subsystem, dated.
+- `docs/adr` : the architectural decisions, with their context and consequences.
+- `docs/plans` : the execution plans derived from specs.
+- `docs/backlog.md` : what is queued, out of session.
 
 ## Where the code lives
 
-Eleven Gradle modules, declared in `../settings.gradle.kts`. The layering is enforced by the build
+Eleven Gradle modules, declared in `settings.gradle.kts`. The layering is enforced by the build
 graph and by `ArchitectureKonsistTest`, not by this table.
 
 | Subsystem | Location | Role |
 |---|---|---|
-| Domain | `../api-domain` | Pure: entities, enums, and the ports (`images`, `storage`, `tasks`, `time`, `security`, `exports`, `repositories`). Declares no project dependency. |
-| Use cases | `../api-usecases` | Business logic: use cases and their exceptions, search, exports, task contracts. Depends on the domain and on `api-utilities`. |
-| Persistence | `../api-persistence-sqlite` | Ebean and SQLite adapter: models (and `models/bases`), mappers, repositories, cursor pagination, and the migration history in `src/main/resources/dbmigration/`. |
-| Presentation | `../api-presentation-quarkus` | Jakarta REST adapter: controllers, DTOs (`input`, `output`, `common`), mappers, security, serialization, OpenAPI, HTTP config. |
-| File storage | `../api-storage-filesystem` | Image store, rendition cache, ZIP export archive store, data directory layout. |
-| Imaging | `../api-imaging-vips` | libvips adapter through vips-ffm: probing and transforming images. |
-| Fetching | `../api-fetch-http` | Fetches remote images over HTTP, behind an address policy. |
-| System | `../api-system` | System adapters: `SystemClock`, bcrypt password hashing, secure token generation. |
-| Worker | `../api-worker-quarkus` | Task worker runtime: dispatcher, bounded executor, task handlers (pin download, account deletion), export retention lifecycle. |
-| Utilities | `../api-utilities` | Shared helpers (`createRandomString`) and the `BaseTest` fixture, published as a `testFixtures` source set. |
-| Application | `../api-application` | Composition root: entry point, CDI wiring, and the end-to-end integration tests. Depends on every module. |
+| Domain | `api-domain` | Pure: entities, enums, and the ports (`images`, `storage`, `tasks`, `time`, `security`, `exports`, `repositories`). Declares no project dependency. |
+| Use cases | `api-usecases` | Business logic: use cases and their exceptions, search, exports, task contracts. Depends on the domain and on `api-utilities`. |
+| Persistence | `api-persistence-sqlite` | Ebean and SQLite adapter: models (and `models/bases`), mappers, repositories, cursor pagination, and the migration history in `src/main/resources/dbmigration/`. |
+| Presentation | `api-presentation-quarkus` | Jakarta REST adapter: controllers, DTOs (`input`, `output`, `common`), mappers, security, serialization, OpenAPI, HTTP config. |
+| File storage | `api-storage-filesystem` | Image store, rendition cache, ZIP export archive store, data directory layout. |
+| Imaging | `api-imaging-vips` | libvips adapter through vips-ffm: probing and transforming images. |
+| Fetching | `api-fetch-http` | Fetches remote images over HTTP, behind an address policy. |
+| System | `api-system` | System adapters: `SystemClock`, bcrypt password hashing, secure token generation. |
+| Worker | `api-worker-quarkus` | Task worker runtime: dispatcher, bounded executor, task handlers (pin download, account deletion), export retention lifecycle. |
+| Utilities | `api-utilities` | Shared helpers (`createRandomString`) and the `BaseTest` fixture, published as a `testFixtures` source set. |
+| Application | `api-application` | Composition root: entry point, CDI wiring, and the end-to-end integration tests. Depends on every module. |
 
 ## Commands
 
@@ -41,13 +41,13 @@ graph and by `ArchitectureKonsistTest`, not by this table.
 - **Install**: nothing for the JVM side, three things once per clone. `git config core.hooksPath
   .githooks` enables the hooks, native libvips must be present or the `api-imaging-vips` tests
   cannot load the library (`libvips42t64` on Ubuntu 24.04, which is what CI installs), and `python3`
-  must be on the PATH because `../.claude/settings.json` runs `../.claude/hooks/evidence-guard.py` on
+  must be on the PATH because `.claude/settings.json` runs `.claude/hooks/evidence-guard.py` on
   every Bash, Edit and Write. Without it the guard cannot run and enforces nothing, silently.
 - **THE GATE**: `./gradlew check koverVerify` (detekt, all tests, and the 100% branch coverage
   bound). Measured green on 2026-07-23. **It is not everything CI runs**: `validate.yml` also
   builds the multi-arch container image behind the same `validate / gate` check, and no local
   command covers that. Building one would change the pre-push hook for every contributor, so it is
-  its own task, not a side effect of another. `../.githooks/pre-push` runs exactly this command, so a
+  its own task, not a side effect of another. `.githooks/pre-push` runs exactly this command, so a
   push runs the gate locally once `core.hooksPath` is set.
 - **One test**: `./gradlew :api-usecases:test --tests "UserCreatorTest"`. The coverage bound lives
   in its own task, so running `test` alone never trips it: there is nothing to bypass.
@@ -60,10 +60,10 @@ graph and by `ArchitectureKonsistTest`, not by this table.
 - **Inside (100% branch coverage)**: the ten modules other than `api-application`. Kover is applied
   per module and measures each module from its own tests, with no aggregation, so
   `api-application`'s end-to-end tests never inflate another module's figure. **The bound is
-  verified per package**, not per module (`groupBy = PACKAGE` in `../build.gradle.kts`): a module
+  verified per package**, not per module (`groupBy = PACKAGE` in `build.gradle.kts`): a module
   averaging 100% still fails the gate when one of its packages does not reach it.
 - **Outside (not measured)**:
-  - `../api-application`, because it is the composition root and its tests are end to end. It has no
+  - `api-application`, because it is the composition root and its tests are end to end. It has no
     unit tests by design, so Kover is not applied to it at all.
   - `fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models` and its `models.bases`
     subpackage, because Ebean's bytecode enhancement rewrites entity classes in place and its
@@ -72,18 +72,18 @@ graph and by `ArchitectureKonsistTest`, not by this table.
     the wrong source line. Operator decision B1, coverage calibration.
   - `...persistence.sqlite.models.query.Q*` and every class annotated
     `io.ebean.typequery.Generated`: kapt output. This is a **generated artefact declared out of the
-    perimeter**, which `../AGENTS.md` requires rather than forbids (Engineering norms, since v2.2.1:
+    perimeter**, which `AGENTS.md` requires rather than forbids (Engineering norms, since v2.2.1:
     code no human wrote and no test can reach was never inside). The generator is Ebean's typequery
     kapt processor, named by the `io.ebean.typequery.Generated` annotation and the `Q*` query
-    package. See `../docs/adr/0002-generated-artefacts-in-gate-perimeter.md`.
+    package. See `docs/adr/0002-generated-artefacts-in-gate-perimeter.md`.
 
 The models-package exclusion above (decision B1) is **the one genuine narrowing** of the gate
 perimeter that remains: those entity classes are hand-written and Ebean enhances them in place, so
 their exclusion is the operator's call, not a generated-artefact declaration
-(`../docs/adr/0001-adopt-agents-baseline.md`). The only other narrowed `../AGENTS.md` rule is the merge
+(`docs/adr/0001-adopt-agents-baseline.md`). The only other narrowed `AGENTS.md` rule is the merge
 convention under Conventions.
 
-The perimeter is transcribed from `../build.gradle.kts`, which is where it is enforced. Change it
+The perimeter is transcribed from `build.gradle.kts`, which is where it is enforced. Change it
 there first.
 
 **Inside never shrinks, and widening Outside requires the user's explicit agreement.** This
@@ -94,10 +94,10 @@ place where an agent must not decide alone.
 
 | Document | Regime |
 |---|---|
-| `../README.md` | living |
-| `../docs/backlog.md` | living |
-| `../docs/openapi.json` | generated: rewritten by the `pre-commit` hook, never edited by hand |
-| `../docs/specs`, `../docs/plans`, `../docs/adr`, `../docs/handoffs` | dated, append-only |
+| `README.md` | living |
+| `docs/backlog.md` | living |
+| `docs/openapi.json` | generated: rewritten by the `pre-commit` hook, never edited by hand |
+| `docs/specs`, `docs/plans`, `docs/adr`, `docs/handoffs` | dated, append-only |
 
 ## API contract
 
@@ -125,7 +125,7 @@ The three values `modules/backend.md` expects this file to declare.
   `security/BearerTokenIdentityProvider`. They are not JWTs, which is why the OpenAPI security
   scheme is declared by hand in `openapi/OpenApiApplication.kt` instead of through
   `quarkus.smallrye-openapi.security-scheme`, whose shortcut would stamp them `bearerFormat: JWT`.
-  HTTP Basic is gone; the old `../AGENTS.md` still announced it.
+  HTTP Basic is gone; the old `AGENTS.md` still announced it.
 
 ## Design invariants
 
@@ -151,15 +151,15 @@ The three values `modules/backend.md` expects this file to declare.
   `users`/`pins`/`boards`/`tags` keep `when_created` and `when_modified` column names that no longer
   match the domain's `createdAt` and `updatedAt`.
 
-Claims the old `../AGENTS.md` made that the code disproved, recorded rather than deleted:
+Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
-- It listed **six modules**; `../settings.gradle.kts` declares **eleven**. The five it never mentioned
+- It listed **six modules**; `settings.gradle.kts` declares **eleven**. The five it never mentioned
   (`api-storage-filesystem`, `api-imaging-vips`, `api-fetch-http`, `api-system`,
   `api-worker-quarkus`) all existed when it was replaced.
-- It said `api-usecases` may depend on **`api-domain` only**; `../api-usecases/build.gradle.kts` also
+- It said `api-usecases` may depend on **`api-domain` only**; `api-usecases/build.gradle.kts` also
   declares `api-utilities`. The dependency table had drifted from the build graph, which is why the
   build graph and the Konsist test are the authority here.
-- It said **JUnit 5**; `../gradle/libs.versions.toml` pins `junit = "6.1.1"`.
+- It said **JUnit 5**; `gradle/libs.versions.toml` pins `junit = "6.1.1"`.
 
 ## Conventions
 
@@ -167,15 +167,15 @@ Claims the old `../AGENTS.md` made that the code disproved, recorded rather than
   work only through integration (a rebased PR); it is never edited directly.
 - **Tags** are annotated and not pushed, one per subsystem, named `vX.Y.Z-` followed by the
   subsystem's name (the latest is `v0.9.0-user-data-export`).
-- **Merging is rebase only.** `../AGENTS.md` offers "squash or rebase"; here only rebase exists.
+- **Merging is rebase only.** `AGENTS.md` offers "squash or rebase"; here only rebase exists.
   `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed` returns
   `false`, `true`, `false`, so the PR is merged with `gh pr merge --rebase`.
-- **No local-merge exemption: everything integrates through a PR.** `../AGENTS.md` lets
+- **No local-merge exemption: everything integrates through a PR.** `AGENTS.md` lets
   documentation-only changes on paths declared here merge locally; this project declares no such
   paths, because a local merge to `main` bypasses the `validate / gate` check (see Gotchas). A
   documentation-only change goes through a PR like code.
 - **Documentation source**: the project configures no in-repo documentation server (no `.mcp.json`,
-  no vendored copy under `../docs`). "Consult the declared documentation source, not recall" resolves
+  no vendored copy under `docs`). "Consult the declared documentation source, not recall" resolves
   to the current upstream documentation of the stack: Quarkus, Ebean, libvips (vips-ffm) and Gradle.
   Name the source when a claim rests on it.
 - **The backlog holds open items only.** It has no shipped section: completed work is recorded by
@@ -185,7 +185,7 @@ Claims the old `../AGENTS.md` made that the code disproved, recorded rather than
 - **"Leave as-is" stays available** as an integration option when the operator wants to handle the
   branch later.
 - **Improve commits separately**: `docs(agents):` for a rule, `test(architecture):` for the test
-  that enforces one. A rule lands in **this file**, since `../AGENTS.md` is generic and the hook
+  that enforces one. A rule lands in **this file**, since `AGENTS.md` is generic and the hook
   refuses to edit it; a lesson true of every project is proposed upstream in `agents-baseline`
   instead.
 - **Structural remedies have two homes**: `ArchitectureKonsistTest` for an invariant over the
@@ -219,16 +219,16 @@ Claims the old `../AGENTS.md` made that the code disproved, recorded rather than
 - **The `api-application` integration tests share one real on-disk database.**
   `EbeanDatabaseProducer` builds its DataSource from `System.getenv("DB_PATH")` and falls back to
   `data.db` at the repository root, ignoring the `datasource.db.url` that
-  `../api-application/src/test/resources/application.properties` sets to `jdbc:sqlite::memory:`. The
+  `api-application/src/test/resources/application.properties` sets to `jdbc:sqlite::memory:`. The
   practical symptom: after editing an already-applied migration the whole suite fails on a checksum
   mismatch until that file is deleted by hand, and a leftover row can leak into a later run. Unlike
   `api-persistence-sqlite`, whose `RepositoryTest` truncates every table before each test. Open item
   in the backlog.
-- **The `pre-commit` hook rewrites `../docs/openapi.json`**, stages it, and exits non-zero when it
+- **The `pre-commit` hook rewrites `docs/openapi.json`**, stages it, and exits non-zero when it
   changed, so the commit has to be re-run. That is the hook working, not a failure.
 - **There is no auto-fix task.** detekt runs without formatting rules and ktlint is configured only
-  as an IDE plugin (`../.idea/ktlint-plugin.xml`), so a finding is fixed by hand.
-- **detekt baselines are per module** (`../config/detekt/baseline-api-usecases.xml` and its two
+  as an IDE plugin (`.idea/ktlint-plugin.xml`), so a finding is fixed by hand.
+- **detekt baselines are per module** (`config/detekt/baseline-api-usecases.xml` and its two
   siblings, one file per module name) because each module's
   `detektBaseline` task rewrites rather than merges the target file. The path degrades gracefully
   when the file is absent.
