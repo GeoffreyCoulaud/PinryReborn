@@ -1,16 +1,16 @@
-<!-- agents-baseline v2.2.0 | generic module | do not edit in place -->
+<!-- agents-baseline v3.0.0 | generic module | do not edit in place -->
 
 # Module: Kotlin
 
 Language conventions. The workflow, the review mandates and the engineering norms are in
-`../../AGENTS.md` and are not repeated here. Project-specific values (module graph, JDK version,
-frameworks) are declared in `../project.md`.
+`AGENTS.md` and are not repeated here. Project-specific values (module graph, JDK version,
+frameworks) are declared in `agents/project.md`.
 
 ## Build
 
 - **`./gradlew` is the runner**, never a globally installed Gradle. The wrapper is committed and
   its version is part of the project.
-- **Kotlin DSL** (`../../build.gradle.kts`) with a version catalog (`../../gradle/libs.versions.toml`) as the
+- **Kotlin DSL** (`build.gradle.kts`) with a version catalog (`gradle/libs.versions.toml`) as the
   single source of dependency versions. No hard-coded versions in module build files.
 - **Module boundaries are enforced by the build graph, not by convention.** If a module must not
   see another, it must not declare it as a dependency. A layering rule that only exists in prose
@@ -67,8 +67,8 @@ frameworks) are declared in `../project.md`.
 
 An invariant written in a document is a wish. The same invariant expressed as a Konsist test is
 enforced on every run, and it names its violations. **Every structural rule this project relies on
-gets a Konsist test**: the invariants declared in `../project.md`, the structural decisions
-recorded in `../../docs/adr`, and every pitfall learned the hard way. A rule that was worth writing down
+gets a Konsist test**: the invariants declared in `agents/project.md`, the structural decisions
+recorded in `docs/adr/`, and every pitfall learned the hard way. A rule that was worth writing down
 was worth failing the build over.
 
 **Express the rule as what must not exist, then assert the list is empty.** Filter down to the

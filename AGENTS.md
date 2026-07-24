@@ -1,4 +1,4 @@
-<!-- agents-baseline v2.2.1 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v3.0.0 | generic file, identical in every project | do not edit in place -->
 
 # AGENTS.md
 
@@ -196,4 +196,4 @@ Two regimes; `agents/project.md` declares which document belongs to which.
 
 Everything below is situated: this project only.
 
-@docs/project.md
+@agents/project.md

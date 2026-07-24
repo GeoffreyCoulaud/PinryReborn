@@ -1,4 +1,4 @@
-# agents-baseline v2.2.0 | generic file, identical in every project | do not edit in place
+# agents-baseline v3.0.0 | generic file, identical in every project | do not edit in place
 """PreToolUse guard for the rules of AGENTS.md that prose cannot hold.
 
 Three rules, applied by blocking the tool call before it runs:
@@ -25,6 +25,8 @@ free for the marker this guard reads.
 Exit 0 allows the call. Exit 2 blocks it and returns the reason to the model,
 which corrects itself without involving the user.
 """
+
+from __future__ import annotations
 
 import json
 import os
@@ -101,7 +103,7 @@ GENERIC_MARKS = ("agents-baseline", "do not edit in place")
 GENERIC_ADVICE = (
     "This file is generic: identical in every project, replaced by copy and "
     "never edited here. Change it upstream in agents-baseline, or put the "
-    "project-specific rule in docs/project.md."
+    "project-specific rule in agents/project.md."
 )
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
 
