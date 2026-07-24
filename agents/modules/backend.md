@@ -3,8 +3,8 @@
 # Module: Backend
 
 Conventions for a service that exposes an API and owns persistent state. Language-specific rules
-are in the language module; the workflow and engineering norms are in `AGENTS.md`. The concrete
-error format, auth scheme and storage engine are declared in `docs/project.md`.
+are in the language module; the workflow and engineering norms are in `../../AGENTS.md`. The concrete
+error format, auth scheme and storage engine are declared in `../project.md`.
 
 ## The API is a contract, and contracts are uniform
 
@@ -42,7 +42,7 @@ broken contract, and it is invisible in a per-endpoint review.
 
 - **All configuration is read in one place** and exposed as a typed object. No component reads the
   environment directly.
-- **Configuration keys keep their namespace.** This is the constraint-escape rule of `AGENTS.md`
+- **Configuration keys keep their namespace.** This is the constraint-escape rule of `../../AGENTS.md`
   Design in its most common backend form: a key is not moved to another prefix to dodge a
   framework strictness check.
 - **Before adding an option, ask whether the deployment model makes it meaningless.** An option

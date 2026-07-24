@@ -105,8 +105,8 @@ Last reviewed: 2026-07-23.
   error is thrown where it was meant to be, or the code, the class and the mapping go together. Found by the
   holistic review of the agents-baseline adoption. New 2026-07-23.
 - **Finish the documentation regime table, and explain the two denied tools.** `AGENTS.md` requires every
-  document to belong to exactly one regime, declared in `docs/project.md`. The table classifies neither the six
-  generic files (which belong to neither regime, being replaced by copy from upstream), nor `docs/project.md`
+  document to belong to exactly one regime, declared in `../agents/project.md`. The table classifies neither the six
+  generic files (which belong to neither regime, being replaced by copy from upstream), nor `../agents/project.md`
   itself, nor `SECURITY.md`. Separately, `.claude/settings.json` denies `AskUserQuestion` and `EnterPlanMode`,
   two prohibitions inherited from the replaced `AGENTS.md` that `docs/adr/0001-adopt-agents-baseline.md` never
   accounts for, and no tool named `EnterPlanMode` was observed in a session (the one that exists is

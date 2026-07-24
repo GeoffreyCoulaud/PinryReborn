@@ -21,6 +21,7 @@ docs/openapi.yaml
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/CLAUDE.md
 
 # Superpowers SDD scratch workspace (task briefs, implementer reports, review packages, progress ledger)
 .superpowers/
