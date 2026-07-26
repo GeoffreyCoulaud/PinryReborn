@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-23.
+Last reviewed: 2026-07-26.
 
 ## How to use this file
 
@@ -98,19 +98,6 @@ Last reviewed: 2026-07-23.
   migration, prefer the clean design and record the debt here rather than contorting around it. New 2026-07-23.
 - **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
   Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
-- **Unreachable `INVALID_LOGIN` in the error contract.** `PinCreationBadLoginError` is declared in
-  `api-usecases/.../exceptions/PinCreationError.kt` and constructed nowhere, so no request can produce the
-  `INVALID_LOGIN` code. `BaseErrorMapper.statusFor` nonetheless maps it to 400, where every neighbouring
-  authentication code maps to 401, and the only test naming it asserts that mapping and nothing else. Either the
-  error is thrown where it was meant to be, or the code, the class and the mapping go together. Found by the
-  holistic review of the agents-baseline adoption. New 2026-07-23.
-- **Finish the documentation regime table, and explain the two denied tools.** `AGENTS.md` requires every
-  document to belong to exactly one regime, declared in `../agents/project.md`. The table classifies neither the six
-  generic files (which belong to neither regime, being replaced by copy from upstream), nor `../agents/project.md`
-  itself, nor `SECURITY.md`. Separately, `.claude/settings.json` denies `AskUserQuestion` and `EnterPlanMode`,
-  two prohibitions inherited from the replaced `AGENTS.md` that `docs/adr/0001-adopt-agents-baseline.md` never
-  accounts for, and no tool named `EnterPlanMode` was observed in a session (the one that exists is
-  `ExitPlanMode`), so that entry may deny nothing at all. `/permissions` settles it. New 2026-07-23.
 
 ---
 
