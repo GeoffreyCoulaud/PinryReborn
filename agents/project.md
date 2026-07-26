@@ -226,14 +226,6 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   refusal and no CI run. Push and open a PR.
 - **Editing an applied migration breaks startup.** The checksum changes and Ebean refuses the
   history. A correction is a new migration, never an edit.
-- **The `api-application` integration tests share one real on-disk database.**
-  `EbeanDatabaseProducer` builds its DataSource from `System.getenv("DB_PATH")` and falls back to
-  `data.db` at the repository root, ignoring the `datasource.db.url` that
-  `api-application/src/test/resources/application.properties` sets to `jdbc:sqlite::memory:`. The
-  practical symptom: after editing an already-applied migration the whole suite fails on a checksum
-  mismatch until that file is deleted by hand, and a leftover row can leak into a later run. Unlike
-  `api-persistence-sqlite`, whose `RepositoryTest` truncates every table before each test. Open item
-  in the backlog.
 - **The `pre-commit` hook rewrites `docs/openapi.json`**, stages it, and exits non-zero when it
   changed, so the commit has to be re-run. That is the hook working, not a failure.
 - **There is no auto-fix task.** detekt runs without formatting rules and ktlint is configured only
