@@ -34,7 +34,6 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.PIN_NOT_SOFT_DELETED -> Response.Status.CONFLICT.statusCode
             ErrorCode.PIN_ALREADY_SOFT_DELETED -> Response.Status.CONFLICT.statusCode
             ErrorCode.SEARCH_EMPTY_QUERY -> Response.Status.BAD_REQUEST.statusCode
-            ErrorCode.INVALID_LOGIN -> Response.Status.BAD_REQUEST.statusCode
             ErrorCode.USER_DOES_NOT_EXIST -> Response.Status.UNAUTHORIZED.statusCode
             ErrorCode.INVALID_PASSWORD -> Response.Status.UNAUTHORIZED.statusCode
             ErrorCode.INVALID_HTTP_AUTHORIZATION_SCHEME -> Response.Status.UNAUTHORIZED.statusCode

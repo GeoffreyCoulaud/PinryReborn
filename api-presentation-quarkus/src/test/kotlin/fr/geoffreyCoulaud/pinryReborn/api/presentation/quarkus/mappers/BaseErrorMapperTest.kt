@@ -54,11 +54,6 @@ class BaseErrorMapperTest {
     }
 
     @Test
-    fun `Given INVALID_LOGIN, Then status is BAD_REQUEST`() {
-        assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.INVALID_LOGIN))
-    }
-
-    @Test
     fun `Given USER_DOES_NOT_EXIST, Then status is UNAUTHORIZED`() {
         assertEquals(Response.Status.UNAUTHORIZED, statusFor(ErrorCode.USER_DOES_NOT_EXIST))
     }
