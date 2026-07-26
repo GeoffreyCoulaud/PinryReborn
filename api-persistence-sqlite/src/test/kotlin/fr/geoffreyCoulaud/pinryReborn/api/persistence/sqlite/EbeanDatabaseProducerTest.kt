@@ -2,53 +2,44 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Covers the `DB_PATH ?: "data.db"` fallback branch and the queue pragma suffix via the pure
- * [EbeanDatabaseProducer.sqliteJdbcUrl] helper, so no process-environment mocking (e.g. `mockkStatic(System::class)`,
- * which deadlocks the test JVM) and no real database build are needed.
+ * Covers the single-connection SQLite `DataSourceConfig` built from the JDBC URL that
+ * `datasource.db.url` provides (option A): SQLite is single-writer, so the pool is pinned to one
+ * connection to keep the concurrency story trivially correct. Kept as a pure helper so no
+ * Quarkus/CDI bootstrap, process-environment mocking or real database build is needed.
  */
 class EbeanDatabaseProducerTest {
-    private val pragmas = "journal_mode=WAL&synchronous=NORMAL&busy_timeout=5000"
-
     @Test
-    fun `Given a DB path, Then the JDBC URL uses it`() {
+    fun `Given an in-memory JDBC URL, Then the data source config uses it verbatim`() {
         // Given
-        val dbPath = "/tmp/custom-pinry-reborn.db"
+        val url = "jdbc:sqlite::memory:"
 
         // When
-        val url = EbeanDatabaseProducer.sqliteJdbcUrl(dbPath)
+        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig(url)
 
         // Then
-        assertEquals("jdbc:sqlite:/tmp/custom-pinry-reborn.db?$pragmas", url)
+        assertEquals(url, dataSourceConfig.url)
     }
 
     @Test
-    fun `Given no DB path, Then the JDBC URL falls back to data dot db`() {
+    fun `Given a file JDBC URL with pragmas, Then the data source config uses it verbatim`() {
+        // Given
+        val url =
+            "jdbc:sqlite:/var/lib/pinry/data.db?journal_mode=WAL&synchronous=NORMAL&busy_timeout=5000"
+
         // When
-        val url = EbeanDatabaseProducer.sqliteJdbcUrl(null)
+        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig(url)
 
         // Then
-        assertEquals("jdbc:sqlite:data.db?$pragmas", url)
+        assertEquals(url, dataSourceConfig.url)
     }
 
     @Test
-    fun `Given a db path, Then the JDBC URL carries the queue pragmas`() {
+    fun `Given a JDBC URL, Then the data source config is constrained to a single connection`() {
         // When
-        val url = EbeanDatabaseProducer.sqliteJdbcUrl("data.db")
-        // Then
-        assertTrue(url.startsWith("jdbc:sqlite:data.db"))
-        assertTrue(url.contains("journal_mode=WAL"))
-        assertTrue(url.contains("busy_timeout=5000"))
-        assertTrue(url.contains("synchronous=NORMAL"))
-    }
-
-    @Test
-    fun `Given a db path, Then the data source config is constrained to a single connection`() {
-        // When
-        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig("data.db")
+        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig("jdbc:sqlite::memory:")
 
         // Then
         assertEquals(1, dataSourceConfig.minConnections)
@@ -56,14 +47,11 @@ class EbeanDatabaseProducerTest {
     }
 
     @Test
-    fun `Given a db path, Then the data source config URL carries the queue pragmas but not transaction mode`() {
+    fun `Given a JDBC URL, Then the data source config sets no transaction mode`() {
         // When
-        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig("data.db")
+        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig("jdbc:sqlite::memory:")
 
         // Then
-        assertTrue(dataSourceConfig.url.contains("journal_mode=WAL"))
-        assertTrue(dataSourceConfig.url.contains("synchronous=NORMAL"))
-        assertTrue(dataSourceConfig.url.contains("busy_timeout=5000"))
         assertFalse(dataSourceConfig.url.contains("transaction_mode"))
     }
 }
