@@ -47,6 +47,17 @@ class EbeanDatabaseProducerTest {
     }
 
     @Test
+    fun `Given a JDBC URL, Then the data source config uses the SQLite driver and default credentials`() {
+        // When
+        val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig("jdbc:sqlite::memory:")
+
+        // Then
+        assertEquals("org.sqlite.JDBC", dataSourceConfig.driver)
+        assertEquals("sa", dataSourceConfig.username)
+        assertEquals("", dataSourceConfig.password)
+    }
+
+    @Test
     fun `Given a JDBC URL, Then the data source config sets no transaction mode`() {
         // When
         val dataSourceConfig = EbeanDatabaseProducer.sqliteDataSourceConfig("jdbc:sqlite::memory:")

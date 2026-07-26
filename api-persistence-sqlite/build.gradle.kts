@@ -26,8 +26,8 @@ dependencies {
     // CDI API for annotations - implementation provided by Quarkus at runtime
     compileOnly(libs.jakarta.cdi.api)
 
-    // MicroProfile Config (@ConfigProperty) - implementation provided by Quarkus at runtime
-    compileOnly(libs.smallrye.config)
+    // MicroProfile Config API (@ConfigProperty) - implementation provided by Quarkus at runtime
+    compileOnly(libs.microprofile.config.api)
 
     testImplementation(libs.ebean.test)
     testImplementation(libs.junit.jupiter)

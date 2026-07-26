@@ -15,6 +15,7 @@ kotlin-logging = "8.0.4"
 jbcrypt = "0.4"
 commons-text = "1.15.0"
 smallrye-config = "3.18.0"
+microprofile-config = "3.1.1"
 quarkus-junit = "3.37.1"
 rest-assured = "6.0.0"
 detekt = "2.0.0-alpha.5"
@@ -59,6 +60,7 @@ quarkus-hibernate-validator = { module = "io.quarkus:quarkus-hibernate-validator
 quarkus-micrometer = { module = "io.quarkus:quarkus-micrometer" }
 quarkus-micrometer-registry-prometheus = { module = "io.quarkus:quarkus-micrometer-registry-prometheus" }
 smallrye-config = { module = "io.smallrye.config:smallrye-config", version.ref = "smallrye-config" }
+microprofile-config-api = { module = "org.eclipse.microprofile.config:microprofile-config-api", version.ref = "microprofile-config" }
 resteasy-reactive-common = { module = "io.quarkus.resteasy.reactive:resteasy-reactive-common", version.ref = "quarkus" }
 resteasy-reactive = { module = "io.quarkus.resteasy.reactive:resteasy-reactive", version.ref = "quarkus" }
 
