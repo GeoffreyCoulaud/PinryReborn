@@ -39,8 +39,10 @@ graph and by `ArchitectureKonsistTest`, not by this table.
 - **Runner**: `./gradlew` (the committed wrapper; the JDK 25 Adoptium toolchain is provisioned by
   the foojay resolver, so no JDK has to be installed by hand).
 - **Install**: nothing for the JVM side, three things once per clone. `git config core.hooksPath
-  .githooks` enables the hooks, native libvips must be present or the `api-imaging-vips` tests
-  cannot load the library (`libvips42t64` on Ubuntu 24.04, which is what CI installs), and `python3`
+  .githooks` enables the hooks, native libvips must be present (`brew install vips` on macOS, which
+  the build wires vips-ffm to automatically; `libvips42t64` on Ubuntu 24.04, which is what CI
+  installs) or the `api-imaging-vips` tests and the `api-application` image-touching integration
+  tests cannot load the library, and `python3`
   must be on the PATH because `.claude/settings.json` runs `.claude/hooks/evidence-guard.py` on
   every Bash, Edit and Write. Without it the guard cannot run and enforces nothing, silently.
 - **THE GATE**: `./gradlew check koverVerify` (detekt, all tests, and the 100% branch coverage

@@ -56,6 +56,35 @@ subprojects {
         jvmArgs("--enable-native-access=ALL-UNNAMED")
     }
 
+    // vips-ffm (api-imaging-vips, api-application) resolves libvips/glib/gobject via
+    // DYLD_LIBRARY_PATH on macOS, but SIP strips DYLD_* from the signed Adoptium JDK, so
+    // homebrew's libs are invisible to it. Point vips-ffm at the dylibs explicitly; a no-op
+    // on Linux (CI) where these paths do not exist.
+    //
+    // Applied in afterEvaluate because the plain tasks.withType<Test> block above does NOT
+    // reach the api-application (Quarkus) test JVM: verified for both the systemProperty and
+    // jvmArgs forms, the -D is absent from that JVM's command line and the imaging tests fail
+    // with UnsatisfiedLinkError. Set in afterEvaluate (after the Quarkus plugin configures the
+    // task) the -D is present and they pass. The precise Quarkus internal is not load-bearing
+    // for the fix; the observation is.
+    afterEvaluate {
+        if (System.getProperty("os.name").lowercase().contains("mac")) {
+            val homebrewLib = listOf("/opt/homebrew/lib", "/usr/local/lib")
+                .firstOrNull { java.io.File(it).isDirectory }
+            if (homebrewLib != null) {
+                tasks.withType<Test> {
+                    mapOf(
+                        "vips" to "libvips.dylib",
+                        "glib" to "libglib-2.0.dylib",
+                        "gobject" to "libgobject-2.0.dylib",
+                    ).forEach { (lib, name) ->
+                        jvmArgs("-Dvipsffm.libpath.$lib.override=$homebrewLib/$name")
+                    }
+                }
+            }
+        }
+    }
+
     extensions.configure<dev.detekt.gradle.extensions.DetektExtension> {
         buildUponDefaultConfig = true
         config.setFrom("$rootDir/config/detekt/detekt.yml")
