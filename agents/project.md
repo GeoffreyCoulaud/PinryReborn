@@ -116,10 +116,7 @@ The three values `modules/backend.md` expects this file to declare.
   merits (`IMAGE_INVALID`, `PASSWORD_PREVIOUSLY_USED`), 401 unauthenticated, 403 authenticated but
   not allowed, 409 for a state conflict, 404 for an absent resource, 410 for one that expired
   (`EXPORT_GONE`), 413 for an oversize upload (`IMAGE_TOO_LARGE`), 429 for a rate limit
-  (`EXPORT_TOO_SOON`). One entry reads as an exception to all of it: `INVALID_LOGIN` maps to 400
-  where the neighbouring authentication codes map to 401. Nothing throws it, in fact:
-  `PinCreationBadLoginError` is declared, never constructed anywhere, and the only test that names
-  the code asserts the mapping itself.
+  (`EXPORT_TOO_SOON`).
 - **Authentication**: opaque session tokens sent as `Authorization: Bearer <token>`, issued by
   `POST /api/v1/sessions` and validated by `SessionTokenAuthenticator` behind
   `security/BearerTokenIdentityProvider`. They are not JWTs, which is why the OpenAPI security
@@ -206,7 +203,7 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   `RepositoryTest` (`api-persistence-sqlite`), or `BaseTest` (`api-utilities` test fixtures).
 - **Module conventions**: entities in `api-domain/entities/` have matching interfaces in
   `api-domain/repositories/`; persistence repositories convert through `mappers/`; use cases throw
-  domain-specific exceptions (`UserCreationError`, `PinCreationError`); controllers use the DTOs in
+  domain-specific exceptions (`UserCreationError`, `BoardCreationError`); controllers use the DTOs in
   `dtos/`.
 
 ## Gotchas
