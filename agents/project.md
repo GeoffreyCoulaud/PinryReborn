@@ -95,9 +95,15 @@ place where an agent must not decide alone.
 | Document | Regime |
 |---|---|
 | `README.md` | living |
+| `SECURITY.md` | living |
 | `docs/backlog.md` | living |
+| `agents/project.md` | living: the situated project doc, edited in-project and updated in the same commit as the change it describes |
 | `docs/openapi.json` | generated: rewritten by the `pre-commit` hook, never edited by hand |
+| `AGENTS.md`, `agents/modules/*`, `agents/reviews/*` | sourced: byte-identical copies recopied verbatim from `agents-baseline` on a bump, never hand-edited (AGENTS.md forbids it); a lesson true of every project goes upstream, not in here |
 | `docs/specs`, `docs/plans`, `docs/adr`, `docs/handoffs` | dated, append-only |
+
+`.claude/` (settings, hooks, the `CLAUDE.md` import pointer) is harness configuration and code,
+not documentation, so it stands outside this regime.
 
 ## API contract
 
@@ -175,6 +181,11 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   no vendored copy under `docs`). "Consult the declared documentation source, not recall" resolves
   to the current upstream documentation of the stack: Quarkus, Ebean, libvips (vips-ffm) and Gradle.
   Name the source when a claim rests on it.
+- **`.claude/settings.json` deny list.** Carries `AskUserQuestion` and `EnterPlanMode`. `EnterPlanMode`
+  is a no-op in this harness: the plan-mode tool that exists is `ExitPlanMode` (used to leave plan mode
+  and request approval), so the entry denies a tool that is not exposed. `AskUserQuestion` is likewise
+  not exposed to the agent in this project; the entry keeps it that way. `/permissions` is the source of
+  truth on the effective set.
 - **The backlog holds open items only.** It has no shipped section: completed work is recorded by
   its handoff, git history and tag. On wrap, delete or narrow the item just finished, add the newly
   discovered ones, and update the `Last reviewed` line. After the merge, reconcile it on `main`: if
