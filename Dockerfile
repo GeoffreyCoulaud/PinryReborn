@@ -23,8 +23,9 @@ RUN groupadd --system --gid 1001 pinry \
 
 WORKDIR /app
 
-# The SQLite database lives on a mounted volume. DB_PATH is read by
-# EbeanDatabaseProducer; Ebean runs the migrations against it at startup.
+# The SQLite database lives on a mounted volume. DB_PATH is wired into
+# datasource.db.url by application.properties and read by EbeanDatabaseProducer;
+# Ebean runs the migrations against it at startup.
 ENV DB_PATH=/data/pinry.db
 RUN mkdir -p /data && chown 1001:1001 /data
 VOLUME /data
