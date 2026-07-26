@@ -42,9 +42,6 @@ Last reviewed: 2026-07-26.
 - **Expired session-token GC sweep.** `session_tokens` rows are inert once expired (verification rejects
   them), but they accumulate. No sweep in v1. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
 
-- **`animated` backfill migration** for pre-existing image rows. The only item with a correctness consequence:
-  rows predating migration 1.6 are labelled `animated = false`, so `?animated=false` on such a row can serve the
-  original animated bytes instead of flattening. See the renditions handoff, "NOT validated" section.
 - **Cache GC sweep** for orphaned rendition subtrees. Eviction is best-effort; a failed eviction or a crash
   mid-write leaves a subtree forever. Spec §14 of the renditions sub-project.
 - **Deleted-account residue GC.** If the `account.delete` task (profile management) fails partially or totally,
@@ -79,15 +76,6 @@ Last reviewed: 2026-07-26.
   reads it today except the export, and `deletedAt` carries the recycling state there, so this is a semantic
   decision to confirm rather than a bug: either accept the narrower meaning and document it in the export
   format, or bump `updatedAt` on those transitions (which the item above would make natural). New 2026-07-23.
-- **`api-application` integration tests share a real on-disk database.** `EbeanDatabaseProducer` builds its
-  DataSource from `System.getenv("DB_PATH")`, falling back to `data.db`, and ignores the `datasource.db.url`
-  property that `api-application/src/test/resources/application.properties` sets to `jdbc:sqlite::memory:`.
-  The `@QuarkusTest`s therefore all run against one gitignored file at the repo root that survives between
-  runs, unlike `api-persistence-sqlite`, whose `RepositoryTest` truncates every table before each test. The
-  practical symptom: editing an already-applied migration makes the whole suite fail with a checksum
-  mismatch until the file is deleted by hand, and any leftover row can leak into a later run. Making the
-  producer honour the configured URL (or pointing tests at a per-run temporary file) would isolate them. New
-  2026-07-23.
 - **Flatten the migration history at beta.** The project is alpha (see docs/project.md): breaking changes and data loss are
   acceptable, nobody should be running it yet. The migration history is nonetheless append-only, and that already
   constrains fixes: `1.2` is a hand-written case-insensitive unique index that `@Index(definition = ...)` would
