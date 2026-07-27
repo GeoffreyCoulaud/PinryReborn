@@ -65,7 +65,7 @@ blocks, not the rollback paths, and the plan had missed `UserDataExportRequester
 - `api-usecases/.../AccountDeletionCleaner.kt`: the three disk-loop calls become
   `imageStore.deleteQuietly`, `renditionCache.evictImageQuietly`, `exportArchiveStore.deleteQuietly`.
 - `api-usecases/.../DeletePinImage.kt`, `PinRecycleBin.kt` (`permanentlyDelete` and
-  `emptyRecycleBin`), `exports/ReapExpiredUserDataExports.kt`, `exports/UserDataExportBuilder.kt` —
+  `emptyRecycleBin`), `exports/ReapExpiredUserDataExports.kt`, `exports/UserDataExportBuilder.kt`:
   switch each cleanup call to its `*Quietly` extension.
 - `api-usecases/.../SetPinImage.kt`, `DownloadPinImage.kt`: switch ALL `imageStore.delete` /
   `renditionCache.evictImage` calls, not only the supersede `runCatching` blocks. The rollback delete
@@ -275,7 +275,7 @@ Orchestrate the four sweeps on a dedicated periodic scheduler.
   (`config.tombstoneGrace()`), `ReapTerminalTasks` (`config.terminalTaskGrace()`), mirroring
   `ExportProducers`.
 **Tests (red first):**
-- `GcLifecycleTest` (MockK, in `api-worker-quarkus`, following `ExportRetentionLifecycleTest`) —
+- `GcLifecycleTest` (MockK, in `api-worker-quarkus`, following `ExportRetentionLifecycleTest`):
   `start()` runs the sweeps once and schedules `safeAll` on the executor. `safeAll()` is covered for
   100% branch: one tick where every sweep succeeds (all four try arms) and one tick where every sweep
   throws (all four catch arms), asserting each throw is logged and the others still run.
