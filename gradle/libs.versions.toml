@@ -12,6 +12,7 @@ jakarta-inject = "2.0.1"
 jakarta-transaction = "2.0.1"
 jandex = "2.3.0"
 kotlin-logging = "8.0.4"
+slf4j = "2.0.3"
 jbcrypt = "0.4"
 commons-text = "1.15.0"
 smallrye-config = "3.18.0"
@@ -71,6 +72,9 @@ jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-dat
 # Logging
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 slf4j-jboss-logmanager = { module = "org.jboss.slf4j:slf4j-jboss-logmanager" }
+# Test-only SLF4J binding so kotlin-logging can initialise in modules whose tests do not bring a
+# Quarkus-provided backend. Production runtime uses slf4j-jboss-logmanager via api-application.
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 
 # Other
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
