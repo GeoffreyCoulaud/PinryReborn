@@ -5,13 +5,15 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRe
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import jakarta.persistence.PersistenceException
 import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.UUID
+import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.util.UUID.randomUUID
 
 class UserRepositoryTest : RepositoryTest() {
     private val repository = UserRepository(database)
@@ -184,5 +186,43 @@ class UserRepositoryTest : RepositoryTest() {
 
         // Then
         assertNotNull(found?.createdAt)
+    }
+
+    // --- Tombstone sweep ---
+
+    @Test
+    fun `Given tombstones and active users, Then findTombstonedUsersModifiedBefore returns only stale tombstones`() {
+        // Given: an active user back-dated before the cutoff (excluded: not soft-deleted),
+        // a stale tombstone back-dated before the cutoff (returned), and a fresh tombstone set
+        // after the cutoff (excluded: too recent). `when_modified` is `@WhenModified`, which Ebean
+        // overwrites on every save, so the back-date is a raw SQL update rather than a re-save.
+        val cutoff = storableNow()
+        val activeUser = saveUser()
+        val staleTombstone = saveUser()
+        val freshTombstone = saveUser()
+        repository.markPendingDeletion(staleTombstone)
+        repository.markPendingDeletion(freshTombstone)
+        val beforeCutoff = cutoff.minus(2, ChronoUnit.HOURS)
+        val afterCutoff = cutoff.plus(2, ChronoUnit.HOURS)
+        backDateWhenModified(activeUser.id, beforeCutoff)
+        backDateWhenModified(staleTombstone.id, beforeCutoff)
+        backDateWhenModified(freshTombstone.id, afterCutoff)
+
+        // When
+        val tombstones = repository.findTombstonedUsersModifiedBefore(cutoff)
+
+        // Then: only the stale tombstone is returned; the active user and the fresh tombstone are not
+        assertEquals(1, tombstones.size)
+        val only = tombstones.single()
+        assertEquals(staleTombstone.id, only.id)
+        assertTrue(only.softDeleted)
+    }
+
+    private fun backDateWhenModified(id: UUID, whenModified: Instant) {
+        database
+            .sqlUpdate("UPDATE users SET when_modified = ? WHERE id = ?")
+            .setParameter(1, whenModified)
+            .setParameter(2, id)
+            .execute()
     }
 }
