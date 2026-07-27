@@ -360,7 +360,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
     // --- deleteTerminalBefore ---
 
     @Test
-    fun `Given terminal and non-terminal tasks, Then deleteTerminalBefore deletes only stale terminals and returns the count`() {
+    fun `Given terminal and non-terminal tasks, Then deleteTerminalBefore deletes only stale terminals`() {
         // Given: for each terminal state (SUCCEEDED, DEAD, CANCELLED) one stale row back-dated before
         // the cutoff and one fresh row back-dated after it, plus a PENDING and a RUNNING task
         // back-dated before the cutoff. `when_modified` is `@WhenModified`, which Ebean overwrites on

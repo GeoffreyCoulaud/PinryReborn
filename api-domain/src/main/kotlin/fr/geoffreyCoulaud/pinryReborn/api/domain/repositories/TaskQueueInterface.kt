@@ -58,4 +58,11 @@ interface TaskQueueInterface {
 
     /** Read a task by id (tests/inspection). */
     fun findById(id: UUID): Task?
+
+    /**
+     * Delete tasks in a terminal state (`SUCCEEDED`, `DEAD`, `CANCELLED`) whose `whenModified`
+     * is before [cutoff]. Returns the count of rows deleted. Non-terminal tasks and fresh
+     * terminals are untouched.
+     */
+    fun deleteTerminalBefore(cutoff: Instant): Int
 }

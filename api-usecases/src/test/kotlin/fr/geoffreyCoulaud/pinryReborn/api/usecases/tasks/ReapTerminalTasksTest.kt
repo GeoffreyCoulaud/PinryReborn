@@ -26,7 +26,7 @@ class ReapTerminalTasksTest : BaseTest() {
     private val cutoff = now.minus(terminalTaskGrace)
 
     @Test
-    fun `Given terminal tasks older than grace, Then reap delegates to deleteTerminalBefore with the cutoff and returns the count`() {
+    fun `Given terminal tasks older than grace, Then reap delegates to deleteTerminalBefore and returns the count`() {
         // Given
         every { clock.now() } returns now
         every { taskQueue.deleteTerminalBefore(cutoff) } returns 5
