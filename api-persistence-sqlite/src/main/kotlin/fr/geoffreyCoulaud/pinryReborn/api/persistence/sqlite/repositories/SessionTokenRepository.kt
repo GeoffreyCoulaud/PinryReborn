@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QSessi
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserModel
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
+import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
@@ -39,4 +40,7 @@ class SessionTokenRepository(
     override fun deleteAllForUser(userId: UUID) {
         QSessionTokenModel().user.id.equalTo(userId).delete()
     }
+
+    override fun deleteExpiredBefore(now: Instant): Int =
+        QSessionTokenModel().expiresAt.lessThan(now).delete()
 }

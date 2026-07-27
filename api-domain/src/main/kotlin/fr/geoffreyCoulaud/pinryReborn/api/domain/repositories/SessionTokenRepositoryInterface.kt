@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.domain.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.SessionToken
+import java.time.Instant
 import java.util.UUID
 
 interface SessionTokenRepositoryInterface {
@@ -15,4 +16,10 @@ interface SessionTokenRepositoryInterface {
 
     /** Delete every session token belonging to the given user. */
     fun deleteAllForUser(userId: UUID)
+
+    /**
+     * Delete every session token whose [SessionToken.expiresAt] is strictly before [now].
+     * Returns the number of rows deleted.
+     */
+    fun deleteExpiredBefore(now: Instant): Int
 }
