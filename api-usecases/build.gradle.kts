@@ -15,6 +15,11 @@ dependencies {
     testImplementation(testFixtures(project(":api-utilities")))
     testImplementation(libs.bundles.testing)
     testRuntimeOnly(libs.bundles.testing.runtime)
+    // StorageCleanup is the first logger in this module's main source; its tests run without a
+    // Quarkus-provided SLF4J backend, so a test-only binding is required for kotlin-logging to
+    // initialise. Production runtime resolves the backend through api-application's
+    // slf4j-jboss-logmanager (see libs.versions.toml).
+    testRuntimeOnly(libs.slf4j.simple)
 
     // Test-only: pins the export archive's published JSON shape (golden-JSON test in
     // ExportContentGoldenJsonTest) with a mapper configured exactly like the real adapter's
