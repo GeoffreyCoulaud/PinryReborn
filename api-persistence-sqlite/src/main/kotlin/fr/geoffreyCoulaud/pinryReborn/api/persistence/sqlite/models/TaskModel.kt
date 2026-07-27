@@ -10,7 +10,7 @@ import java.util.UUID
 
 @Entity
 @Table(name = "tasks")
-// Targets the terminal-task GC sweep: `deleteTerminalBefore` filters WHERE state IN (...) AND
+// Targets the terminal-task garbage collection sweep: `deleteTerminalBefore` filters WHERE state IN (...) AND
 // when_modified < ?. `state` leads as the more selective predicate; `when_modified` is inherited
 // from AuditedBaseModel and lands as a real column on this table, so the composite spans both.
 // Without it the sweep is a full scan over a table that accumulates terminal rows forever

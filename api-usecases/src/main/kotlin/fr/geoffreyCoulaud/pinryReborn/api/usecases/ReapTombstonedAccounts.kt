@@ -12,13 +12,14 @@ import java.time.Duration
  * running.
  *
  * Not `@ApplicationScoped`: [tombstoneGrace] is a primitive ARC cannot resolve, so the bean is
- * produced in wiring (T10's `GcProducers`), mirroring `ExportProducers` for
+ * produced in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for
  * `ReapExpiredUserDataExports`.
  *
  * The second logger in `api-usecases`: the cleaner's DB transaction can still throw (its disk half
  * is best-effort after Sequence 1), so each re-drive is isolated in its own try/catch and a failure
  * is logged at WARN rather than aborting the batch. One bad tombstone must not block the rest
- * (docs/adr/0003-periodic-gc-and-best-effort-cleanup.md, consequence).
+ * (docs/adr/0003-periodic-gc-and-best-effort-cleanup.md, consequence of the periodic garbage
+ * collection design).
  */
 class ReapTombstonedAccounts(
     private val userRepository: UserRepositoryInterface,

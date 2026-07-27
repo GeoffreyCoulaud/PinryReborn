@@ -11,7 +11,7 @@ import java.util.UUID
 
 @Entity
 @Table(name = "session_tokens")
-// Targets the expired-token GC sweep: `deleteExpiredBefore` filters WHERE expires_at < ?, which is a
+// Targets the expired-token garbage collection sweep: `deleteExpiredBefore` filters WHERE expires_at < ?, which is a
 // full scan on a growing table without this index (spec 2026-07-27-periodic-gc.md section 11, D6).
 @Index(columnNames = ["expires_at"])
 class SessionTokenModel(

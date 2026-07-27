@@ -48,13 +48,12 @@ class TaskRuntimeProducers {
     fun exportPurgeScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
     /**
-     * The GC's own single thread, separate from [pollScheduler] and [exportPurgeScheduler]: the
-     * orphan disk scan and the tombstone re-drive do heavy filesystem and DB work that must not
-     * block task claiming, the lease reaper, or archive purging, which share the other two
-     * schedulers.
+     * The garbage collector's own single thread, separate from [pollScheduler] and
+     * [exportPurgeScheduler]: the orphan disk scan and the tombstone re-drive do heavy filesystem
+     * and DB work that must not block task claiming, the lease reaper, or archive purging, which
+     * share the other two schedulers.
      */
     @Produces
     @ApplicationScoped
-    @Identifier(GC_SCHEDULER)
-    fun gcScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    fun garbageCollectionExecutor(): GarbageCollectionExecutor = SingleThreadGarbageCollectionExecutor()
 }

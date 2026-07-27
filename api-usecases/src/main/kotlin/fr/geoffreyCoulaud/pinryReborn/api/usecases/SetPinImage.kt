@@ -78,7 +78,7 @@ class SetPinImage(
         } catch (e: Exception) {
             imageStore.discard(staged)
             // Best-effort: a cleanup failure here must not mask `e`, which is the cause the caller
-            // needs to see. The orphan (if any) is reclaimed by the periodic GC.
+            // needs to see. The orphan (if any) is reclaimed by the periodic garbage collection.
             imageStore.deleteQuietly(storageKey)
             throw e
         }

@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * The periodic GC cutoff sweeps filter on columns that accumulate with activity, so the spec
+ * The periodic garbage collection cutoff sweeps filter on columns that accumulate with activity, so the spec
  * (`docs/specs/2026-07-27-periodic-gc.md` section 11) requires supporting indexes to keep each sweep a
  * targeted scan rather than O(n) over a growing table. This test pins their presence in the
  * migration history so a future model edit cannot silently drop them.

@@ -20,7 +20,7 @@ interface ImageRepositoryInterface {
     fun deleteByPinId(pinId: UUID)
 
     /**
-     * Return the candidate ids that have no image row, i.e. the orphans the GC
+     * Return the candidate ids that have no image row, i.e. the orphans the garbage collection
      * sweep should reclaim. Backed by a primary-key `IN (...)` lookup, so the
      * call is bounded by the size of [candidates] (the orphan sweep chunks it).
      */
