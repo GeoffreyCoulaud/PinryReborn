@@ -17,9 +17,10 @@ dependencies {
     testRuntimeOnly(libs.bundles.testing.runtime)
     // StorageCleanup is the first logger in this module's main source; its tests run without a
     // Quarkus-provided SLF4J backend, so a test-only binding is required for kotlin-logging to
-    // initialise. Production runtime resolves the backend through api-application's
-    // slf4j-jboss-logmanager (see libs.versions.toml).
-    testRuntimeOnly(libs.slf4j.simple)
+    // initialise. slf4j-nop keeps the test output silent: these unit tests assert outcomes, not log
+    // output, and the failure-path tests added later would otherwise flood stderr with WARN traces.
+    // Production runtime resolves the backend through api-application's slf4j-jboss-logmanager.
+    testRuntimeOnly(libs.slf4j.nop)
 
     // Test-only: pins the export archive's published JSON shape (golden-JSON test in
     // ExportContentGoldenJsonTest) with a mapper configured exactly like the real adapter's

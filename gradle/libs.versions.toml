@@ -73,8 +73,10 @@ jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-dat
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 slf4j-jboss-logmanager = { module = "org.jboss.slf4j:slf4j-jboss-logmanager" }
 # Test-only SLF4J binding so kotlin-logging can initialise in modules whose tests do not bring a
-# Quarkus-provided backend. Production runtime uses slf4j-jboss-logmanager via api-application.
-slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+# Quarkus-provided backend (production runtime uses slf4j-jboss-logmanager via api-application).
+# slf4j-nop over slf4j-simple: these unit tests assert outcomes, not log output, and nop keeps the
+# test output silent instead of flooding stderr with WARN traces on every failure path.
+slf4j-nop = { module = "org.slf4j:slf4j-nop", version.ref = "slf4j" }
 
 # Other
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
