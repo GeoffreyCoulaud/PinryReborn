@@ -4,12 +4,10 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.BackoffPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ExponentialBackoffWithJitter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskHandler
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskHandlerRegistry
-import io.smallrye.common.annotation.Identifier
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.inject.Instance
 import jakarta.enterprise.inject.Produces
 import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadLocalRandom
 
@@ -31,29 +29,4 @@ class TaskRuntimeProducers {
     @ApplicationScoped
     fun workerExecutor(config: TaskQueueConfig): WorkerExecutor =
         BoundedWorkerExecutor(Semaphore(config.workerCount()), Executors.newFixedThreadPool(config.workerCount()))
-
-    @Produces
-    @ApplicationScoped
-    @Identifier(TASK_POLL_SCHEDULER)
-    fun pollScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-
-    /**
-     * The export purge's own single thread, separate from [pollScheduler]: deleting
-     * multi-gigabyte archives must not block task claiming or the lease reaper, which share the
-     * task poll scheduler.
-     */
-    @Produces
-    @ApplicationScoped
-    @Identifier(EXPORT_PURGE_SCHEDULER)
-    fun exportPurgeScheduler(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-
-    /**
-     * The garbage collector's own single thread, separate from [pollScheduler] and
-     * [exportPurgeScheduler]: the orphan disk scan and the tombstone re-drive do heavy filesystem
-     * and DB work that must not block task claiming, the lease reaper, or archive purging, which
-     * share the other two schedulers.
-     */
-    @Produces
-    @ApplicationScoped
-    fun garbageCollectionExecutor(): GarbageCollectionExecutor = SingleThreadGarbageCollectionExecutor()
 }

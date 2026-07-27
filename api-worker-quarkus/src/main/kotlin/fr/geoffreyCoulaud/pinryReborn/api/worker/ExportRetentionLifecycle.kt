@@ -4,18 +4,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataEx
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
-import io.smallrye.common.annotation.Identifier
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.event.Observes
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-
-/**
- * CDI qualifier identifier for the export purge's own [ScheduledExecutorService], produced
- * separately from [TASK_POLL_SCHEDULER]: deleting multi-gigabyte archives must not block task
- * claiming or the lease reaper, which share the task poll scheduler.
- */
-internal const val EXPORT_PURGE_SCHEDULER = "export-purge-scheduler"
 
 /**
  * Drives the export retention lifecycle: purges expired export archives and sweeps orphaned
@@ -25,7 +16,7 @@ internal const val EXPORT_PURGE_SCHEDULER = "export-purge-scheduler"
 @ApplicationScoped
 class ExportRetentionLifecycle(
     private val reapExpiredUserDataExports: ReapExpiredUserDataExports,
-    @Identifier(EXPORT_PURGE_SCHEDULER) private val purgeScheduler: ScheduledExecutorService,
+    private val purgeScheduler: PeriodicScheduler,
     private val config: ExportsConfig,
 ) {
     fun onStart(

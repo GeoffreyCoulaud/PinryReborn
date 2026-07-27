@@ -18,7 +18,7 @@ class GarbageCollectionLifecycleTest {
     private val reapOrphanedStorage = mockk<ReapOrphanedStorage>(relaxed = true)
     private val reapTombstonedAccounts = mockk<ReapTombstonedAccounts>(relaxed = true)
     private val reapTerminalTasks = mockk<ReapTerminalTasks>(relaxed = true)
-    private val executor = mockk<GarbageCollectionExecutor>(relaxed = true)
+    private val executor = mockk<PeriodicScheduler>(relaxed = true)
     private val config = mockk<GarbageCollectionConfig>()
 
     private fun lifecycle() = GarbageCollectionLifecycle(

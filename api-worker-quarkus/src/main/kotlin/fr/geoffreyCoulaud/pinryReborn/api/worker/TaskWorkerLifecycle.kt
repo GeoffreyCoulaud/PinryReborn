@@ -4,20 +4,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.ReapExpiredTasks
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
-import io.smallrye.common.annotation.Identifier
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.event.Observes
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-
-/**
- * CDI qualifier identifier for the task queue's poll [ScheduledExecutorService]. Quarkus's own
- * ArC container always registers a synthetic `@Default` bean for the raw JDK
- * [ScheduledExecutorService]/`ExecutorService`/`Executor` types (backed by its main blocking
- * pool); without this qualifier, [TaskRuntimeProducers.pollScheduler] would be ambiguous with
- * that built-in bean as soon as anything actually injects [ScheduledExecutorService].
- */
-internal const val TASK_POLL_SCHEDULER = "task-poll-scheduler"
 
 /**
  * Drives the task worker lifecycle: sweeps orphaned leases and starts the poll loop on
@@ -31,7 +20,7 @@ class TaskWorkerLifecycle(
     private val dispatcher: TaskDispatcher,
     private val reapExpiredTasks: ReapExpiredTasks,
     private val workerExecutor: WorkerExecutor,
-    @Identifier(TASK_POLL_SCHEDULER) private val pollScheduler: ScheduledExecutorService,
+    private val pollScheduler: PeriodicScheduler,
     private val config: TaskQueueConfig,
 ) {
     fun onStart(

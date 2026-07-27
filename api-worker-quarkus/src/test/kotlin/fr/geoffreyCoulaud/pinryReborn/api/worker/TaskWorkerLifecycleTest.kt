@@ -8,14 +8,13 @@ import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 class TaskWorkerLifecycleTest {
     private val dispatcher: TaskDispatcher = mockk(relaxed = true)
     private val reap: ReapExpiredTasks = mockk(relaxed = true)
     private val executor: WorkerExecutor = mockk()
-    private val scheduler: ScheduledExecutorService = mockk(relaxed = true)
+    private val scheduler: PeriodicScheduler = mockk(relaxed = true)
     private val config: TaskQueueConfig = mockk()
 
     private fun lifecycle() = TaskWorkerLifecycle(dispatcher, reap, executor, scheduler, config)
