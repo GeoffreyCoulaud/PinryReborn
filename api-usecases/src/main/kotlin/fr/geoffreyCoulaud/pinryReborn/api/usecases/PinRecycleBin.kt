@@ -47,8 +47,8 @@ class PinRecycleBin(
         imageRepository.deleteByPinId(pin.id)
         pinRepository.permanentlyDeletePin(pin)
         image?.let {
-            imageStore.delete(it.storageKey)
-            runCatching { renditionCache.evictImage(it.id) }
+            imageStore.deleteQuietly(it.storageKey)
+            renditionCache.evictImageQuietly(it.id)
         }
     }
 
@@ -62,8 +62,8 @@ class PinRecycleBin(
         }
         pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user)
         images.forEach {
-            imageStore.delete(it.storageKey)
-            runCatching { renditionCache.evictImage(it.id) }
+            imageStore.deleteQuietly(it.storageKey)
+            renditionCache.evictImageQuietly(it.id)
         }
     }
 }

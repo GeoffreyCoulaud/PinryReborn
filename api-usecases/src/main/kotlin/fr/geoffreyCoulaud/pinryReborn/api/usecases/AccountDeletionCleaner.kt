@@ -59,13 +59,13 @@ class AccountDeletionCleaner(
             userRepository.permanentlyDeleteUser(user)
         }
         for ((storageKey, imageId) in toEvict) {
-            imageStore.delete(storageKey)
-            runCatching { renditionCache.evictImage(imageId) }
+            imageStore.deleteQuietly(storageKey)
+            renditionCache.evictImageQuietly(imageId)
         }
         // Derive each archive key from its id, not from the (now-deleted) row: this reclaims an
         // archive promoted by a builder that died before writing its storageKey column.
         for (exportId in exportIds) {
-            exportArchiveStore.delete(exportStorageKey(exportId))
+            exportArchiveStore.deleteQuietly(exportStorageKey(exportId))
         }
     }
 

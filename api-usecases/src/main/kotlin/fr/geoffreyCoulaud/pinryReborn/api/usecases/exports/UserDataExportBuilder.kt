@@ -20,6 +20,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import java.time.Duration
 import java.util.UUID
@@ -112,7 +113,7 @@ class UserDataExportBuilder(
      */
     private fun publish(exportId: UUID, storageKey: String, staged: StagedFile) {
         val published = transactionRunner.inTransaction { publishIfStillPending(exportId, staged) }
-        if (!published) archiveStore.delete(storageKey)
+        if (!published) archiveStore.deleteQuietly(storageKey)
     }
 
     private fun publishIfStillPending(exportId: UUID, staged: StagedFile): Boolean {

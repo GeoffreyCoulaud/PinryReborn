@@ -84,8 +84,8 @@ class SetPinImage(
         // the new row is already committed, so a failure here (old file already gone, transient
         // I/O error, ...) must not turn a successful upload into a 500.
         existing?.let { old ->
-            runCatching { imageStore.delete(old.storageKey) }
-            runCatching { renditionCache.evictImage(old.id) }
+            imageStore.deleteQuietly(old.storageKey)
+            renditionCache.evictImageQuietly(old.id)
         }
         clearPinDownload.clear(pinId)
         return SetPinImageResult(image = saved, replaced = existing != null)
