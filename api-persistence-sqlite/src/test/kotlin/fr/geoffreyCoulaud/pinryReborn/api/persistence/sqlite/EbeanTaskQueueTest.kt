@@ -6,11 +6,14 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanTaskQueue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.UUID
 
 class EbeanTaskQueueTest : RepositoryTest() {
     private val queue = EbeanTaskQueue(database)
@@ -352,5 +355,76 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Then
         assertFalse(renewed)
         assertEquals(TaskState.SUCCEEDED, queue.findById(claimed.id)?.state)
+    }
+
+    // --- deleteTerminalBefore ---
+
+    @Test
+    fun `Given terminal and non-terminal tasks, Then deleteTerminalBefore deletes only stale terminals and returns the count`() {
+        // Given: for each terminal state (SUCCEEDED, DEAD, CANCELLED) one stale row back-dated before
+        // the cutoff and one fresh row back-dated after it, plus a PENDING and a RUNNING task
+        // back-dated before the cutoff. `when_modified` is `@WhenModified`, which Ebean overwrites on
+        // every save, so the back-date is a raw SQL update rather than a re-save (same idiom as
+        // UserRepositoryTest's tombstone sweep).
+        val cutoff = storableNow()
+        val beforeCutoff = cutoff.minus(2, ChronoUnit.HOURS)
+        val afterCutoff = cutoff.plus(2, ChronoUnit.HOURS)
+
+        val staleSucceeded = claimFresh().also { queue.markSucceeded(it.id, it.leaseId, now) }
+        val freshSucceeded = claimFresh().also { queue.markSucceeded(it.id, it.leaseId, now) }
+        val staleDead = claimFresh().also { queue.markDead(it.id, it.leaseId, now, "boom") }
+        val freshDead = claimFresh().also { queue.markDead(it.id, it.leaseId, now, "boom") }
+        val staleCancelled = queue.enqueue(newTask()).also { queue.cancelPending(it.id) }
+        val freshCancelled = queue.enqueue(newTask()).also { queue.cancelPending(it.id) }
+        val oldPending = queue.enqueue(newTask())
+        val oldRunning = claimFresh()
+
+        backDateWhenModified(staleSucceeded.id, beforeCutoff)
+        backDateWhenModified(freshSucceeded.id, afterCutoff)
+        backDateWhenModified(staleDead.id, beforeCutoff)
+        backDateWhenModified(freshDead.id, afterCutoff)
+        backDateWhenModified(staleCancelled.id, beforeCutoff)
+        backDateWhenModified(freshCancelled.id, afterCutoff)
+        backDateWhenModified(oldPending.id, beforeCutoff)
+        backDateWhenModified(oldRunning.id, beforeCutoff)
+
+        // When
+        val deleted = queue.deleteTerminalBefore(cutoff)
+
+        // Then: the three stale terminals are gone; fresh terminals and non-terminals are untouched
+        // (the state filter excludes PENDING/RUNNING, the time filter excludes fresh terminals).
+        assertEquals(3, deleted)
+        assertNull(queue.findById(staleSucceeded.id))
+        assertNull(queue.findById(staleDead.id))
+        assertNull(queue.findById(staleCancelled.id))
+        assertNotNull(queue.findById(freshSucceeded.id))
+        assertNotNull(queue.findById(freshDead.id))
+        assertNotNull(queue.findById(freshCancelled.id))
+        assertNotNull(queue.findById(oldPending.id))
+        assertNotNull(queue.findById(oldRunning.id))
+    }
+
+    @Test
+    fun `Given no terminal task older than the cutoff, Then deleteTerminalBefore returns zero`() {
+        // Given: every task is either non-terminal or a fresh terminal
+        val cutoff = storableNow().minus(1, ChronoUnit.HOURS)
+        val freshTerminal = claimFresh().also { queue.markSucceeded(it.id, it.leaseId, now) }
+        val runningTask = claimFresh()
+
+        // When
+        val deleted = queue.deleteTerminalBefore(cutoff)
+
+        // Then
+        assertEquals(0, deleted)
+        assertNotNull(queue.findById(freshTerminal.id))
+        assertNotNull(queue.findById(runningTask.id))
+    }
+
+    private fun backDateWhenModified(id: UUID, whenModified: Instant) {
+        database
+            .sqlUpdate("UPDATE tasks SET when_modified = ? WHERE id = ?")
+            .setParameter(1, whenModified)
+            .setParameter(2, id)
+            .execute()
     }
 }
