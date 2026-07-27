@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-26.
+Last reviewed: 2026-07-27.
 
 ## How to use this file
 
@@ -39,17 +39,6 @@ Last reviewed: 2026-07-26.
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
 
-- **Expired session-token GC sweep.** `session_tokens` rows are inert once expired (verification rejects
-  them), but they accumulate. No sweep in v1. See `docs/handoffs/2026-07-21 - handoff - session-token-auth.md`.
-
-- **Cache GC sweep** for orphaned rendition subtrees. Eviction is best-effort; a failed eviction or a crash
-  mid-write leaves a subtree forever. Spec §14 of the renditions sub-project.
-- **Deleted-account residue GC.** If the `account.delete` task (profile management) fails partially or totally,
-  an account can stay stuck in its Ebean soft-delete tombstone with orphaned child rows and on-disk files. A
-  sweep should reclaim such tombstoned accounts and their residue. Note: the cleaner's disk loop wraps only
-  `renditionCache.evictImage` in `runCatching`, not `imageStore.delete`, so a failed `imageStore.delete`
-  propagates after the DB commit (the task then retries and no-ops, since the user is already gone), leaving
-  byte residue; making the whole per-image cleanup best-effort would reduce this. New 2026-07-21.
 - **`imageStore.discard` can mask the original error in failure handlers.** `SetPinImage` and
   `DownloadPinImage` call `imageStore.discard(staged)` inside their `catch (e)` rollback blocks; a
   throwing `discard` would mask `e`, the same error-masking the periodic-GC best-effort parity work
