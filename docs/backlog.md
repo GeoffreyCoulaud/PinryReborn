@@ -80,6 +80,19 @@ Last reviewed: 2026-07-27.
   migration, prefer the clean design and record the debt here rather than contorting around it. New 2026-07-23.
 - **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
   Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
+- **Periodic maintenance via the task queue instead of dedicated schedulers.** The worker runs three
+  periodic lifecycles (task poll, export retention purge, garbage collection), each on its own
+  single-thread scheduler. The task queue is a solid, retried, state-tracked system, and periodic work
+  could plausibly be modelled as recurring tasks it dispatches rather than as separate schedulers.
+  Surfaced while wiring the schedulers by type (2026-07-27). Trade-off to spec: today's design isolates
+  the garbage collection sweep's heavy filesystem and database work on its own thread so it cannot
+  starve the worker pool serving user tasks (downloads, exports, account deletes), and a sweep is an
+  idempotent loop with no client waiting on a result, which the terminal-state `tasks` model does not
+  fit naturally. Routing maintenance through the task queue would unify retry and observability (a
+  failing sweep would surface as a DEAD task instead of an error log), but it needs a recurrence
+  mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
+  compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
+  needs a poller regardless. New 2026-07-27.
 
 ---
 
