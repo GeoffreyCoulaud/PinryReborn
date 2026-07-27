@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createIndex indexName="ix_session_tokens_expires_at" tableName="session_tokens" columns="expires_at"/>
+        <createIndex indexName="ix_tasks_state_when_modified" tableName="tasks" columns="state,when_modified"/>
+    </changeSet>
+</migration>
