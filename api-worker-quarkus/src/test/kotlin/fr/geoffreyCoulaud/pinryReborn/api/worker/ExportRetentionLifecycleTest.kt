@@ -8,12 +8,11 @@ import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 class ExportRetentionLifecycleTest {
     private val reap: ReapExpiredUserDataExports = mockk(relaxed = true)
-    private val scheduler: ScheduledExecutorService = mockk(relaxed = true)
+    private val scheduler: PeriodicScheduler = mockk(relaxed = true)
     private val config: ExportsConfig = mockk()
 
     private fun lifecycle() = ExportRetentionLifecycle(reap, scheduler, config)

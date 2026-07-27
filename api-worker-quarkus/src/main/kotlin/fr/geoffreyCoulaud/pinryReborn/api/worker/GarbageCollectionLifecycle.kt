@@ -14,13 +14,14 @@ import java.util.concurrent.TimeUnit
 /**
  * Drives the periodic garbage collection lifecycle: runs the four `Reap*` sweeps on application
  * startup, keeps sweeping on a fixed delay so inert rows and orphaned files do not accumulate, and
- * stops the executor on shutdown. Mirrors [ExportRetentionLifecycle]; the only structural
+ * stops the scheduler on shutdown. Mirrors [ExportRetentionLifecycle]; the only structural
  * difference is four sweeps instead of one, each isolated in its own try/catch inside [safeAll] so
  * one throwing sweep is logged and does not stop the others (spec
- * docs/specs/2026-07-27-periodic-gc.md, D4). The executor is its own type ([GarbageCollectionExecutor]),
- * not a named `ScheduledExecutorService`, so the orphan disk scan and the tombstone re-drive do
- * heavy filesystem and DB work on a thread isolated from task claiming, the lease reaper, and
- * archive purging without relying on a string qualifier.
+ * docs/specs/2026-07-27-periodic-gc.md, D4). The scheduler is a [PeriodicScheduler] wired as a
+ * `@Dependent` producer (one instance per lifecycle injection, so one thread per role), so the
+ * orphan disk scan and the tombstone re-drive do heavy filesystem and DB work on a thread isolated
+ * from task claiming, the lease reaper, and archive purging without relying on a distinct type or
+ * a string qualifier.
  */
 @ApplicationScoped
 class GarbageCollectionLifecycle(
@@ -28,7 +29,7 @@ class GarbageCollectionLifecycle(
     private val reapOrphanedStorage: ReapOrphanedStorage,
     private val reapTombstonedAccounts: ReapTombstonedAccounts,
     private val reapTerminalTasks: ReapTerminalTasks,
-    private val executor: GarbageCollectionExecutor,
+    private val executor: PeriodicScheduler,
     private val config: GarbageCollectionConfig,
 ) {
     fun onStart(
