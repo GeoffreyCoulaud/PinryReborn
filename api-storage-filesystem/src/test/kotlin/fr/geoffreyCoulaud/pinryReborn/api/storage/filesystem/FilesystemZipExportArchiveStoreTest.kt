@@ -180,4 +180,21 @@ class FilesystemZipExportArchiveStoreTest {
         assertEquals("application/zip", store.format.mediaType)
         assertEquals("zip", store.format.fileExtension)
     }
+
+    @Test
+    fun `Given archives on disk, Then forEachStorageKeyOnDisk yields their storage keys`() {
+        // Given: two promoted archives plus a staged temp file outside the exports directory
+        val exportsDir = Files.createDirectories(tempDir.resolve("exports"))
+        Files.createFile(exportsDir.resolve("e1.zip"))
+        Files.createFile(exportsDir.resolve("e2.zip"))
+        val tmpDir = Files.createDirectories(tempDir.resolve("tmp"))
+        Files.createFile(tmpDir.resolve("staged.tmp"))
+
+        // When: the sweep loans the on-disk keys as a lazy sequence
+        val yielded = mutableSetOf<String>()
+        store.forEachStorageKeyOnDisk { keys -> keys.forEach(yielded::add) }
+
+        // Then: exactly the two archive keys are yielded; the staged temp is not listed
+        assertEquals(setOf("exports/e1.zip", "exports/e2.zip"), yielded)
+    }
 }
