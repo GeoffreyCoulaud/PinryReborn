@@ -22,6 +22,11 @@ import jakarta.persistence.PersistenceException
 import java.time.Instant
 import java.util.UUID
 
+// Implements every port method of UserDataExportRepositoryInterface plus its private helpers, which
+// trips detekt's default per-class threshold. Suppressed rather than split, since splitting would
+// fragment one cohesive adapter across artificial classes for no readability gain (mirrors
+// BoardRepository and EbeanTaskQueue for the same rule).
+@Suppress("TooManyFunctions")
 @ApplicationScoped
 class UserDataExportRepository(
     private val database: Database,
@@ -118,6 +123,12 @@ class UserDataExportRepository(
 
     override fun findAllExportIdsForUser(userId: UUID): List<UUID> =
         QUserDataExportModel().user.id.equalTo(userId).findList().map { it.id }
+
+    override fun findMissingExportIds(candidates: Collection<UUID>): Set<UUID> {
+        if (candidates.isEmpty()) return emptySet()
+        val existing = QUserDataExportModel().id.isIn(candidates).findIds<UUID>()
+        return candidates.toSet() - existing.toSet()
+    }
 
     override fun deleteAllForUser(userId: UUID) {
         QUserDataExportModel().user.id.equalTo(userId).delete()
