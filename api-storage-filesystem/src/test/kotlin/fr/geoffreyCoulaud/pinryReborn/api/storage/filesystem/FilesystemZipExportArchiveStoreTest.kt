@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveEntryDigest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -196,5 +197,25 @@ class FilesystemZipExportArchiveStoreTest {
 
         // Then: exactly the two archive keys are yielded; the staged temp is not listed
         assertEquals(setOf("exports/e1.zip", "exports/e2.zip"), yielded)
+    }
+
+    @Test
+    fun `Given no exports directory on disk, Then forEachStorageKeyOnDisk yields nothing and does not throw`() {
+        // Given: a fresh install where the exports/ directory has never been created
+        assertFalse(Files.exists(tempDir.resolve("exports")))
+
+        // When: the sweep enumerates the disk
+        var blockRuns = 0
+        val yielded = mutableSetOf<String>()
+        assertDoesNotThrow {
+            store.forEachStorageKeyOnDisk { keys ->
+                blockRuns++
+                keys.forEach(yielded::add)
+            }
+        }
+
+        // Then: the block still runs once (loan contract) but yields no keys
+        assertEquals(1, blockRuns)
+        assertTrue(yielded.isEmpty())
     }
 }
