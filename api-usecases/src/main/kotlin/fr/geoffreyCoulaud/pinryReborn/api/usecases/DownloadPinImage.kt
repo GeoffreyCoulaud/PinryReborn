@@ -115,8 +115,8 @@ class DownloadPinImage(
                 // task. Only after a real swap; a no-op swap kept the old image, which must not
                 // be touched.
                 superseded?.let { old ->
-                    runCatching { imageStore.delete(old.storageKey) }
-                    runCatching { renditionCache.evictImage(old.id) }
+                    imageStore.deleteQuietly(old.storageKey)
+                    renditionCache.evictImageQuietly(old.id)
                 }
             } else {
                 imageStore.delete(image.storageKey)

@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import java.time.Duration
 
 /**
@@ -25,7 +26,7 @@ class ReapExpiredUserDataExports(
         val now = clock.now()
         val expired = repository.findExpiredReadyExports(now)
         for (export in expired) {
-            export.storageKey?.let { archiveStore.delete(it) }
+            export.storageKey?.let { archiveStore.deleteQuietly(it) }
             repository.save(export.copy(state = UserDataExportState.EXPIRED))
         }
         archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge))

@@ -25,8 +25,8 @@ class DeletePinImage(
         val image = imageRepository.findByPinId(pinId)
         if (image != null) {
             imageRepository.deleteByPinId(pinId)
-            imageStore.delete(image.storageKey)
-            runCatching { renditionCache.evictImage(image.id) }
+            imageStore.deleteQuietly(image.storageKey)
+            renditionCache.evictImageQuietly(image.id)
             clearPinDownload.clear(pinId)
             return
         }
