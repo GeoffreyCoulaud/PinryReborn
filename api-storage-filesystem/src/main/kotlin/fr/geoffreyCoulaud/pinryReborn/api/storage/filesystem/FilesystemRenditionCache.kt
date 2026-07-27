@@ -68,6 +68,14 @@ class FilesystemRenditionCache(dataDir: String) : RenditionCache {
 
     override fun forEachImageIdOnDisk(block: (Sequence<UUID>) -> Unit) {
         val cacheRoot = paths.resolveWithinRoot("cache")
+        // A fresh install has no cache/ yet: Files.list would throw NoSuchFileException, which the
+        // periodic sweep would log as a failure every tick. Run the block once on an empty sequence
+        // instead, preserving the loan contract (the block always runs exactly once). Mirrors
+        // FilesystemZipExportArchiveStore.discardOrphanedStagedFiles.
+        if (!Files.isDirectory(cacheRoot)) {
+            block(emptySequence())
+            return
+        }
         // Loans the on-disk image ids as a lazy sequence; `use` owns the directory stream and
         // closes it when [block] returns, so the sequence must be consumed inside [block].
         // Non-UUID entries (the cache root is not expected to hold any, but defense in depth)

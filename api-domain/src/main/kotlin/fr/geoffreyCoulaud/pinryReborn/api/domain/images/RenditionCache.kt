@@ -26,8 +26,8 @@ interface RenditionCache {
      *
      * The adapter owns the underlying directory stream and closes it when [block] returns; the
      * sequence must be consumed inside [block]. Lets a sweep ask "what is on disk" without holding
-     * the whole listing in memory (it chunks the sequence by batch size to bound memory regardless
-     * of how many cache entries an active instance accumulates).
+     * the whole listing in memory (the sweep chunks the sequence by batch size to bound memory
+     * regardless of how many cache entries an active instance accumulates).
      */
     fun forEachImageIdOnDisk(block: (Sequence<UUID>) -> Unit)
 }
