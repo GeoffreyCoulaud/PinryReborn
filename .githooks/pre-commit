@@ -1,13 +1,13 @@
 #!/bin/sh
 # Keep the committed OpenAPI spec in sync (generate-openapi.sh regenerates it, stages it,
 # and exits non-zero if it changed so the commit is re-run up to date), and reject
-# em/en-dashes in staged text additions (no-em-dash rule, AGENTS.md Conventions).
+# em/en-dashes in staged additions (no-em-dash rule, AGENTS.md Conventions): the diff must
+# contain none, in any file, so the check carries no pathspec filter.
 set -e
 
 em=$(printf '\342\200\224')  # U+2014 EM DASH
 en=$(printf '\342\200\223')  # U+2013 EN DASH
-if git diff --cached -U0 -- '*.md' '*.kt' '*.kts' '*.properties' '*.sql' '*.json' '*.yaml' '*.yml' \
-    | grep '^+' | grep -qF -e "$em" -e "$en"; then
+if git diff --cached -U0 | grep '^+' | grep -qF -e "$em" -e "$en"; then
     echo "pre-commit: em-dash or en-dash in staged additions; use ':' or '-' (no-em-dash rule)." >&2
     exit 1
 fi
