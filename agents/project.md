@@ -157,6 +157,11 @@ The three values `modules/backend.md` expects this file to declare.
   case-insensitive unique index that `@Index(definition = ...)` would express today, and
   `users`/`pins`/`boards`/`tags` keep `when_created` and `when_modified` column names that no longer
   match the domain's `createdAt` and `updatedAt`.
+- **Dependencies are injected by type, not by a string qualifier** (decided 2026-07-27): a new
+  dependency is a dedicated type that carries its role (e.g. `GarbageCollectionExecutor`), and the
+  container provides the instance. `@Identifier("...")` string qualifiers are not used for new code,
+  because they couple the consumer to a producer's name rather than its type. The pre-existing
+  `TASK_POLL_SCHEDULER` / `EXPORT_PURGE_SCHEDULER` schedulers predate this rule and are not in scope.
 
 Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
@@ -220,6 +225,9 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   `api-domain/repositories/`; persistence repositories convert through `mappers/`; use cases throw
   domain-specific exceptions (`UserCreationError`, `BoardCreationError`); controllers use the DTOs in
   `dtos/`.
+- **No abbreviations in code, comments, KDocs or logs** (decided 2026-07-27): domain terms are
+  spelled out (e.g. "garbage collection", not "GC"). Narrative documents (specs, ADRs, handoffs) may
+  abbreviate after the first definition, but the source must not.
 
 ## Gotchas
 
