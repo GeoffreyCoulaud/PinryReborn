@@ -16,6 +16,7 @@ import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
@@ -295,5 +296,42 @@ class PinRecycleBinTest {
         // Then
         verify { clearPinDownload.clear(firstPin.id) }
         verify { clearPinDownload.clear(secondPin.id) }
+    }
+
+    // --- Best-effort cleanup ---
+
+    @Test
+    fun `Given the image store throws on permanent delete, Then the delete still succeeds`() {
+        // Given
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val image = createImage(pin.id)
+        every { pinRepository.findPinById(pin.id) } returns pin
+        every { imageRepository.findByPinId(pin.id) } returns image
+        justRun { pinRepository.permanentlyDeletePin(pin) }
+        every { imageStore.delete(any()) } throws RuntimeException("disk down")
+
+        // When / Then: the row and pin are gone and no exception propagates
+        assertDoesNotThrow { useCase.permanentlyDelete(pinId = pin.id, user = user) }
+        verify { imageRepository.deleteByPinId(pin.id) }
+        verify { pinRepository.permanentlyDeletePin(pin) }
+        verify { imageStore.delete(image.storageKey) }
+    }
+
+    @Test
+    fun `Given the image store throws on empty recycle bin, Then the bin still empties`() {
+        // Given
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val image = createImage(pin.id)
+        every { pinRepository.findAllSoftDeletedPinsForUser(user) } returns listOf(pin)
+        every { imageRepository.findByPinId(pin.id) } returns image
+        justRun { pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user) }
+        every { imageStore.delete(any()) } throws RuntimeException("disk down")
+
+        // When / Then: the bulk delete ran and the file delete was still attempted
+        assertDoesNotThrow { useCase.emptyRecycleBin(user = user) }
+        verify { pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user) }
+        verify { imageStore.delete(image.storageKey) }
     }
 }
