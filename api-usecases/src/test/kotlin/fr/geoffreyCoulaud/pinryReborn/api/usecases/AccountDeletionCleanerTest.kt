@@ -176,7 +176,7 @@ class AccountDeletionCleanerTest : BaseTest() {
     }
 
     @Test
-    fun `Given imageStore delete throws mid-loop, Then the disk loop still attempts every image and every export archive`() {
+    fun `Given imageStore delete throws mid-loop, Then the disk loop still attempts all images and exports`() {
         // Given: at least two pins with images and one export archive, so the loop has a
         // second iteration plus the export loop to reach after the throw.
         every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
