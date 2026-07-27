@@ -197,6 +197,8 @@ class AccountDeletionCleanerTest : BaseTest() {
         assertDoesNotThrow { cleaner.deleteAccountData(userId) }
         verify { imageStore.delete(firstImage.storageKey) }
         verify { imageStore.delete(secondImage.storageKey) }
+        verify { renditions.evictImage(firstImage.id) }
+        verify { renditions.evictImage(secondImage.id) }
         verify { exportArchiveStore.delete("exports/$exportId.zip") }
     }
 }
