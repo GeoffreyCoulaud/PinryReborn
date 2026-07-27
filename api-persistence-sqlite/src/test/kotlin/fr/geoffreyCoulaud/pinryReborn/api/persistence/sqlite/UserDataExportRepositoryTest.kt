@@ -261,6 +261,35 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         assertEquals(listOf(otherExport.id), repository.findAllExportIdsForUser(otherUser.id))
     }
 
+    // --- findMissingExportIds (orphan sweep) ---
+
+    @Test
+    fun `Given a mix of present and absent candidate ids, Then findMissingExportIds returns only the absent`() {
+        // Given
+        val user = createAndSaveUser()
+        val saved = repository.save(pendingExport(user.id))
+        val missingId = randomUUID()
+
+        // When
+        val missing = repository.findMissingExportIds(listOf(saved.id, missingId))
+
+        // Then
+        assertEquals(setOf(missingId), missing)
+    }
+
+    @Test
+    fun `Given an empty candidate set, Then findMissingExportIds returns empty`() {
+        // Given
+        val user = createAndSaveUser()
+        repository.save(pendingExport(user.id))
+
+        // When
+        val missing = repository.findMissingExportIds(emptyList())
+
+        // Then
+        assertTrue(missing.isEmpty())
+    }
+
     // --- paging ---
 
     @Test
