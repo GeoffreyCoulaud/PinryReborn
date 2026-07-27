@@ -15,6 +15,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.zip.ZipOutputStream
+import kotlin.streams.asSequence
 
 /**
  * [ExportArchiveStore] adapter backed by the local filesystem, producing ZIP archives.
@@ -100,6 +101,15 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
                 .filter { Files.getLastModifiedTime(it).toInstant().isBefore(olderThan) }
                 .toList()
         }.count { Files.deleteIfExists(it) }
+    }
+
+    override fun forEachStorageKeyOnDisk(block: (Sequence<String>) -> Unit) {
+        // List ONLY <dataDir>/exports/, never the dataDir root: the root also holds `tmp/`
+        // staged files, which are not promoted archives and must never be swept here.
+        val exportsDir = paths.resolveWithinRoot("exports")
+        Files.list(exportsDir).use { stream ->
+            block(stream.asSequence().filter { Files.isRegularFile(it) }.map { "exports/${it.fileName}" })
+        }
     }
 
     private companion object {
