@@ -213,4 +213,22 @@ class SetPinImageTest : BaseTest() {
 
         assertTrue(result.replaced)
     }
+
+    @Test fun `Given the rollback delete throws, Then the original promote error is preserved`() {
+        val p = pin()
+        val promoteError = RuntimeException("disk full")
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5, animated = false)
+        every { images.findByPinId(p.id) } returns null
+        every { clock.now() } returns Instant.EPOCH
+        every { store.promote(any(), any()) } throws promoteError
+        every { store.delete(any()) } throws RuntimeException("cleanup boom")
+
+        val thrown = assertThrows(RuntimeException::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
+
+        // The cleanup exception must not mask the original promote failure.
+        assertEquals(promoteError, thrown)
+        verify { store.discard(staged) }
+    }
 }
