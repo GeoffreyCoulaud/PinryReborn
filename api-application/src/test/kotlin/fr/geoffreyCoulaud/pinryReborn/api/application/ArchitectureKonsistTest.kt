@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.architecture.KoArchitectureCreator.assertArchitecture
 import com.lemonappdev.konsist.api.architecture.Layer
+import com.lemonappdev.konsist.api.ext.list.withName
 import com.lemonappdev.konsist.api.ext.list.withNameStartingWith
 import com.lemonappdev.konsist.api.ext.list.withoutName
 import com.lemonappdev.konsist.api.ext.list.withoutNameStartingWith
@@ -110,6 +111,18 @@ class ArchitectureKonsistTest {
                 // Byte-stream boundary type on the image ports; adapters perform the actual I/O.
                 "java.io.InputStream",
             )
+            .assertEmpty()
+    }
+
+    @Test
+    fun `Given production sources, Then none imports the Identifier string qualifier`() {
+        // The inject-by-type convention forbids @Identifier string qualifiers in production: a
+        // dependency is a dedicated type, and the container provides the instance. `assertEmpty`
+        // names every file that still imports the qualifier if the convention regresses.
+        Konsist
+            .scopeFromProduction()
+            .imports
+            .withName("io.smallrye.common.annotation.Identifier")
             .assertEmpty()
     }
 }
