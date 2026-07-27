@@ -11,10 +11,11 @@ import java.util.UUID
  * see (a committed account delete that left bytes behind, a crash mid-write, residue from before
  * this change). Disk drives the iteration and each batch is checked against the DB, so memory is
  * bounded by [batchSize] regardless of how many files or rows an active instance accumulates. The
- * GC bounds residue, not live data (spec docs/specs/2026-07-27-periodic-gc.md, decision D5).
+ * garbage collection bounds residue, not live data (spec docs/specs/2026-07-27-periodic-gc.md,
+ * decision D5).
  *
  * Not `@ApplicationScoped`: [batchSize] is a primitive ARC cannot resolve, so the bean is produced
- * in wiring (T10's `GcProducers`), mirroring `ExportProducers` for `ReapExpiredUserDataExports`.
+ * in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for `ReapExpiredUserDataExports`.
  *
  * Logger-free: the `*Quietly` extensions log per-item failures, and the lifecycle `safeAll` logs a
  * sweep-level throw. Add no logger here.

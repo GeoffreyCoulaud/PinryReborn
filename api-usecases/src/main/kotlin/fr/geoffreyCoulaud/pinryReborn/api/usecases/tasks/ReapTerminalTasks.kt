@@ -10,7 +10,7 @@ import java.time.Duration
  * (a DEAD task an operator might investigate).
  *
  * Not `@ApplicationScoped`: [terminalTaskGrace] is a primitive ARC cannot resolve, so the bean is
- * produced in wiring (T10's `GcProducers`), mirroring `ExportProducers` for
+ * produced in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for
  * `ReapExpiredUserDataExports`.
  *
  * Logger-free: the lifecycle `safeAll` logs a sweep-level throw, and the count is returned for the

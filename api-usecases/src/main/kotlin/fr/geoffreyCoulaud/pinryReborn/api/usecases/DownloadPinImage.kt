@@ -126,7 +126,7 @@ class DownloadPinImage(
         } catch (e: Exception) {
             imageStore.discard(staged)
             // Best-effort: a cleanup failure must not mask `e`, which the retry policy records
-            // and rethrows. The orphan (if any) is reclaimed by the periodic GC.
+            // and rethrows. The orphan (if any) is reclaimed by the periodic garbage collection.
             imageStore.deleteQuietly(image.storageKey)
             failRetryable(pinId, DownloadReason.INTERNAL_ERROR, context, e)
         }

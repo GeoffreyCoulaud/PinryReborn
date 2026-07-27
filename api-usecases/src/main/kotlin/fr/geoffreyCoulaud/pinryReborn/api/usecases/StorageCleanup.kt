@@ -9,8 +9,8 @@ import java.util.UUID
 /**
  * Shared best-effort body for storage cleanup: a throw from [block] is logged at WARN and
  * swallowed, never propagated to the caller. A business operation that already succeeded must
- * not fail because of a file cleanup; the periodic GC is the ultimate guarantor of residue
- * (see docs/adr/0003-periodic-gc-and-best-effort-cleanup.md).
+ * not fail because of a file cleanup; the periodic garbage collection is the ultimate guarantor of
+ * residue (see docs/adr/0003-periodic-gc-and-best-effort-cleanup.md).
  */
 object StorageCleanup {
     private val logger = KotlinLogging.logger {}

@@ -11,28 +11,27 @@ import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-class GcLifecycleTest {
+class GarbageCollectionLifecycleTest {
     private val reapExpiredSessionTokens = mockk<ReapExpiredSessionTokens>(relaxed = true)
     private val reapOrphanedStorage = mockk<ReapOrphanedStorage>(relaxed = true)
     private val reapTombstonedAccounts = mockk<ReapTombstonedAccounts>(relaxed = true)
     private val reapTerminalTasks = mockk<ReapTerminalTasks>(relaxed = true)
-    private val scheduler = mockk<ScheduledExecutorService>(relaxed = true)
-    private val config = mockk<GcConfig>()
+    private val executor = mockk<GarbageCollectionExecutor>(relaxed = true)
+    private val config = mockk<GarbageCollectionConfig>()
 
-    private fun lifecycle() = GcLifecycle(
+    private fun lifecycle() = GarbageCollectionLifecycle(
         reapExpiredSessionTokens = reapExpiredSessionTokens,
         reapOrphanedStorage = reapOrphanedStorage,
         reapTombstonedAccounts = reapTombstonedAccounts,
         reapTerminalTasks = reapTerminalTasks,
-        scheduler = scheduler,
+        executor = executor,
         config = config,
     )
 
     @Test
-    fun `Given startup, Then it runs every sweep once and schedules safeAll on the GC scheduler`() {
+    fun `Given startup, Then it runs every sweep once and schedules safeAll on the garbage collection executor`() {
         // Given
         every { config.interval() } returns Duration.ofSeconds(1)
         // When
@@ -43,7 +42,7 @@ class GcLifecycleTest {
         verify(exactly = 1) { reapTombstonedAccounts.reap() }
         verify(exactly = 1) { reapTerminalTasks.reap() }
         // ... and safeAll is scheduled at the config interval (initial and fixed delay)
-        verify { scheduler.scheduleWithFixedDelay(any(), 1000L, 1000L, TimeUnit.MILLISECONDS) }
+        verify { executor.scheduleWithFixedDelay(any(), 1000L, 1000L, TimeUnit.MILLISECONDS) }
     }
 
     @Test
@@ -53,7 +52,7 @@ class GcLifecycleTest {
         // When
         lifecycle().start()
         // Then
-        verify { scheduler.scheduleWithFixedDelay(any(), 1L, 1L, TimeUnit.MILLISECONDS) }
+        verify { executor.scheduleWithFixedDelay(any(), 1L, 1L, TimeUnit.MILLISECONDS) }
     }
 
     @Test
@@ -88,11 +87,11 @@ class GcLifecycleTest {
     }
 
     @Test
-    fun `Given shutdown, Then it shuts the scheduler down`() {
+    fun `Given shutdown, Then it shuts the executor down`() {
         // When
         lifecycle().stop()
         // Then
-        verify { scheduler.shutdown() }
+        verify { executor.shutdown() }
     }
 
     @Test
@@ -110,6 +109,6 @@ class GcLifecycleTest {
         // When
         lifecycle().onStop(mockk<ShutdownEvent>())
         // Then
-        verify { scheduler.shutdown() }
+        verify { executor.shutdown() }
     }
 }

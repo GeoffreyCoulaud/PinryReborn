@@ -41,8 +41,8 @@ Last reviewed: 2026-07-27.
 
 - **`imageStore.discard` can mask the original error in failure handlers.** `SetPinImage` and
   `DownloadPinImage` call `imageStore.discard(staged)` inside their `catch (e)` rollback blocks; a
-  throwing `discard` would mask `e`, the same error-masking the periodic-GC best-effort parity work
-  (T2) removed for `delete`. No `discardQuietly` extension exists yet. Extend `StorageCleanup` when a
+  throwing `discard` would mask `e`, the same error-masking that `deleteQuietly` now prevents for
+  `imageStore.delete`. No `discardQuietly` extension exists yet. Extend `StorageCleanup` when a
   non-delete cleanup needs best-effort. New 2026-07-27.
 - **Task worker observability: surface DEAD/failed tasks.** `TaskProcessor` swallows a throwing `TaskHandler`
   into a retryable outcome with no logging, so a task that exhausts its attempts and is marked DEAD is

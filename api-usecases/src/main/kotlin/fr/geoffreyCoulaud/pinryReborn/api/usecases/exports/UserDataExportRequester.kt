@@ -48,7 +48,7 @@ class UserDataExportRequester(
         // Outside the transaction on purpose: deleting inside means a later rollback leaves a READY
         // row pointing at bytes that no longer exist, which serves a 500 instead of a clean error.
         // Best-effort: the transaction has committed, so a disk failure here must not 500 a request
-        // that already succeeded. The orphan archive is reclaimed by the periodic GC.
+        // that already succeeded. The orphan archive is reclaimed by the periodic garbage collection.
         supersededKey?.let { archiveStore.deleteQuietly(it) }
         return export
     }

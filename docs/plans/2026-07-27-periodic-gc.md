@@ -252,16 +252,16 @@ pattern) for the composite. Confirm against the generated SQL.
 **Acceptance:** the migration applies cleanly at startup (no checksum conflict); both indexes exist
 on a fresh DB; the gate is green.
 
-### T10: GcConfig, scheduler, lifecycle and wiring
+### T10: GarbageCollectionConfig, scheduler, lifecycle and wiring
 
 Orchestrate the four sweeps on a dedicated periodic scheduler.
 
 **Depends on:** T3, T6, T7, T8 (the four `Reap*` use cases).
 **Files:**
-- `api-worker-quarkus/.../GcConfig.kt` (new): `@ConfigMapping(prefix = "gc",
+- `api-worker-quarkus/.../GarbageCollectionConfig.kt` (new): `@ConfigMapping(prefix = "garbage-collection",
   namingStrategy = SNAKE_CASE)` with `interval` (`P1D`), `tombstone_grace` (`PT24H`),
   `terminal_task_grace` (`P7D`), `orphan_batch_size` (`500`).
-- `api-worker-quarkus/.../GcLifecycle.kt` (new): `@ApplicationScoped`; declares
+- `api-worker-quarkus/.../GarbageCollectionLifecycle.kt` (new): `@ApplicationScoped`; declares
   `internal const val GC_SCHEDULER = "gc-scheduler"` (the consumer declares the qualifier constant,
   as `TaskWorkerLifecycle` and `ExportRetentionLifecycle` do); `@Observes StartupEvent`/`ShutdownEvent`;
   `start()` runs all four sweeps once then
@@ -269,13 +269,13 @@ Orchestrate the four sweeps on a dedicated periodic scheduler.
   `try { reap() } catch (e: Exception) { logger.error(e) { ... } }`. Mirror `ExportRetentionLifecycle`.
 - `api-worker-quarkus/.../TaskRuntimeProducers.kt`: add a
   `@Produces @ApplicationScoped @Identifier(GC_SCHEDULER) fun gcScheduler()` returning
-  `Executors.newSingleThreadScheduledExecutor()`, referencing the constant from `GcLifecycle`.
-- `api-application/.../wiring/GcProducers.kt` (new): `@Produces @ApplicationScoped` for
+  `Executors.newSingleThreadScheduledExecutor()`, referencing the constant from `GarbageCollectionLifecycle`.
+- `api-application/.../wiring/GarbageCollectionProducers.kt` (new): `@Produces @ApplicationScoped` for
   `ReapOrphanedStorage` (`config.orphanBatchSize()`), `ReapTombstonedAccounts`
   (`config.tombstoneGrace()`), `ReapTerminalTasks` (`config.terminalTaskGrace()`), mirroring
   `ExportProducers`.
 **Tests (red first):**
-- `GcLifecycleTest` (MockK, in `api-worker-quarkus`, following `ExportRetentionLifecycleTest`):
+- `GarbageCollectionLifecycleTest` (MockK, in `api-worker-quarkus`, following `ExportRetentionLifecycleTest`):
   `start()` runs the sweeps once and schedules `safeAll` on the executor. `safeAll()` is covered for
   100% branch: one tick where every sweep succeeds (all four try arms) and one tick where every sweep
   throws (all four catch arms), asserting each throw is logged and the others still run.
