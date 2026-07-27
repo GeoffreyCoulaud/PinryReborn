@@ -169,9 +169,10 @@ TDD, red before green, 100% branch per package.
    changes: the lifecycles call the same two methods.
 3. **Konsist test:** fails red before the refactor (the three worker files still import `Identifier`),
    then passes once they drop it. The red is committed before the green per the TDD cycle.
-4. **End-to-end (existing, untouched):** `TaskQueueBootIntegrationTest` and the GC / export-retention
-   boot paths confirm the three lifecycles still start on boot and run on their own threads, each
-   injecting its own `@Dependent` scheduler instance.
+4. **End-to-end (existing, untouched):** every `@QuarkusTest` boots the full application, so all three
+   lifecycles fire `@Observes StartupEvent` and resolve their `PeriodicScheduler` dependency; a missing
+   bean would fail every boot with `UnsatisfiedDependencyException`. The three-distinct-instances
+   property (one thread per lifecycle) is the CDI `@Dependent` guarantee, not an asserted test outcome.
 
 ## 6. Acceptance criteria
 
