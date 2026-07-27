@@ -107,6 +107,14 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
         // List ONLY <dataDir>/exports/, never the dataDir root: the root also holds `tmp/`
         // staged files, which are not promoted archives and must never be swept here.
         val exportsDir = paths.resolveWithinRoot("exports")
+        // A fresh install has no exports/ yet: Files.list would throw NoSuchFileException, which the
+        // periodic sweep would log as a failure every tick. Run the block once on an empty sequence
+        // instead, preserving the loan contract (the block always runs exactly once). Mirrors
+        // discardOrphanedStagedFiles above.
+        if (!Files.isDirectory(exportsDir)) {
+            block(emptySequence())
+            return
+        }
         Files.list(exportsDir).use { stream ->
             block(stream.asSequence().filter { Files.isRegularFile(it) }.map { "exports/${it.fileName}" })
         }
