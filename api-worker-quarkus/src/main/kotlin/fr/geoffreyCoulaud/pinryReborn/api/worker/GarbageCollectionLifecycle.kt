@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
  * one throwing sweep is logged and does not stop the others (spec
  * docs/specs/2026-07-27-periodic-gc.md, D4). The scheduler is a [PeriodicScheduler] wired as a
  * `@Dependent` producer (one instance per lifecycle injection, so one thread per role), so the
- * orphan disk scan and the tombstone re-drive do heavy filesystem and DB work on a thread isolated
+ * orphan disk scan and the tombstone re-drive do heavy filesystem and database work on a thread isolated
  * from task claiming, the lease reaper, and archive purging without relying on a distinct type or
  * a string qualifier.
  */
