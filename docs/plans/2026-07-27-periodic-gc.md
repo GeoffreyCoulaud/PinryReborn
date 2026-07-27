@@ -55,27 +55,48 @@ The single helper every storage cleanup call site will use.
 
 ### T2 — Switch every storage cleanup call site to `*Quietly`
 
-Make `imageStore.delete`, `exportArchiveStore.delete` and `renditionCache.evictImage` best-effort at
-every call site; remove the `AccountDeletionCleaner` loop-abort.
+Make every side-effect storage cleanup best-effort; remove the `AccountDeletionCleaner` loop-abort
+and the error-masking in the rollback / no-op-swap / post-commit-supersede paths. (Amended after the
+T2 task review: the original "already wrapped in `runCatching`" note was true only of the supersede
+blocks, not the rollback paths, and the plan had missed `UserDataExportRequester`.)
 
 **Depends on:** T1.
 **Files:**
 - `api-usecases/.../AccountDeletionCleaner.kt` — the three disk-loop calls become
   `imageStore.deleteQuietly`, `renditionCache.evictImageQuietly`, `exportArchiveStore.deleteQuietly`.
 - `api-usecases/.../DeletePinImage.kt`, `PinRecycleBin.kt` (`permanentlyDelete` and
-  `emptyRecycleBin`), `SetPinImage.kt`, `DownloadPinImage.kt`,
-  `exports/ReapExpiredUserDataExports.kt`, `exports/UserDataExportBuilder.kt` — switch each cleanup
-  call to its `*Quietly` extension. (`SetPinImage`/`DownloadPinImage` already wrapped in
-  `runCatching`; switching preserves behaviour and adds the WARN.)
+  `emptyRecycleBin`), `exports/ReapExpiredUserDataExports.kt`, `exports/UserDataExportBuilder.kt` —
+  switch each cleanup call to its `*Quietly` extension.
+- `api-usecases/.../SetPinImage.kt`, `DownloadPinImage.kt` — switch ALL `imageStore.delete` /
+  `renditionCache.evictImage` calls, not only the supersede `runCatching` blocks. The rollback delete
+  in the failure handler (`SetPinImage` `catch { ...; imageStore.delete(storageKey); throw e }`,
+  `DownloadPinImage` `catch { ...; imageStore.delete(...); failRetryable(...) }`) and the no-op-swap
+  delete currently let a cleanup failure escape into the caller's error path, masking the original
+  cause. Each becomes `imageStore.deleteQuietly` so the original error is preserved and the orphan is
+  left for T6.
+- `api-usecases/.../exports/UserDataExportRequester.kt` — the post-commit supersede delete of the
+  previous READY archive (`supersededKey?.let { archiveStore.delete(it) }`) becomes
+  `archiveStore.deleteQuietly`; the transaction has committed, so this is post-success cleanup.
+- NOT touched: `UserDataExportDeleter` (`archiveStore.delete(export.storageKey)`) — that delete IS
+  the user's primary `DELETE /me/exports/{id}` operation, not a side-effect cleanup, so a disk
+  failure is a real failure the caller must see. Add an inline comment documenting this exception to
+  D1 so a future edit does not silently make it best-effort.
 **Tests (red first):**
 - `AccountDeletionCleanerTest` — `Given imageStore.delete throws mid-loop, Then the disk loop still
-  attempts every image and every export archive` (red today: the throw aborts the loop). The fixture
-  must have at least two pins with images and at least one export archive, so the loop has a second
-  iteration plus the export loop to reach after the throw.
+  attempts every image and every export archive` (red today). Fixture: at least two pins with images
+  and at least one export archive.
 - Extend `DeletePinImageTest`, `PinRecycleBinTest` — `Given the image store throws, Then the delete /
   recycle still succeeds`.
-**Acceptance:** no storage-cleanup call propagates from a use case; `AccountDeletionCleaner` runs its
-full disk loop under a mid-loop throw; pre-existing tests stay green.
+- `SetPinImageTest` — `Given the rollback delete throws, Then the original promote/save error is
+  preserved` (red today: the delete exception masks the original).
+- `DownloadPinImageTest` — `Given the rollback delete throws, Then the task fails with the original
+  cause` and `Given the no-op-swap delete throws, Then the task still succeeds` (not retried).
+- `UserDataExportRequesterTest` — `Given the superseded archive delete throws, Then the request still
+  succeeds` (red today: 500 for a committed request).
+**Acceptance:** no side-effect storage cleanup propagates from a use case; `AccountDeletionCleaner`
+runs its full disk loop under a mid-loop throw; rollback and no-op-swap deletes preserve the original
+error; the post-commit supersede delete does not fail a committed request; `UserDataExportDeleter`
+still propagates (primary user operation, documented); pre-existing tests stay green.
 
 ---
 

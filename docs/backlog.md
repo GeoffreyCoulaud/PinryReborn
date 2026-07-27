@@ -50,6 +50,11 @@ Last reviewed: 2026-07-26.
   `renditionCache.evictImage` in `runCatching`, not `imageStore.delete`, so a failed `imageStore.delete`
   propagates after the DB commit (the task then retries and no-ops, since the user is already gone), leaving
   byte residue; making the whole per-image cleanup best-effort would reduce this. New 2026-07-21.
+- **`imageStore.discard` can mask the original error in failure handlers.** `SetPinImage` and
+  `DownloadPinImage` call `imageStore.discard(staged)` inside their `catch (e)` rollback blocks; a
+  throwing `discard` would mask `e`, the same error-masking the periodic-GC best-effort parity work
+  (T2) removed for `delete`. No `discardQuietly` extension exists yet. Extend `StorageCleanup` when a
+  non-delete cleanup needs best-effort. New 2026-07-27.
 - **Task worker observability: surface DEAD/failed tasks.** `TaskProcessor` swallows a throwing `TaskHandler`
   into a retryable outcome with no logging, so a task that exhausts its attempts and is marked DEAD is
   invisible to operators. A user who deleted their account gets a 202 but would silently stay tombstoned
