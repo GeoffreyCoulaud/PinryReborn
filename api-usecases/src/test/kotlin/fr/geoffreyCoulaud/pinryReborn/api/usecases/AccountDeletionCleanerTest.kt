@@ -174,4 +174,29 @@ class AccountDeletionCleanerTest : BaseTest() {
         verify(exactly = 0) { imageStore.delete(any()) }
         verify(exactly = 0) { renditions.evictImage(any()) }
     }
+
+    @Test
+    fun `Given imageStore delete throws mid-loop, Then the disk loop still attempts every image and every export archive`() {
+        // Given: at least two pins with images and one export archive, so the loop has a
+        // second iteration plus the export loop to reach after the throw.
+        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { users.findUserByIdIncludingDeleted(userId) } returns user
+        val firstPin = buildPin()
+        val secondPin = buildPin()
+        val firstImage = buildImage(firstPin.id)
+        val secondImage = buildImage(secondPin.id)
+        every { pins.findAllPinIdsForUser(user) } returns listOf(firstPin.id, secondPin.id)
+        every { images.findByPinId(firstPin.id) } returns firstImage
+        every { images.findByPinId(secondPin.id) } returns secondImage
+        val exportId = randomUUID()
+        every { exports.findAllExportIdsForUser(userId) } returns listOf(exportId)
+        every { exportArchiveStore.format } returns ArchiveFormat(mediaType = "application/zip", fileExtension = "zip")
+        every { imageStore.delete(any()) } throws RuntimeException("disk down")
+
+        // When / Then: the throw must not abort the loop, and the export loop must still run.
+        assertDoesNotThrow { cleaner.deleteAccountData(userId) }
+        verify { imageStore.delete(firstImage.storageKey) }
+        verify { imageStore.delete(secondImage.storageKey) }
+        verify { exportArchiveStore.delete("exports/$exportId.zip") }
+    }
 }

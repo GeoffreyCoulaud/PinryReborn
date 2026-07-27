@@ -16,6 +16,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -87,5 +88,19 @@ class DeletePinImageTest : BaseTest() {
         verify(exactly = 0) { images.deleteByPinId(any()) }
         verify(exactly = 0) { store.delete(any()) }
         verify(exactly = 0) { renditionCache.evictImage(any()) }
+    }
+
+    @Test fun `Given the image store throws, Then the delete still succeeds`() {
+        // Given
+        val p = pin(); val img = imageFor(p.id)
+        every { pins.findPinById(p.id) } returns p
+        every { images.findByPinId(p.id) } returns img
+        every { store.delete(any()) } throws RuntimeException("disk down")
+
+        // When / Then: the row is removed and no exception propagates
+        assertDoesNotThrow { useCase.delete(p.id, owner) }
+        verify { images.deleteByPinId(p.id) }
+        verify { store.delete(img.storageKey) }
+        verify { clearPinDownload.clear(p.id) }
     }
 }
