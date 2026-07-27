@@ -41,4 +41,10 @@ class EbeanImageRepository(
     override fun deleteByPinId(pinId: UUID) {
         QImageModel(database).pinId.equalTo(pinId).delete()
     }
+
+    override fun findMissingImageIds(candidates: Collection<UUID>): Set<UUID> {
+        if (candidates.isEmpty()) return emptySet()
+        val existing = QImageModel(database).id.isIn(candidates).findIds<UUID>()
+        return candidates.toSet() - existing.toSet()
+    }
 }
