@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserModel
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
+import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
@@ -72,4 +73,14 @@ class UserRepository(
                 .findOne() ?: return
         database.deletePermanent(model)
     }
+
+    override fun findTombstonedUsersModifiedBefore(cutoff: Instant): List<User> =
+        QUserModel()
+            .deleted
+            .isTrue
+            .whenModified
+            .lessThan(cutoff)
+            .setIncludeSoftDeletes()
+            .findList()
+            .map { it.toDomain() }
 }
