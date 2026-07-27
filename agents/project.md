@@ -158,10 +158,9 @@ The three values `modules/backend.md` expects this file to declare.
   `users`/`pins`/`boards`/`tags` keep `when_created` and `when_modified` column names that no longer
   match the domain's `createdAt` and `updatedAt`.
 - **Dependencies are injected by type, not by a string qualifier** (decided 2026-07-27): a new
-  dependency is a dedicated type that carries its role (e.g. `GarbageCollectionExecutor`), and the
-  container provides the instance. `@Identifier("...")` string qualifiers are not used for new code,
-  because they couple the consumer to a producer's name rather than its type. The pre-existing
-  `TASK_POLL_SCHEDULER` / `EXPORT_PURGE_SCHEDULER` schedulers predate this rule and are not in scope.
+  dependency is a dedicated type that carries its role (e.g. `PeriodicScheduler`, `WorkerExecutor`),
+  and the container provides the instance. `@Identifier("...")` string qualifiers are not used for new
+  code, because they couple the consumer to a producer's name rather than its type.
 
 Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
