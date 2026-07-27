@@ -1,5 +1,6 @@
 #!/bin/sh
-# Local gate, mirroring CI: detekt + tests + 100% branch coverage.
-# `check` pulls in detekt and tests; koverVerify adds the branch-coverage gate.
+# Local gate, mirroring CI's validate / gate: detekt, all tests, and the 100% branch
+# coverage bound. The `gate` task (root build.gradle.kts) aggregates `check` and
+# `koverVerify` across all modules; add more `dependsOn` there to grow the gate.
 set -e
-exec ./gradlew check koverVerify
+exec ./gradlew gate
