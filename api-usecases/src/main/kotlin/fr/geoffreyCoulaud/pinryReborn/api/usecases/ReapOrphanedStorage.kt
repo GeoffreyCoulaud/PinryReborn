@@ -28,7 +28,9 @@ class ReapOrphanedStorage(
 ) {
     /**
      * Reclaim every orphaned rendition subtree and export archive on disk, batched by [batchSize].
-     * Returns the total count reclaimed across both halves.
+     * Returns the total count of orphans identified for reclamation across both halves: per-item
+     * eviction/deletion is best-effort via the `*Quietly` extensions, so a failed delete is logged at
+     * WARN and retried on the next sweep, not counted here as a success.
      */
     fun reap(): Int {
         var reclaimed = 0
