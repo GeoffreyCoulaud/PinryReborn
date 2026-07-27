@@ -20,4 +20,14 @@ interface RenditionCache {
 
     /** Delete the whole cache subtree for an image (idempotent; a no-op when absent). */
     fun evictImage(imageId: UUID)
+
+    /**
+     * Enumerate every cached image id present on disk, loaning a lazy [Sequence] to [block].
+     *
+     * The adapter owns the underlying directory stream and closes it when [block] returns; the
+     * sequence must be consumed inside [block]. Lets a sweep ask "what is on disk" without holding
+     * the whole listing in memory (it chunks the sequence by batch size to bound memory regardless
+     * of how many cache entries an active instance accumulates).
+     */
+    fun forEachImageIdOnDisk(block: (Sequence<UUID>) -> Unit)
 }

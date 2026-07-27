@@ -33,4 +33,14 @@ interface ExportArchiveStore {
     fun delete(storageKey: String)
     fun discard(staged: StagedFile)
     fun discardOrphanedStagedFiles(olderThan: Instant): Int
+
+    /**
+     * Enumerate every archive storage key present on disk, loaning a lazy [Sequence] to [block].
+     *
+     * Same loan contract as [fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache.forEachImageIdOnDisk]:
+     * the adapter owns the directory stream and closes it when [block] returns, so the sequence
+     * must be consumed inside [block]. Lets a sweep ask "what is on disk" without holding the whole
+     * listing in memory.
+     */
+    fun forEachStorageKeyOnDisk(block: (Sequence<String>) -> Unit)
 }

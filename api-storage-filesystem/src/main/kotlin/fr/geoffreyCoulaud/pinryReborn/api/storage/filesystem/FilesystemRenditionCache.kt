@@ -7,6 +7,7 @@ import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.UUID
+import kotlin.streams.asSequence
 
 /**
  * [RenditionCache] adapter backed by the local filesystem, under `<dataDir>/cache/<imageId>/`.
@@ -63,5 +64,22 @@ class FilesystemRenditionCache(dataDir: String) : RenditionCache {
             // Already gone: the subtree was never created, or a concurrent evict won the race.
             // Catching beats an exists() pre-check, which only narrows the same window.
         }
+    }
+
+    override fun forEachImageIdOnDisk(block: (Sequence<UUID>) -> Unit) {
+        val cacheRoot = paths.resolveWithinRoot("cache")
+        // Loans the on-disk image ids as a lazy sequence; `use` owns the directory stream and
+        // closes it when [block] returns, so the sequence must be consumed inside [block].
+        // Non-UUID entries (the cache root is not expected to hold any, but defense in depth)
+        // are skipped by `mapNotNull` rather than failing the whole enumeration.
+        Files.list(cacheRoot).use { stream ->
+            block(stream.asSequence().mapNotNull { it.fileName.toString().toUuidOrNull() })
+        }
+    }
+
+    private fun String.toUuidOrNull(): UUID? = try {
+        UUID.fromString(this)
+    } catch (_: IllegalArgumentException) {
+        null
     }
 }
