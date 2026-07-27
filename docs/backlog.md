@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-27.
+Last reviewed: 2026-07-28.
 
 ## How to use this file
 
