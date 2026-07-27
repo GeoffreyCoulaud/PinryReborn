@@ -119,11 +119,15 @@ class DownloadPinImage(
                     renditionCache.evictImageQuietly(old.id)
                 }
             } else {
-                imageStore.delete(image.storageKey)
+                // A no-op swap is itself a success; deleting the freshly promoted file is
+                // best-effort cleanup. A failure here must not turn a success into a retry.
+                imageStore.deleteQuietly(image.storageKey)
             }
         } catch (e: Exception) {
             imageStore.discard(staged)
-            imageStore.delete(image.storageKey)
+            // Best-effort: a cleanup failure must not mask `e`, which the retry policy records
+            // and rethrows. The orphan (if any) is reclaimed by the periodic GC.
+            imageStore.deleteQuietly(image.storageKey)
             failRetryable(pinId, DownloadReason.INTERNAL_ERROR, context, e)
         }
     }

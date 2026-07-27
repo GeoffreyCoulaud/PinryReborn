@@ -34,6 +34,11 @@ class UserDataExportDeleter(
                 repository.save(export.copy(state = UserDataExportState.DELETED))
             }
             UserDataExportState.READY -> {
+                // Deliberately propagating, NOT deleteQuietly: this delete IS the user's primary
+                // DELETE /me/exports/{id} operation, not a side-effect cleanup, so D1
+                // (every storage cleanup is best-effort) does not apply. A disk failure here is a
+                // real failure the caller must see, and the row is only moved to DELETED after the
+                // bytes are gone.
                 archiveStore.delete(export.storageKey!!)
                 repository.save(export.copy(state = UserDataExportState.DELETED))
             }

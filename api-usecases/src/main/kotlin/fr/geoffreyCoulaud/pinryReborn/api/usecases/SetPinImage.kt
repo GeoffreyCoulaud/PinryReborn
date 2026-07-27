@@ -77,7 +77,9 @@ class SetPinImage(
             imageRepository.save(image)
         } catch (e: Exception) {
             imageStore.discard(staged)
-            imageStore.delete(storageKey)
+            // Best-effort: a cleanup failure here must not mask `e`, which is the cause the caller
+            // needs to see. The orphan (if any) is reclaimed by the periodic GC.
+            imageStore.deleteQuietly(storageKey)
             throw e
         }
         // Deleting the superseded file (and evicting its cached renditions) is best-effort only:
