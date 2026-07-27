@@ -78,4 +78,33 @@ class EbeanImageRepositoryTest : RepositoryTest() {
         repository.deleteByPinId(randomUUID()) // must not throw
         assertNull(repository.findByPinId(randomUUID()))
     }
+
+    // --- findMissingImageIds (orphan sweep) ---
+
+    @Test
+    fun `Given a mix of present and absent candidate ids, Then findMissingImageIds returns only the absent`() {
+        // Given
+        val pin = savedPin()
+        val saved = repository.save(imageFor(pin.id))
+        val missingId = randomUUID()
+
+        // When
+        val missing = repository.findMissingImageIds(listOf(saved.id, missingId))
+
+        // Then
+        assertEquals(setOf(missingId), missing)
+    }
+
+    @Test
+    fun `Given an empty candidate set, Then findMissingImageIds returns empty`() {
+        // Given
+        val pin = savedPin()
+        repository.save(imageFor(pin.id))
+
+        // When
+        val missing = repository.findMissingImageIds(emptyList())
+
+        // Then
+        assertTrue(missing.isEmpty())
+    }
 }
