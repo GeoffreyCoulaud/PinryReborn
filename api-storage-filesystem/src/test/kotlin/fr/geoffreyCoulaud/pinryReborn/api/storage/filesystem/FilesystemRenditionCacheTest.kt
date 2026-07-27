@@ -4,8 +4,10 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.IOException
@@ -104,5 +106,25 @@ class FilesystemRenditionCacheTest {
 
         // Then: exactly the two UUID-named subtrees are yielded, the junk dir is skipped
         assertEquals(setOf(id1, id2), yielded)
+    }
+
+    @Test
+    fun `Given no cache directory on disk, Then forEachImageIdOnDisk yields nothing and does not throw`() {
+        // Given: a fresh install where the cache/ directory has never been created
+        assertFalse(Files.exists(dataDir.resolve("cache")))
+
+        // When: the sweep enumerates the disk
+        var blockRuns = 0
+        val yielded = mutableSetOf<UUID>()
+        assertDoesNotThrow {
+            cache().forEachImageIdOnDisk { ids ->
+                blockRuns++
+                ids.forEach(yielded::add)
+            }
+        }
+
+        // Then: the block still runs once (loan contract) but yields no ids
+        assertEquals(1, blockRuns)
+        assertTrue(yielded.isEmpty())
     }
 }
