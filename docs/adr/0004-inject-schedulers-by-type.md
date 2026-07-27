@@ -31,17 +31,19 @@ role by string.
    expose the same surface and each is an isolated single thread, so a dedicated type per scheduler
    would triplicate an identical contract for no gain. The role is carried by the wiring (which
    lifecycle consumes which instance), not by the type.
-2. **Wire the scheduler explicitly in the composition root.** A `WorkerLifecycleProducers` in
-   `api-application/wiring/` produces the three lifecycles, and each producer instantiates
-   `SingleThreadPeriodicScheduler()` and passes it to the constructor. The isolation (one thread per
-   role) is stated in plain code a reader can follow without CDI knowledge. This rejects an implicit
-   `@Dependent` producer, whose "instance per injection" semantics are invisible at the call site.
-3. **Produce the lifecycles; their `@Observes` methods still fire under ArC.** Producing a lifecycle
-   means the class loses its `@ApplicationScoped` annotation, which raised whether ArC still discovers
-   and calls its `@Observes StartupEvent` / `ShutdownEvent`. Validated empirically: a spike produced
-   `TaskWorkerLifecycle` via `@Produces @ApplicationScoped`, and `TaskQueueBootIntegrationTest` still
-   passed (the enqueued task settled to DEAD), proving the poller started and the `@Observes
-   StartupEvent` fired on the produced bean.
+2. **Wire the scheduler as a `@Dependent` bean in the composition root.** A `SchedulerProducers` in
+   `api-application/wiring/` produces `PeriodicScheduler` via `@Produces @Dependent`, instantiating
+   `SingleThreadPeriodicScheduler()`. `@Dependent` is the CDI pseudo-scope that yields a fresh instance
+   per injection point, so the three lifecycles obtain three distinct instances (three threads): the
+   isolation the qualifiers bought is preserved without a qualifier. `@Dependent` is an explicit
+   annotation, so a reader who knows it understands the isolation directly, and one who does not sees
+   the annotation and can look it up, the opposite of an implicit default scope.
+3. **Keep the lifecycles self-discovered; do not produce them.** The lifecycles stay `@ApplicationScoped`
+   with their `@Observes StartupEvent` / `ShutdownEvent`. Producing them was considered and rejected:
+   under ArC, a class that declares `@Observes` is discovered as a `@Dependent` class-bean even without a
+   scope annotation, so dropping `@ApplicationScoped` does not stop discovery, and the class-bean's
+   constructor (taking `PeriodicScheduler`) has no bean to satisfy it. Producing only the scheduler
+   avoids that trap and needs no bootstrap.
 4. **Enforce the convention with a Konsist test.** `ArchitectureKonsistTest` asserts no production
    source imports `io.smallrye.common.annotation.Identifier`. The convention moves from a paragraph in
    `agents/project.md` to a failing build.
@@ -51,19 +53,14 @@ role by string.
 ## Consequences
 
 - One scheduler type instead of three; the wiring is explicit and centralised in the composition root,
-  and the isolation (three schedulers, three threads) is visible as three
-  `SingleThreadPeriodicScheduler()` instantiations rather than encoded in `@Dependent` semantics or in
-  string qualifiers.
+  and the isolation (three schedulers, three threads) is expressed by the `@Dependent` annotation on the
+  producer, an explicit marker rather than a string qualifier or an implicit default.
 - The inject-by-type convention holds with no "not in scope" caveat and is enforced structurally.
 - `GarbageCollectionExecutor` and `SingleThreadGarbageCollectionExecutor` are deleted; the GC lifecycle,
   its former producer in `TaskRuntimeProducers`, and the GC lifecycle test move to `PeriodicScheduler`.
   The change is behaviour-preserving (GC still schedules on its own single thread).
-- The three lifecycles are no longer self-discovered `@ApplicationScoped` beans; they are produced from
-  `api-application/wiring/`. Validated by spike that `@Observes StartupEvent` / `ShutdownEvent` still
-  fire, but this is a property worth re-checking if Quarkus changes how producer-method beans are
-  processed.
-- `WorkerLifecycleProducers` sits in `api-application`, outside the Kover perimeter by design; it is
-  exercised by the boot integration tests, not by a unit test. No perimeter change.
+- `SchedulerProducers` sits in `api-application`, outside the Kover perimeter by design; it is exercised
+  by the boot integration tests, not by a unit test. No perimeter change.
 - The `@Identifier` qualifier is not banned as a Quarkus feature, only in this codebase's production
   sources. A genuine future need suppresses the Konsist assertion inline with a reason, which is the
   point of encoding the convention as a test.
