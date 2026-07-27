@@ -78,23 +78,25 @@ The single scheduler type all three lifecycles will consume.
 **Verify:** `./gradlew :api-worker-quarkus:test --tests "*SingleThreadPeriodicSchedulerTest"` green;
 `:api-worker-quarkus:detekt` clean; `:api-worker-quarkus:koverVerify` green.
 
-### T3: Wire the lifecycles explicitly from the composition root (turns T1 green)
+### T3: Inject `PeriodicScheduler` by type and drop the qualifiers (turns T1 green)
 
-The refactor. Atomic by necessity: removing `@ApplicationScoped` and the qualifier producers must land
-together with the new `WorkerLifecycleProducers`, or the worker cannot boot.
+The refactor. The lifecycles keep `@ApplicationScoped` and their `@Observes` (only the scheduler type
+and the qualifier change); the new `@Dependent` producer gives each lifecycle its own scheduler
+instance. Producing the lifecycles themselves is rejected: under ArC a class with `@Observes` is
+discovered as a `@Dependent` class-bean even without a scope annotation, so its `PeriodicScheduler`
+constructor would have no bean to satisfy it (spec D3, ADR decision 3).
 
 **Depends on:** T2.
 **Files:**
 - `api-worker-quarkus/.../TaskWorkerLifecycle.kt`: scheduler param `ScheduledExecutorService` ->
-  `PeriodicScheduler`; drop `@Identifier` and the `TASK_POLL_SCHEDULER` constant; drop
-  `@ApplicationScoped` (now produced); keep `@Observes StartupEvent` / `ShutdownEvent` and the body.
+  `PeriodicScheduler`; drop `@Identifier` and the `TASK_POLL_SCHEDULER` constant (and its KDoc); keep
+  `@ApplicationScoped`, `@Observes StartupEvent` / `ShutdownEvent` and the body.
 - `api-worker-quarkus/.../ExportRetentionLifecycle.kt`: same shape; drop `EXPORT_PURGE_SCHEDULER`.
 - `api-worker-quarkus/.../GarbageCollectionLifecycle.kt`: scheduler param `GarbageCollectionExecutor`
-  -> `PeriodicScheduler`; drop `@ApplicationScoped`; keep the body and its `@Observes` methods; rewrite
-  the class KDoc, which today links `[GarbageCollectionExecutor]` and explains isolation as a dedicated
-  type. Reference `PeriodicScheduler` and rephrase: isolation now comes from three
-  producer-instantiated `SingleThreadPeriodicScheduler()` calls in `WorkerLifecycleProducers`, one per
-  lifecycle, not from a distinct garbage-collection-scoped type.
+  -> `PeriodicScheduler`; keep `@ApplicationScoped`, the body and its `@Observes` methods; rewrite the
+  class KDoc to reference `PeriodicScheduler` and rephrase: isolation comes from the `@Dependent`
+  scheduler producer (one instance per lifecycle injection, so one thread per role), not from a distinct
+  type.
 - delete `api-worker-quarkus/.../GarbageCollectionExecutor.kt` (interface + impl).
 - delete `api-worker-quarkus/src/test/kotlin/.../SingleThreadGarbageCollectionExecutorTest.kt`: it
   covered the deleted wrapper's two delegation methods, a role now taken by T2's
@@ -104,20 +106,20 @@ together with the new `WorkerLifecycleProducers`, or the worker cannot boot.
   (`pollScheduler`, `exportPurgeScheduler`, `garbageCollectionExecutor`) and the now-unused
   `Identifier` / `ScheduledExecutorService` imports; keep `Executors` (still used by `workerExecutor`)
   and the other producers.
-- `api-application/src/main/kotlin/.../wiring/WorkerLifecycleProducers.kt` (new): three
-  `@Produces @ApplicationScoped` methods, each instantiating `SingleThreadPeriodicScheduler()` and
-  passing it to the lifecycle constructor, with the lifecycle's other dependencies injected as producer
-  params. Exactly as in spec §4.3.
+- `api-application/src/main/kotlin/.../wiring/SchedulerProducers.kt` (new): one
+  `@Produces @Dependent fun periodicScheduler(): PeriodicScheduler = SingleThreadPeriodicScheduler()`.
+  `@Dependent` yields one instance per injection point, so each lifecycle gets its own scheduler (its
+  own thread). Follow the pattern of `GarbageCollectionProducers.kt` and spec §4.3.
 - `api-worker-quarkus/src/test/.../TaskWorkerLifecycleTest.kt`,
   `ExportRetentionLifecycleTest.kt`, `GarbageCollectionLifecycleTest.kt`: change the scheduler mock
   type to `PeriodicScheduler` (from `ScheduledExecutorService` / `GarbageCollectionExecutor`
   respectively). No assertion changes: the lifecycles call the same two methods.
-**Commit:** `refactor(worker): inject schedulers by type from the composition root`
+**Commit:** `refactor(worker): inject PeriodicScheduler by type`
 **Acceptance:**
-- The three lifecycles receive `PeriodicScheduler`; no `@Identifier` anywhere in production.
+- The three lifecycles inject `PeriodicScheduler`; no `@Identifier` anywhere in production.
 - `GarbageCollectionExecutor` / `SingleThreadGarbageCollectionExecutor` gone.
-- `TaskQueueBootIntegrationTest` still passes (proves the produced lifecycles boot and the poller
-  starts; the integration check the spike relied on).
+- `TaskQueueBootIntegrationTest` still passes (the lifecycles boot, each injecting its own `@Dependent`
+  scheduler instance).
 - The Konsist test from T1 now passes.
 - `./gradlew gate` green, 100% branch per package.
 **Verify:** `./gradlew gate` green; `rg "@Identifier"` over `**/src/main/**` empty;

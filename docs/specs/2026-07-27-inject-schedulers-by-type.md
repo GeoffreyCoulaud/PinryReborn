@@ -1,7 +1,7 @@
 # Inject worker schedulers by type
 
 Date: 2026-07-27
-Status: pending approval
+Status: pending approval (revised: `@Dependent` wiring)
 Branch: `refactor/inject-schedulers-by-type`
 Depends on: the worker runtime (`TaskRuntimeProducers`, `TaskWorkerLifecycle`,
 `ExportRetentionLifecycle`, `GarbageCollectionLifecycle`), the CDI wiring in `api-application/wiring/`,
@@ -19,8 +19,8 @@ debt, recorded in that same convention's "not in scope" caveat.
 
 The qualifier existed only to lift the ambiguity with Quarkus's synthetic `@Default` bean for the raw
 `ScheduledExecutorService` / `ExecutorService` / `Executor` types (documented in the
-`TASK_POLL_SCHEDULER` KDoc). A scheduler the consumer receives as a plain constructor parameter, wired
-by hand in the composition root, resolves that ambiguity by construction, with no qualifier.
+`TASK_POLL_SCHEDULER` KDoc). A scheduler the consumer asks for by type, with its scope made explicit on
+the producer, resolves that ambiguity by construction, with no qualifier.
 
 This also enforces the convention structurally: a Konsist test forbids `@Identifier` anywhere in
 production, so the debt cannot return.
@@ -33,12 +33,11 @@ production, so the debt cannot return.
   `api-worker-quarkus`, replacing the three scheduler shapes (the two qualified
   `ScheduledExecutorService` beans and the dedicated `GarbageCollectionExecutor`).
 - The three lifecycles (`TaskWorkerLifecycle`, `ExportRetentionLifecycle`,
-  `GarbageCollectionLifecycle`) receive their scheduler as a plain `PeriodicScheduler` constructor
-  parameter, with no `@Identifier`. They stop being self-discovered `@ApplicationScoped` beans and are
-  produced from the composition root instead (D3, validated by spike).
-- A `WorkerLifecycleProducers` in `api-application/wiring/` produces the three lifecycles, each with
-  its own `SingleThreadPeriodicScheduler()` wired by hand. Three producers, three instances, three
-  threads: the isolation the qualifiers used to buy is visible in the wiring itself.
+  `GarbageCollectionLifecycle`) inject `PeriodicScheduler` by type, with no `@Identifier`. They stay
+  self-discovered `@ApplicationScoped` beans (D3).
+- A `SchedulerProducers` in `api-application/wiring/` produces `PeriodicScheduler` as a `@Dependent`
+  bean, so each lifecycle gets its own instance (its own thread); the wiring sits in the composition
+  root, next to `GarbageCollectionProducers`.
 - A Konsist test in `ArchitectureKonsistTest` forbids importing `io.smallrye.common.annotation.Identifier`
   in production.
 - `agents/project.md` loses the "not in scope" caveat on the inject-by-type convention (the debt is
@@ -50,6 +49,7 @@ production, so the debt cannot return.
   `workerExecutor`) stay where they are; only the scheduler wiring moves.
 - No change to the lifecycle logic (`start` / `stop` / `safe*`), to the sweeps, or to any use case.
 - No migration, no new port, no config change.
+- Producing the lifecycles themselves is out of scope: it is unreachable in ArC (D3).
 - `@Identifier` is not banned as a Quarkus feature, only in this codebase's production sources; the
   Konsist test encodes the convention, and a genuine future need disables it inline with a reason.
 
@@ -63,18 +63,21 @@ Settled in discussion; the ADR is `docs/adr/0004-inject-schedulers-by-type.md`.
   identical interface and wrapper for no information gain: the role is carried by the wiring (which
   lifecycle consumes which instance), not by the type. One `PeriodicScheduler` with one
   `SingleThreadPeriodicScheduler` is the minimum that carries the contract.
-- **D2: the scheduler is wired explicitly in the composition root.** A `WorkerLifecycleProducers` in
-  `api-application/wiring/` produces the three lifecycles, and each producer instantiates
-  `SingleThreadPeriodicScheduler()` and passes it to the constructor. The isolation (one thread per
-  role) is now stated in plain code a reader can follow without CDI knowledge, unlike an implicit
-  `@Dependent` whose "instance per injection" semantics are invisible at the call site.
-- **D3: the lifecycles are produced, not self-discovered; their `@Observes` methods still fire.**
-  Producing a lifecycle means the class loses its `@ApplicationScoped` annotation, which raised whether
-  ArC still discovers and calls its `@Observes StartupEvent` / `ShutdownEvent`. Validated empirically: a
-  spike produced `TaskWorkerLifecycle` via `@Produces @ApplicationScoped`, and
-  `TaskQueueBootIntegrationTest` still passed, proving the poller started (the enqueued task settled to
-  DEAD), so the `@Observes StartupEvent` fired on the produced bean. The three lifecycles are therefore
-  produced from the composition root with no startup regression.
+- **D2: the scheduler is wired as a `@Dependent` bean in the composition root.** A `SchedulerProducers`
+  in `api-application/wiring/` produces `PeriodicScheduler` via `@Produces @Dependent`, instantiating
+  `SingleThreadPeriodicScheduler()`. `@Dependent` is the CDI pseudo-scope that yields a fresh instance
+  per injection point, so the three lifecycles obtain three distinct instances (three threads), and the
+  isolation the qualifiers used to buy is preserved without a qualifier. `@Dependent` is an explicit
+  annotation: a reader who knows it understands the isolation directly, and one who does not sees the
+  annotation and can look it up, which is the opposite of an implicit default scope (no annotation).
+- **D3: the lifecycles stay self-discovered `@ApplicationScoped` beans; only the scheduler is produced.**
+  The lifecycles keep `@ApplicationScoped` and their `@Observes StartupEvent` / `ShutdownEvent`. An
+  earlier draft proposed producing the lifecycles (dropping `@ApplicationScoped`, keeping `@Observes`),
+  but a build-time check showed it is unreachable in ArC: a class that declares `@Observes` is
+  discovered as a `@Dependent` class-bean even without a scope annotation, so its constructor must
+  resolve independently of any producer method, and a `PeriodicScheduler` parameter has no bean to
+  satisfy it. Keeping the lifecycles discovered and producing only the scheduler avoids that trap and
+  needs no bootstrap.
 - **D4: the convention is enforced structurally.** A Konsist test asserts no production source imports
   `io.smallrye.common.annotation.Identifier`. After the refactor there is no legitimate use (verified by
   search: the three scheduler sites are the only occurrences), so the test has no false positives; a
@@ -107,52 +110,28 @@ class SingleThreadPeriodicScheduler : PeriodicScheduler {
 
 `TaskWorkerLifecycle`, `ExportRetentionLifecycle`, `GarbageCollectionLifecycle`: the scheduler
 constructor parameter changes type from `ScheduledExecutorService` (the first two) /
-`GarbageCollectionExecutor` (GC) to `PeriodicScheduler`, and loses its `@Identifier`. The class loses
-its `@ApplicationScoped` annotation (it is produced from the composition root instead, D3). The body is
-unchanged: each already calls only `scheduleWithFixedDelay` and `shutdown`, and each keeps its
-`@Observes StartupEvent` / `ShutdownEvent` methods.
+`GarbageCollectionExecutor` (GC) to `PeriodicScheduler`, and loses its `@Identifier`. The class keeps
+its `@ApplicationScoped` annotation and its `@Observes StartupEvent` / `ShutdownEvent` methods (D3). The
+body is unchanged: each already calls only `scheduleWithFixedDelay` and `shutdown`.
 
 ### 4.3 Wiring
 
-A new `api-application/wiring/WorkerLifecycleProducers.kt`:
+A new `api-application/wiring/SchedulerProducers.kt`:
 
 ```kotlin
 @ApplicationScoped
-class WorkerLifecycleProducers {
+class SchedulerProducers {
     @Produces
-    @ApplicationScoped
-    fun taskWorkerLifecycle(
-        dispatcher: TaskDispatcher,
-        reapExpiredTasks: ReapExpiredTasks,
-        workerExecutor: WorkerExecutor,
-        config: TaskQueueConfig,
-    ) = TaskWorkerLifecycle(dispatcher, reapExpiredTasks, workerExecutor, SingleThreadPeriodicScheduler(), config)
-
-    @Produces
-    @ApplicationScoped
-    fun exportRetentionLifecycle(
-        reapExpiredUserDataExports: ReapExpiredUserDataExports,
-        config: ExportsConfig,
-    ) = ExportRetentionLifecycle(reapExpiredUserDataExports, SingleThreadPeriodicScheduler(), config)
-
-    @Produces
-    @ApplicationScoped
-    fun garbageCollectionLifecycle(
-        reapExpiredSessionTokens: ReapExpiredSessionTokens,
-        reapOrphanedStorage: ReapOrphanedStorage,
-        reapTombstonedAccounts: ReapTombstonedAccounts,
-        reapTerminalTasks: ReapTerminalTasks,
-        config: GarbageCollectionConfig,
-    ) = GarbageCollectionLifecycle(
-        reapExpiredSessionTokens, reapOrphanedStorage, reapTombstonedAccounts, reapTerminalTasks,
-        SingleThreadPeriodicScheduler(), config,
-    )
+    @Dependent
+    fun periodicScheduler(): PeriodicScheduler = SingleThreadPeriodicScheduler()
 }
 ```
 
-The three scheduler producers in `TaskRuntimeProducers` (`pollScheduler`, `exportPurgeScheduler`,
-`garbageCollectionExecutor`) are deleted, along with the `TASK_POLL_SCHEDULER` /
-`EXPORT_PURGE_SCHEDULER` constants and the `Identifier` import.
+`@Dependent` yields one instance per injection point, so each of the three lifecycles gets its own
+`SingleThreadPeriodicScheduler` (its own thread). The three scheduler producers in
+`TaskRuntimeProducers` (`pollScheduler`, `exportPurgeScheduler`, `garbageCollectionExecutor`) are
+deleted, along with the `TASK_POLL_SCHEDULER` / `EXPORT_PURGE_SCHEDULER` constants and the `Identifier`
+import.
 
 ### 4.4 Konsist test
 
@@ -190,10 +169,9 @@ TDD, red before green, 100% branch per package.
    changes: the lifecycles call the same two methods.
 3. **Konsist test:** fails red before the refactor (the three worker files still import `Identifier`),
    then passes once they drop it. The red is committed before the green per the TDD cycle.
-4. **End-to-end (existing, untouched):** `TaskQueueBootIntegrationTest` (which the spike ran against a
-   produced `TaskWorkerLifecycle` to confirm `@Observes StartupEvent` still fires) and the GC /
-   export-retention boot paths confirm the three produced lifecycles still start on boot and run on
-   their own threads.
+4. **End-to-end (existing, untouched):** `TaskQueueBootIntegrationTest` and the GC / export-retention
+   boot paths confirm the three lifecycles still start on boot and run on their own threads, each
+   injecting its own `@Dependent` scheduler instance.
 
 ## 6. Acceptance criteria
 
@@ -203,8 +181,8 @@ TDD, red before green, 100% branch per package.
   lifecycle injects `PeriodicScheduler`.
 - `PeriodicScheduler` and `SingleThreadPeriodicScheduler` exist in `api-worker-quarkus`, with a unit
   test covering both methods at 100% branch.
-- `WorkerLifecycleProducers` exists in `api-application/wiring/` and produces the three lifecycles, each
-  with its own `SingleThreadPeriodicScheduler()`.
+- `SchedulerProducers` exists in `api-application/wiring/` and produces `PeriodicScheduler` via
+  `@Produces @Dependent`.
 - `ArchitectureKonsistTest` has the `Identifier`-import assertion, and it fails if the import is
   reintroduced.
 - `./gradlew gate` is green, 100% branch coverage per package maintained.
@@ -212,12 +190,13 @@ TDD, red before green, 100% branch per package.
 
 ## 7. Risks and accepted trade-offs
 
-- **Producing the lifecycles changes how ArC instantiates them.** The class loses `@ApplicationScoped`
-  and is created by a producer method. The risk was that ArC would stop discovering the `@Observes`
-  methods; validated otherwise by the spike (D3). No residual risk identified.
+- **`@Dependent` semantics.** A reader must know that a `@Dependent` bean is instantiated per injection
+  to see why three lifecycles get three threads. The annotation is explicit (present on the producer),
+  so it is discoverable and look-up-able, the opposite of an implicit default scope; a KDoc on the
+  producer and on `PeriodicScheduler` states the isolation intent.
 - **Removing `GarbageCollectionExecutor` touches shipped, tested code.** The change is
   behaviour-preserving (the GC lifecycle still schedules on its own single thread), and its test changes
   only the mock type. Accepted because keeping a fourth type would contradict D1.
-- **The producer is outside the coverage perimeter.** `WorkerLifecycleProducers` lives in
-  `api-application`, which is outside the Kover gate by design (composition root, end-to-end tests
-  only). It is exercised by the boot integration tests. No perimeter change.
+- **The producer is outside the coverage perimeter.** `SchedulerProducers` lives in `api-application`,
+  which is outside the Kover gate by design (composition root, end-to-end tests only). It is exercised
+  by the boot integration tests. No perimeter change.
