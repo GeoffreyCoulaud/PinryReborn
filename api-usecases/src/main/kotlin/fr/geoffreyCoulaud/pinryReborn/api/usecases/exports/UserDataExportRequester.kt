@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.Reauthenticator
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportAlreadyInProgressError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportTooSoonError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
@@ -46,7 +47,9 @@ class UserDataExportRequester(
         val (export, supersededKey) = transactionRunner.inTransaction { createPending(user) }
         // Outside the transaction on purpose: deleting inside means a later rollback leaves a READY
         // row pointing at bytes that no longer exist, which serves a 500 instead of a clean error.
-        supersededKey?.let { archiveStore.delete(it) }
+        // Best-effort: the transaction has committed, so a disk failure here must not 500 a request
+        // that already succeeded. The orphan archive is reclaimed by the periodic GC.
+        supersededKey?.let { archiveStore.deleteQuietly(it) }
         return export
     }
 
