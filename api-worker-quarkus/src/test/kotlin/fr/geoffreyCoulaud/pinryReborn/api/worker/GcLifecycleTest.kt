@@ -69,15 +69,15 @@ class GcLifecycleTest {
     }
 
     @Test
-    fun `Given every sweep throws, Then safeAll logs each and still runs the rest`() {
+    fun `Given every sweep throws, Then safeAll isolates each and still runs the rest`() {
         // Given: every sweep throws; each catch arm must run so the next sweep is still attempted
         every { reapExpiredSessionTokens.reap() } throws RuntimeException("tokens boom")
         every { reapOrphanedStorage.reap() } throws RuntimeException("orphan boom")
         every { reapTombstonedAccounts.reap() } throws RuntimeException("tomb boom")
         every { reapTerminalTasks.reap() } throws RuntimeException("tasks boom")
 
-        // When / Then: no exception escapes (each throw was caught and logged via the companion
-        // logger, never propagated)
+        // When / Then: no exception escapes (each throw is caught by its own catch arm and logged
+        // at ERROR; the log itself is not asserted here, matching ExportRetentionLifecycleTest)
         lifecycle().safeAll()
 
         // Then: every sweep was attempted despite every prior sweep throwing
