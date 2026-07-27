@@ -257,4 +257,28 @@ class UserDataExportRequesterTest : BaseTest() {
         assertEquals(domainException, error.cause)
         verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
     }
+
+    @Test
+    fun `Given the superseded archive delete throws, Then the request still succeeds`() {
+        // Given: the transaction has committed (the new PENDING row is saved and its task enqueued),
+        // so deleting the previous READY archive is post-success cleanup. A disk failure here must
+        // not 500 a request that already succeeded.
+        stubTransactionPassthrough()
+        every { reauthenticator.reauthenticate(user, factor) } just runs
+        every { clock.now() } returns now
+        every { repository.findPendingForUser(user.id) } returns null
+        every { repository.findLastRequestedAtForUser(user.id) } returns null
+        val ready = readyExport(storageKey = "exports/old.zip")
+        every { repository.findReadyForUser(user.id) } returns ready
+        every { repository.save(any()) } answers { firstArg() }
+        stubEnqueue()
+        every { archiveStore.delete("exports/old.zip") } throws RuntimeException("io")
+
+        // When
+        val result = requester.request(user, factor)
+
+        // Then
+        assertEquals(UserDataExportState.PENDING, result.state)
+        verify { archiveStore.delete("exports/old.zip") }
+    }
 }

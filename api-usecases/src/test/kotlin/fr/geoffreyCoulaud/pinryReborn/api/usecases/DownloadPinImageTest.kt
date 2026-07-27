@@ -34,6 +34,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTas
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
@@ -324,5 +326,39 @@ class DownloadPinImageTest {
         verify { downloads.recordLastError(pinId, "INTERNAL_ERROR", now) }
         verify(exactly = 0) { images.save(any()) }
         verify(exactly = 0) { renditionCache.evictImage(any()) }
+    }
+
+    @Test
+    fun `Given the rollback delete throws, Then the task fails with the original cause`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
+        val promoteError = RuntimeException("disk full")
+        every { store.promote(any(), any()) } throws promoteError
+        every { store.delete(any()) } throws RuntimeException("cleanup boom")
+
+        val thrown = assertThrows(RuntimeException::class.java) {
+            subject.download(pinId, ctx(attempt = 1, max = 3), 100, 100)
+        }
+
+        // The cleanup exception must not mask the original promote failure; the retry policy
+        // records the original cause and rethrows it.
+        assertEquals(promoteError, thrown)
+        verify { downloads.recordLastError(pinId, "disk full", now) }
+    }
+
+    @Test
+    fun `Given the no-op-swap delete throws, Then the task still succeeds`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
+        every { downloads.deleteIfPending(pinId) } returns 0
+        every { runner.inTransaction<Boolean>(any()) } answers { firstArg<() -> Boolean>().invoke() }
+        every { store.delete(any()) } throws RuntimeException("cleanup boom")
+
+        assertDoesNotThrow { subject.download(pinId, ctx(), 100, 100) }
+
+        // A no-op swap is a success; the cleanup failure must not turn it into a retryable failure.
+        verify(exactly = 0) { downloads.markFailed(any(), any(), any()) }
+        verify(exactly = 0) { downloads.recordLastError(any(), any(), any()) }
+        verify(exactly = 0) { images.save(any()) }
     }
 }
