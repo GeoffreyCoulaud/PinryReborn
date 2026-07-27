@@ -92,4 +92,25 @@ class SessionTokenRepositoryTest : RepositoryTest() {
         assertNull(repository.findByTokenHash("ha"))
         assertNotNull(repository.findByTokenHash("hb"))
     }
+
+    @Test
+    fun `Given expired and valid tokens, Then deleteExpiredBefore deletes only the expired and returns the count`() {
+        // Given two expired tokens (strictly before now), one valid future token, and one at the boundary
+        val now = storableNow()
+        val user = createUser()
+        repository.saveSessionToken(sessionToken(user, expiresAt = now.minusSeconds(3600)), tokenHash = "expired-a")
+        repository.saveSessionToken(sessionToken(user, expiresAt = now.minusSeconds(1800)), tokenHash = "expired-b")
+        repository.saveSessionToken(sessionToken(user, expiresAt = now.plusSeconds(3600)), tokenHash = "valid-future")
+        repository.saveSessionToken(sessionToken(user, expiresAt = now), tokenHash = "valid-boundary")
+
+        // When
+        val deleted = repository.deleteExpiredBefore(now)
+
+        // Then only the two strictly-before tokens are gone; the boundary (equal) is kept
+        assertEquals(2, deleted)
+        assertNull(repository.findByTokenHash("expired-a"))
+        assertNull(repository.findByTokenHash("expired-b"))
+        assertNotNull(repository.findByTokenHash("valid-future"))
+        assertNotNull(repository.findByTokenHash("valid-boundary"))
+    }
 }
