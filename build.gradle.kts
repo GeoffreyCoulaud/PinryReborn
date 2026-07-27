@@ -152,3 +152,16 @@ subprojects {
         }
     }
 }
+
+// Single entry point for the local gate, mirroring CI's `validate / gate` check. A root-level
+// `dependsOn("check")` does NOT fan out to subprojects (the name resolves only inside the root
+// project, which has no such task), so the subproject tasks are referenced explicitly. `check`
+// exists in every module (the java plugin); `koverVerify` only in modules that apply Kover, i.e.
+// every module except `api-application` (the composition root, no unit tests by design). Add more
+// `dependsOn` lines here as the gate grows; this is the one knob, not a per-task invocation.
+tasks.register("gate") {
+    group = "verification"
+    description = "Full gate: detekt, all tests (check) and the 100% branch coverage bound (koverVerify)."
+    dependsOn(subprojects.map { "${it.path}:check" })
+    dependsOn(subprojects.filter { it.name != "api-application" }.map { "${it.path}:koverVerify" })
+}

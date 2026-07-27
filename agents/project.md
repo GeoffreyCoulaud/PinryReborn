@@ -45,12 +45,14 @@ graph and by `ArchitectureKonsistTest`, not by this table.
   tests cannot load the library, and `python3`
   must be on the PATH because `.claude/settings.json` runs `.claude/hooks/evidence-guard.py` on
   every Bash, Edit and Write. Without it the guard cannot run and enforces nothing, silently.
-- **THE GATE**: `./gradlew check koverVerify` (detekt, all tests, and the 100% branch coverage
-  bound). Measured green on 2026-07-23. **It is not everything CI runs**: `validate.yml` also
-  builds the multi-arch container image behind the same `validate / gate` check, and no local
-  command covers that. Building one would change the pre-push hook for every contributor, so it is
-  its own task, not a side effect of another. `.githooks/pre-push` runs exactly this command, so a
-  push runs the gate locally once `core.hooksPath` is set.
+- **THE GATE**: `./gradlew gate` (detekt, all tests, and the 100% branch coverage bound). The `gate`
+  task in the root `build.gradle.kts` aggregates `check` and `koverVerify` across every module, so it
+  is the single knob: grow the gate by adding `dependsOn` there, not by changing what each caller
+  runs. Measured green on 2026-07-23. **It is not everything CI runs**: `validate.yml` also builds
+  the multi-arch container image behind the same `validate / gate` check, and no local command covers
+  that. Building one would change the pre-push hook for every contributor, so it is its own task, not
+  a side effect of another. `.githooks/pre-push` runs `./gradlew gate`, so a push runs the gate
+  locally once `core.hooksPath` is set.
 - **One test**: `./gradlew :api-usecases:test --tests "UserCreatorTest"`. The coverage bound lives
   in its own task, so running `test` alone never trips it: there is nothing to bypass.
 - **New migration**: `./gradlew :api-persistence-sqlite:generateDbMigration`, after changing an
@@ -227,7 +229,9 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
 - **Editing an applied migration breaks startup.** The checksum changes and Ebean refuses the
   history. A correction is a new migration, never an edit.
 - **The `pre-commit` hook rewrites `docs/openapi.json`**, stages it, and exits non-zero when it
-  changed, so the commit has to be re-run. That is the hook working, not a failure.
+  changed, so the commit has to be re-run. That is the hook working, not a failure. It also rejects
+  em-dashes and en-dashes in staged text additions (no-em-dash rule, AGENTS.md Conventions): use a
+  colon or a hyphen instead.
 - **There is no auto-fix task.** detekt runs without formatting rules and ktlint is configured only
   as an IDE plugin (`.idea/ktlint-plugin.xml`), so a finding is fixed by hand.
 - **detekt baselines are per module** (`config/detekt/baseline-api-usecases.xml` and its two
