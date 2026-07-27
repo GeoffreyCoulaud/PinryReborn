@@ -223,6 +223,12 @@ class EbeanTaskQueue(
             .setRaw("version = version + 1")
             .update()
 
+    override fun deleteTerminalBefore(cutoff: Instant): Int =
+        QTaskModel(database)
+            .state.isIn(TaskState.SUCCEEDED.name, TaskState.DEAD.name, TaskState.CANCELLED.name)
+            .whenModified.lessThan(cutoff)
+            .delete()
+
     /** Query for the task row identified by [id], guarded by its current [leaseId] (fencing). */
     private fun leaseGuard(
         id: UUID,
