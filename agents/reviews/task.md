@@ -1,4 +1,4 @@
-<!-- agents-baseline v3.0.0 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v3.2.0 | generic file, identical in every project | do not edit in place -->
 
 # Review mandate: task
 
@@ -8,6 +8,10 @@ that produced it. That is the point: judge the artefact, not the intent.
 Report findings as `SEVERITY | file:line | issue | suggested fix`, most severe first, where
 SEVERITY is one of `CRITICAL`, `MAJOR`, `MINOR`. **Do not edit anything.** If you find nothing,
 say so plainly rather than inventing a finding.
+
+**Read the ranges your brief names, not the documents containing them.** One task is one slice of a
+plan; opening it whole carries nine tasks you are not reviewing on every later turn. Widen a range
+that proves insufficient and say so in the report. The branch as a whole is the holistic review's.
 
 ## Part A: judge the tests, in isolation
 
@@ -28,9 +32,10 @@ them is worth reviewing.
    or tautological (comparing the result to a recomputation of the same expression)?
 5. **Error and boundary paths.** Are failure modes, empty inputs, partial failures and rollback
    asserted, or only the happy path?
-6. **Red before green.** Run `git log --oneline` over this task's commits. Is there a test-only
-   commit (`test(scope): ...`) preceding the commit that implements the behaviour? If the history
-   has been squashed, or was not made available to you, report that as a finding against the
+6. **Red before green.** Run `git log --oneline` over this task's commits: a test-only commit
+   (`test(scope): ...`) precedes the implementation commit, and its message body carries the red it
+   produced. Take that output as the evidence. Where the body is empty or the history was squashed,
+   check out the test commit and run the test yourself, and report the gap as a finding against the
    process rather than against the code. Never infer compliance from the absence of evidence.
 
 **State a verdict on the tests before continuing.** If Part A produced a CRITICAL finding, say so

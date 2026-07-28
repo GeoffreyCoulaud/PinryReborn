@@ -1,4 +1,4 @@
-<!-- agents-baseline v3.0.0 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v3.2.0 | generic file, identical in every project | do not edit in place -->
 
 # AGENTS.md
 
@@ -91,10 +91,11 @@ run in every tier** and scale down on their own.
    surfaces out of scope), then plain conversation: no code, no plan, no files. Use the
    structured-elicitation affordance named in `agents/project.md`, if any.
 2. **Spec.** Goal, acceptance criteria, explicit out-of-scope. Simple work inline; structured work in
-   `docs/specs/<ISO date>-<slug>.md`. **Approved by the user before any plan or code**: the only human
-   review gate. **Record an ADR** in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles
-   no architectural question. _Observable: the ADR path, or the one-line justification for its absence._
-   A delivered ADR is never rewritten; only its `Status` field may change (`Superseded by <NNNN>`).
+   `docs/specs/<ISO date>-<slug>.md`. **Approved by the user before any plan or code**: the human gate
+   at entry (the PR review in Wrap is the gate at exit); the human's word is never assumed. **Record
+   an ADR** in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles no architectural
+   question. _Observable: the ADR path, or the one-line justification for its absence._ A delivered
+   ADR is never rewritten; only its `Status` field may change (`Superseded by <NNNN>`).
 3. **Plan.** Ordered, independently checkable tasks in `docs/plans/<ISO date>-<slug>.md`, each with
    acceptance criteria, files and tests. **Reviewed by a fresh subagent before any dispatch**: plan
    defects are the most expensive to discover late.
@@ -105,15 +106,20 @@ run in every tier** and scale down on their own.
 5. **Verify.** Run the full project gate as declared in `agents/project.md` (run, not described), then a
    **holistic review by a fresh subagent** over the whole branch diff, never skipped: it catches what
    per-task reviews cannot see.
-6. **Wrap.** (a) Update the backlog in the branch. (b) Write the handoff in
-   `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was built, pitfalls, what
-   is **not** validated against real conditions, suggested next step. (c) Integrate: anything not
-   documentation-only goes through a PR so CI runs, linear history (squash or rebase, never a merge
-   commit); documentation-only changes on paths declared in `agents/project.md` may merge locally,
-   **except `agents/project.md` itself**, which goes through a PR like code. (d) Tag if the spec called
-   for a release. (e) Clean up the branch or worktree. (f) Report what was done and the friction points
-   (wrong turns, corrections, rules that did not hold): the friction report is the input to Improve.
-7. **Improve.** **Never skipped, even when the work went fine.** The question: what should the gate
+6. **Wrap.** Runs to completion before Improve opens: the two phases never interleave. (a) Update the
+   backlog in the branch. (b) Write the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`:
+   current state, what was built, pitfalls, what is **not** validated against real conditions,
+   suggested next step. (c) Integrate: anything not documentation-only goes through a PR so CI runs,
+   linear history (squash or rebase, never a merge commit); documentation-only changes on paths
+   declared in `agents/project.md` may merge locally, **except `agents/project.md` itself**, which
+   goes through a PR like code. **A PR is merged only after the human has reviewed it**: address each
+   round of feedback and wait for the next; approval is never assumed. (d) Tag if the spec called for
+   a release. (e) Clean up the branch or worktree. (f) Report what was done and the friction points
+   (wrong turns, corrections, review rounds, rules that did not hold), written after integration so
+   the review loop feeds it: this report is the input to Improve.
+7. **Improve.** Begins only once Wrap has fully completed: work integrated, branch or worktree
+   cleaned. _Observable: the integration precedes the first message of the phase._ **Never skipped,
+   even when the work went fine.** The question: what should the gate
    have caught? A self-correction counts the same as one the user made. Opens as a discussion: state
    the **failures met** and the **remedy proposed** for each, then wait. _Observable: both lists and
    the user's answer appear before the first edit of the phase._ Each retained remedy takes the
@@ -137,15 +143,23 @@ reasoning that produced them. Reviewers report findings and never edit.
 who knows the criteria writes to them. _Observable: no read of `agents/reviews/` in the trace of a
 session that produced work._ Only exception: work whose subject is a mandate itself.
 
+**The brief carries the artefact, not the answers.** It names what is under review and its commits,
+points at each criterion by path **and line range** rather than by document, and adds at most three
+zones of risk, each an open question ("what bounds memory here?"): the mandate is already the list,
+and a second list doubles what the reviewer walks. "Confirm X is not premature" has performed the
+review itself; a whole plan named has ten tasks read to review one. _Observable: no instruction
+begins with "confirm", "verify" or "check that", and every document named carries a line range._
+
 ## Engineering norms
 
 - **Clean architecture.** The domain is pure (no I/O, framework, clock, environment); I/O lives in
   adapters; the dependency graph is a DAG pointing inward.
 - **Strict TDD: red, green, refactor.** Write the failing test first, **run it and show it fail**,
   write the minimal implementation, then refactor with tests green (part of the cycle, not an afterthought).
-- **The failing test is committed alone, before its implementation**, as `test(scope): <behaviour>`.
-  _Observable: `git log --oneline` shows the test-only commit preceding the implementation commit._ The
-  commit is the only red evidence the reviewer receives.
+- **The failing test is committed alone, before its implementation**, as `test(scope): <behaviour>`,
+  **its message body carrying the red**: the command run and the failure it produced, pasted from
+  that run and never retyped. _Observable: `git log -1 --format=%b` on the test commit shows the
+  command and its failure._
 - **Review judges the tests before the code.** A test that passes against a wrong implementation is a
   defect of the same rank as the bug it missed.
 - **100% branch coverage, verified after the fact**: the audit of the TDD cycle. Uncovered code is a
