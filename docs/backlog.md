@@ -84,7 +84,8 @@ dependency, not preference.
   handled". Limiting attempts needs state the codebase does not have (a per-user failure counter, its
   expiry, its behaviour across instances), so it is its own specification. Surfaced while specifying
   the P0 lot, 2026-07-29.
-- **Flatten the migration history at beta.** The project is alpha (see docs/project.md): breaking changes and data loss are
+- **Flatten the migration history at beta.** The project is alpha (see docs/project.md): breaking changes and data loss
+  are
   acceptable, nobody should be running it yet. The migration history is nonetheless append-only, and that already
   constrains fixes: `1.2` is a hand-written case-insensitive unique index that `@Index(definition = ...)` would
   express today (`DbMigrationModelCoverageTest` lists it), and `users`/`pins`/`boards`/`tags` keep `when_created` /
@@ -92,8 +93,6 @@ dependency, not preference.
   rewriting an applied migration changes its checksum and breaks startup. At beta, collapse `1.0` to `1.n` into a
   single generated baseline and take both fixes with it. Until then, when a fix is blocked only by an already-applied
   migration, prefer the clean design and record the debt here rather than contorting around it. New 2026-07-23.
-- **Perceptual `ImageHash` (pHash)** for pin deduplication / merging (deliberately YAGNI'd in sub-project 2b).
-  Now promoted: it is the flagship of the sequenced **user-segmented base** (see the roadmap section below).
 - **Periodic maintenance via the task queue instead of dedicated schedulers.** The worker runs three
   periodic lifecycles (task poll, export retention purge, garbage collection), each on its own
   single-thread scheduler. The task queue is a solid, retried, state-tracked system, and periodic work
@@ -108,27 +107,34 @@ dependency, not preference.
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27.
 
----
+### Features
 
-## Sequenced roadmap (deliberately ordered, not parked indefinitely)
+- **Perceptual `ImageHash` (pHash)** for pin deduplication / merging. Flagship of the sequenced **user-segmented base
+  ** (see the roadmap section below).
+- **Advanced pin / tag / board management** : Features that make the data model genuinely user-segmented and pleasant to
+  use. To be explored.
+- **Import from 3rd party sites**
+  Initial candidates :
+    - Pinterest (board import),
+    - Danbooru / Gelbooru / Other booru (favorites import),
+    - Instagram (saved collection import),
+    - Reddit / Twitter / Pixiv (saved posts import).
 
-**Audience / visibility is no longer parked indefinitely** *(re-scoped 2026-07-21; was parked 2026-07-20)*.
-It is deliberately **sequenced after a solid user-segmented base**, in this order:
+  On some of these sites, a post may contain multiple media. We're not changing our semantic 1 pin = 1 media rule.
+  Can be either a one-time import, or to sync a local pinry board with a remote source periodically, as the user
+  chooses.
+- **Video support** : Completes the 3rd party use case, since those allow posting videos as well. Videos are a 1st class
+  citizen, just like images. Their renditions are the video's thumbnail in case of a still rendition, or an animated
+  image of the first few seconds of the video (eg. 3s)
+- **RBAC and quota system** : Allow admins to toggle features and define quotas per-role, from the API
+- **Audience mechanics (public / private).** Until this lands everything stays `@Authenticated` and owner-scoped (
+  non-owner → 403); no anonymous browsing, no public gallery, no shareable links. It will interact with boards (public /
+  shared boards) and with the profile items.
+- **Two-factor / step-up authentication** — TOTP + Passkey/WebAuthn, with a possible short-lived "sudo" elevation token
+  for sensitive actions.
 
-1. **User-segmented base — advanced pin / tag / board management.** Features that make the data model genuinely
-   user-segmented and pleasant to use. Flagship: **pin merging via perceptual `ImageHash` / pHash** (see P2).
-   Others to be explored when we get there.
-2. **Audience mechanics (public / private).** Until this lands everything stays `@Authenticated` and
-   owner-scoped (non-owner → 403); no anonymous browsing, no public gallery, no shareable links. It will
-   interact with boards (public / shared boards) and with the profile items.
+Gated on audience mechanics :
 
-Gated on audience (mechanics to define):
-
+- **Hard-copy of a public pin or board** from user B into user A's own collection: a real, independent copy, not a soft
+  link.
 - **Public profiles** — the deferred slice of profile management.
-- **Hard-copy of a public pin or board** from user B into user A's own collection: a real, independent copy,
-  not a soft link.
-
-Security enrichment (not audience-gated; builds on the profile-management step-up brick):
-
-- **Two-factor / step-up authentication** — TOTP + Passkey/WebAuthn, with a possible short-lived "sudo"
-  elevation token for sensitive actions.
