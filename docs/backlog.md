@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-28.
+Last reviewed: 2026-07-29.
 
 ## How to use this file
 
@@ -21,7 +21,34 @@ Last reviewed: 2026-07-28.
 
 ## Open items
 
-### P0 — none open
+### P0: Domain-owned timestamps (specified 2026-07-29, three blocks)
+
+Specified as one piece of work in `docs/specs/2026-07-29-domain-owned-timestamps.md`, with
+`docs/adr/0006-domain-owned-timestamps.md`. It absorbs three items that sat in P2 until 2026-07-29
+(`softDeletedAt` stamped in the adapter, soft delete not bumping `updatedAt`, and the
+`findCurrentPasswordHash` tie-breaker): they were one defect with three faces, a business instant
+invented by the persistence adapter rather than stamped by a use case. Scoping them showed the defect
+is wider than they recorded, so the work also unifies the two soft-delete mechanisms and deletes
+`AuditedBaseModel`.
+
+Delivered as three sequential blocks, one session and one pull request each. The order is imposed by
+dependency, not preference.
+
+- **Block 1: uniform soft delete.** Absorbs two of the former items: `softDeletedAt` is stamped inside
+  the persistence adapter (`PinRepository.kt:195`, `BoardRepository.kt:50`), and soft delete and
+  restore no longer bump `updatedAt`. The block generalises Ebean's `@SoftDelete` to pins and boards
+  with the boolean derived by the mapper, turns `User.softDeleted` into `softDeletedAt`, and makes
+  account retention read that instant instead of `users.when_modified`, which Ebean rewrites on every
+  write to the row. Carries the Konsist assertion banning `Instant.now()` in the persistence layer.
+- **Block 2: end of `AuditedBaseModel`.** Not covered by any former item, surfaced while scoping them.
+  `tasks.when_modified` drives the deletion of terminal tasks and moves on any row write, the same
+  defect as account retention. `Task` receives `terminalStateAt`, `SessionToken` and `HashedPassword`
+  receive `createdAt`, seven dead audit columns are dropped, and a Konsist assertion bans
+  `@WhenCreated` / `@WhenModified`.
+- **Block 3: current-password determinism.** Absorbs the third former item, the
+  `findCurrentPasswordHash` tie-breaker. A `(user_id, created_at)` unique constraint plus a
+  configurable minimum interval between password changes (default 30 s), with
+  `PASSWORD_CHANGE_COLLISION` (409) and `PASSWORD_CHANGED_TOO_SOON` (429).
 
 ### P1 — Client ergonomics (needed for the web UI and browser extension)
 
@@ -49,27 +76,14 @@ Last reviewed: 2026-07-28.
   invisible to operators. A user who deleted their account gets a 202 but would silently stay tombstoned
   forever if the cleaner failed. Add logging/metrics on handler failure and on DEAD transitions. Exposed by
   profile management's end-to-end test. New 2026-07-22.
-- **`findCurrentPasswordHash` tie-breaker.** "Current password" is the latest `user_passwords` row by
-  `when_created` (an `@WhenCreated Instant`), with no secondary ordering key. Two hashes written in the same
-  clock tick make the current-password determination nondeterministic. Practically unreachable for the human
-  register-then-change flow, but a latent fragility on a security-critical read; a monotonic sequence column
-  would remove it. New 2026-07-22.
-- **`softDeletedAt` is still stamped inside the persistence adapter.** `PinRepository.softDeletePin` and
-  `BoardRepository.softDeleteBoard` call `Instant.now()` themselves instead of taking the instant from the
-  caller. That is the same layering problem that was just fixed for `createdAt`/`updatedAt`: when an entity
-  was recycled is business data, so the use case should stamp it from the `Clock` port, as the creators now
-  do. Fixing it means changing the repository interfaces (either passing the instant, or letting the recycle
-  bin use cases go through `savePin`/`saveBoard` with an updated copy) and touching `PinRecycleBin` and
-  `BoardRecycleBin`. Deliberately left out of the timestamps refactor to keep that change scoped. New
-  2026-07-23.
-- **Soft delete and restore no longer bump `updatedAt`.** Before the timestamps refactor, `pins.when_modified`
-  and `boards.when_modified` were Ebean-generated, so recycling or restoring a row bumped them as a side
-  effect. Those columns are now written by the mapper from the domain entity, and the four repository methods
-  (`softDeletePin`, `restorePin`, `softDeleteBoard`, `restoreBoard`) mutate the model directly without
-  touching `updatedAt`, so it now means "last content change" and no longer moves on a state change. Nothing
-  reads it today except the export, and `deletedAt` carries the recycling state there, so this is a semantic
-  decision to confirm rather than a bug: either accept the narrower meaning and document it in the export
-  format, or bump `updatedAt` on those transitions (which the item above would make natural). New 2026-07-23.
+- **Authentication attempt limiting (brute force).** `PasswordChanger` verifies the current password
+  before changing it, and `POST /api/v1/sessions` verifies it to issue a token: both are password
+  oracles, and neither limits attempts. The minimum interval added by P0 block 3 counts **successful**
+  changes only (it reads the current hash's `createdAt`), so a failed attempt writes nothing and costs
+  the caller nothing. Do not read "there is a rate limit on password change" as "brute force is
+  handled". Limiting attempts needs state the codebase does not have (a per-user failure counter, its
+  expiry, its behaviour across instances), so it is its own specification. Surfaced while specifying
+  the P0 lot, 2026-07-29.
 - **Flatten the migration history at beta.** The project is alpha (see docs/project.md): breaking changes and data loss are
   acceptable, nobody should be running it yet. The migration history is nonetheless append-only, and that already
   constrains fixes: `1.2` is a hand-written case-insensitive unique index that `@Index(definition = ...)` would
