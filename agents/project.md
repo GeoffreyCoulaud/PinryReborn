@@ -180,7 +180,11 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   subsystem's name (the latest is `v0.9.0-user-data-export`).
 - **Merging is rebase only.** `AGENTS.md` offers "squash or rebase"; here only rebase exists.
   `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed` returns
-  `false`, `true`, `false`, so the PR is merged with `gh pr merge --rebase`.
+  `false`, `true`, `false`, so the PR is merged with `gh pr merge --rebase`, and only once the
+  human review `AGENTS.md` requires in Wrap has come back. **The observable of that review is not
+  `reviewDecision`**: GitHub refuses an approval from a pull request's own author, and every PR
+  here is authored by the sole operator, so the trace is the feedback addressed in the
+  conversation. Settled 2026-07-28, `docs/adr/0005-adopt-agents-baseline-v3.2.md`.
 - **No local-merge exemption: everything integrates through a PR.** `AGENTS.md` lets
   documentation-only changes on paths declared here merge locally; this project declares no such
   paths, because a local merge to `main` bypasses the `validate / gate` check (see Gotchas). A
@@ -203,7 +207,8 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
 - **Improve commits separately**: `docs(agents):` for a rule, `test(architecture):` for the test
   that enforces one. A rule lands in **this file**, since `AGENTS.md` is generic and the hook
   refuses to edit it; a lesson true of every project is proposed upstream in `agents-baseline`
-  instead.
+  instead. Improve opens only once Wrap has fully completed, so a retained remedy starts from
+  `main` on its own branch and integrates through its own PR (PR #30 is the precedent).
 - **Structural remedies have two homes**: `ArchitectureKonsistTest` for an invariant over the
   source, and a plain test such as `DbMigrationModelCoverageTest` for an invariant about repository
   content.
@@ -213,6 +218,12 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
 - **Testing order**, each level failing before implementation: integration tests in
   `api-application` (REST Assured, end to end), then use-case unit tests in `api-usecases` (MockK),
   then repository tests in `api-persistence-sqlite` (Ebean).
+- **The red pasted into a test commit body** is the output of `./gradlew :<module>:test`, narrowed
+  with `--tests` when one class is enough. Here it is usually a **compilation failure rather than a
+  failing assertion**: a test naming a type its implementation has not introduced yet breaks
+  `compileTestKotlin`, and that unresolved-reference output is the red. Paste it from the run; a
+  prose description of what failed is what this rule replaced (settled 2026-07-28,
+  `docs/adr/0005-adopt-agents-baseline-v3.2.md`).
 - **Test names** use backticks and the `Given..., Then...` form, with no "when" in the name:
   `` fun `Given duplicate username, Then throws UserCreationError`() ``.
 - **Test bodies** follow Given-When-Then with explicit `// Given`, `// When` and `// Then` comments.
