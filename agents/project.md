@@ -46,14 +46,14 @@ graph and by `ArchitectureKonsistTest`, not by this table.
   tests cannot load the library, and `python3`
   must be on the PATH because `.claude/settings.json` runs `.claude/hooks/evidence-guard.py` on
   every Bash, Edit and Write. Without it the guard cannot run and enforces nothing, silently.
-- **THE GATE**: `./gradlew gate` (detekt, all tests, and the 100% branch coverage bound). The `gate`
-  task in the root `build.gradle.kts` aggregates `check` and `koverVerify` across every module, so it
-  is the single knob: grow the gate by adding `dependsOn` there, not by changing what each caller
-  runs. Measured green on 2026-07-23. **It is not everything CI runs**: `validate.yml` also builds
-  the multi-arch container image behind the same `validate / gate` check, and no local command covers
-  that. Building one would change the pre-push hook for every contributor, so it is its own task, not
-  a side effect of another. `.githooks/pre-push` runs `./gradlew gate`, so a push runs the gate
-  locally once `core.hooksPath` is set.
+- **THE GATE**: `./gradlew gate` (detekt, all tests, the 100% branch coverage bound, and
+  `checkNoLongDashes` over every tracked file). The `gate` task in the root `build.gradle.kts`
+  aggregates `check` and `koverVerify` across every module, so it is the single knob: grow the gate by
+  adding `dependsOn` there, not by changing what each caller runs. Measured green on 2026-07-23. **It
+  is not everything CI runs**: `validate.yml` also builds the multi-arch container image and checks
+  that `docs/openapi.json` is in sync, both behind the same `validate / gate` check, and no local
+  command covers either. `.githooks/pre-push` runs `./gradlew gate`, so a push runs the gate locally
+  once `core.hooksPath` is set.
 - **One test**: `./gradlew :api-usecases:test --tests "UserCreatorTest"`. The coverage bound lives
   in its own task, so running `test` alone never trips it: there is nothing to bypass.
 - **New migration**: `./gradlew :api-persistence-sqlite:generateDbMigration`, after changing an
@@ -118,7 +118,7 @@ place where an agent must not decide alone.
 | `SECURITY.md` | living |
 | `docs/backlog.md` | living |
 | `agents/project.md` | living: the situated project doc, edited in-project and updated in the same commit as the change it describes |
-| `docs/openapi.json` | generated: rewritten by the `pre-commit` hook, never edited by hand |
+| `docs/openapi.json` | generated: rewritten by the `pre-commit` hook and checked in CI, never edited by hand |
 | `AGENTS.md`, `agents/modules/*`, `agents/reviews/*` | sourced: byte-identical copies recopied verbatim from `agents-baseline` on a bump, never hand-edited (AGENTS.md forbids it); a lesson true of every project goes upstream, not in here |
 | `docs/specs`, `docs/plans`, `docs/adr`, `docs/handoffs` | dated, append-only |
 
@@ -287,6 +287,12 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   changed, so the commit has to be re-run. That is the hook working, not a failure. It also rejects
   em-dashes and en-dashes in staged text additions (no-em-dash rule, AGENTS.md Conventions): use a
   colon or a hyphen instead.
+- **The hook is a shortcut, not a barrier**, and an uninstalled one is no barrier at all: it ran on
+  none of the 70 commits of the branch delivered on 2026-07-29, because `core.hooksPath` was unset in
+  that clone. Both of its checks now have a home nothing can skip: the dash rule in the gate
+  (`checkNoLongDashes`, over every tracked file, excluding the dated document directories because a
+  frozen document is never rewritten), and the OpenAPI document in CI, right after the build that
+  regenerates it.
 - **There is no auto-fix task.** detekt runs without formatting rules and ktlint is configured only
   as an IDE plugin (`.idea/ktlint-plugin.xml`), so a finding is fixed by hand.
 - **detekt baselines are per module** (`config/detekt/baseline-api-usecases.xml` and its two
