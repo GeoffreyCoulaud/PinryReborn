@@ -18,17 +18,22 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
     private val users = UserRepository(database = database)
     private val repository = UserPasswordHashRepository(database = database)
 
+    private val anInstant = Instant.parse("2026-07-01T00:00:00Z")
+
     private fun user() = users.saveUser(User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()))
 
-    private fun hash(h: String) = HashedPassword(hash = h, algorithm = PasswordHashAlgorithm.BCRYPT)
+    private fun hash(h: String, createdAt: Instant) =
+        HashedPassword(hash = h, algorithm = PasswordHashAlgorithm.BCRYPT, createdAt = createdAt)
 
     @Test
-    fun `Given two saved hashes, Then current is the latest and all returns both`() {
-        // Given
+    fun `Given two saved hashes, Then current is the latest by createdAt and all returns both`() {
+        // Given: explicit createdAt values replace the Thread.sleep timing trick, since the instant
+        // is now use-case-supplied and the column is no longer auto-stamped by Ebean
         val user = user()
-        repository.saveUserPasswordHash(user, hash("old"))
-        Thread.sleep(2) // ensure a distinct when_created for deterministic ordering
-        repository.saveUserPasswordHash(user, hash("new"))
+        val older = Instant.parse("2026-07-20T00:00:00Z")
+        val newer = Instant.parse("2026-07-21T00:00:00Z")
+        repository.saveUserPasswordHash(user, hash("old", older))
+        repository.saveUserPasswordHash(user, hash("new", newer))
         // When / Then
         assertEquals("new", repository.findCurrentPasswordHash(user)?.hash)
         assertEquals(setOf("old", "new"), repository.findAllPasswordHashesForUser(user).map { it.hash }.toSet())
@@ -38,7 +43,7 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
     fun `Given saved hashes, Then deleteForUser removes them all`() {
         // Given
         val user = user()
-        repository.saveUserPasswordHash(user, hash("a"))
+        repository.saveUserPasswordHash(user, hash("a", anInstant))
         // When
         repository.deleteForUser(user)
         // Then
@@ -55,7 +60,7 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
 
         // When, Then
         assertThrows(UserModelDoesNotExistError::class.java) {
-            repository.saveUserPasswordHash(user, hash("hash"))
+            repository.saveUserPasswordHash(user, hash("hash", anInstant))
         }
     }
 
@@ -63,7 +68,7 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
     fun `Given a nonexistent user, Then saveUserPasswordHash throws UserModelDoesNotExistError`() {
         // Given
         val nonexistentUser = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
-        val hashedPassword = hash("hash")
+        val hashedPassword = hash("hash", anInstant)
 
         // When, Then
         assertThrows(UserModelDoesNotExistError::class.java) {
