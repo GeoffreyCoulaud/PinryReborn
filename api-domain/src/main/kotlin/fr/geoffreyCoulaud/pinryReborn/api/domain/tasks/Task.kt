@@ -18,4 +18,5 @@ data class Task(
     val cancelRequested: Boolean,
     val dedupKey: String?,
     val lastError: String?,
+    val terminalStateAt: Instant? = null,
 ) : Identifiable

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <addColumn tableName="tasks">
+            <column name="terminal_state_at" type="timestamp"/>
+        </addColumn>
+        <createIndex indexName="ix_tasks_state_terminal_state_at" tableName="tasks" columns="state,terminal_state_at"/>
+        <dropIndex indexName="ix_tasks_state_when_modified" tableName="tasks"/>
+    </changeSet>
+</migration>

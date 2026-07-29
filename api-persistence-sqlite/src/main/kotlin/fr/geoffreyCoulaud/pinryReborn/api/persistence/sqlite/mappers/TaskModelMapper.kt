@@ -20,5 +20,6 @@ object TaskModelMapper {
             cancelRequested = cancelRequested,
             dedupKey = dedupKey,
             lastError = lastError,
+            terminalStateAt = terminalStateAt,
         )
 }
