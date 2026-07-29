@@ -35,14 +35,14 @@ class ReapTombstonedAccountsTest : BaseTest() {
         every { clock.now() } returns now
         val tombstone1 = userTombstone()
         val tombstone2 = userTombstone()
-        every { userRepository.findTombstonedUsersModifiedBefore(cutoff) } returns listOf(tombstone1, tombstone2)
+        every { userRepository.findTombstonedUsersSoftDeletedBefore(cutoff) } returns listOf(tombstone1, tombstone2)
 
         // When
         val count = reap.reap()
 
         // Then: the cutoff is clock.now() minus the grace, each tombstone is re-driven, count returned
         assertEquals(2, count)
-        verify { userRepository.findTombstonedUsersModifiedBefore(cutoff) }
+        verify { userRepository.findTombstonedUsersSoftDeletedBefore(cutoff) }
         verify { accountDeletionCleaner.deleteAccountData(tombstone1.id) }
         verify { accountDeletionCleaner.deleteAccountData(tombstone2.id) }
     }
@@ -54,7 +54,7 @@ class ReapTombstonedAccountsTest : BaseTest() {
         val tombstone1 = userTombstone()
         val tombstone2 = userTombstone()
         val tombstone3 = userTombstone()
-        every { userRepository.findTombstonedUsersModifiedBefore(cutoff) } returns
+        every { userRepository.findTombstonedUsersSoftDeletedBefore(cutoff) } returns
             listOf(tombstone1, tombstone2, tombstone3)
         every { accountDeletionCleaner.deleteAccountData(tombstone2.id) } throws RuntimeException("db down")
 
@@ -71,7 +71,7 @@ class ReapTombstonedAccountsTest : BaseTest() {
     private fun userTombstone() = User(
         id = randomUUID(),
         name = "tombstone",
-        softDeleted = true,
+        softDeletedAt = cutoff,
         createdAt = now,
     )
 }

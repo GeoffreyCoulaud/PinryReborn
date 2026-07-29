@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ReauthenticationError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.AccountDeletionTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
@@ -22,19 +23,22 @@ class AccountDeleterTest : BaseTest() {
     private val sessionRevoker = mockk<SessionRevoker>(relaxed = true)
     private val enqueue = mockk<EnqueueTask>(relaxed = true)
     private val tx = mockk<TransactionRunner>()
-    private val deleter = AccountDeleter(reauth, users, sessionRevoker, enqueue, tx)
+    private val clock = mockk<Clock>()
+    private val deleter = AccountDeleter(reauth, users, sessionRevoker, enqueue, tx, clock)
     private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
+    private val deletionRequestedAt = Instant.parse("2026-07-29T09:15:00Z")
 
     @Test
-    fun `Given a valid factor, Then it tombstones, revokes and enqueues`() {
+    fun `Given a valid factor, Then it tombstones with the clock's instant, revokes and enqueues`() {
         // Given
         every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { clock.now() } returns deletionRequestedAt
         // When
         deleter.requestDeletion(user, "secret")
         // Then
         verify { reauth.reauthenticate(user, "secret") }
         verifyOrder {
-            users.markPendingDeletion(user)
+            users.markPendingDeletion(user, deletionRequestedAt)
             sessionRevoker.revokeAll(user)
             enqueue.enqueue(
                 kind = AccountDeletionTask.KIND,
@@ -51,6 +55,6 @@ class AccountDeleterTest : BaseTest() {
         every { reauth.reauthenticate(user, "bad") } throws ReauthenticationError()
         // When / Then
         assertThrows<ReauthenticationError> { deleter.requestDeletion(user, "bad") }
-        verify(exactly = 0) { users.markPendingDeletion(any()) }
+        verify(exactly = 0) { users.markPendingDeletion(any(), any()) }
     }
 }

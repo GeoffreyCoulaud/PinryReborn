@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-29.
+Last reviewed: 2026-07-29 (block 1 of the domain-owned timestamps work delivered and removed).
 
 ## How to use this file
 
@@ -21,30 +21,33 @@ Last reviewed: 2026-07-29.
 
 ## Open items
 
-### P0: Domain-owned timestamps (specified 2026-07-29, three blocks)
+### P0: Domain-owned timestamps (specified 2026-07-29, two blocks left of three)
 
 Specified as one piece of work in `docs/specs/2026-07-29-domain-owned-timestamps.md`, with
-`docs/adr/0006-domain-owned-timestamps.md`. It absorbs three items that sat in P2 until 2026-07-29
+`docs/adr/0006-domain-owned-timestamps.md`. It absorbed three items that sat in P2 until 2026-07-29
 (`softDeletedAt` stamped in the adapter, soft delete not bumping `updatedAt`, and the
 `findCurrentPasswordHash` tie-breaker): they were one defect with three faces, a business instant
 invented by the persistence adapter rather than stamped by a use case. Scoping them showed the defect
 is wider than they recorded, so the work also unifies the two soft-delete mechanisms and deletes
 `AuditedBaseModel`.
 
-Delivered as three sequential blocks, one session and one pull request each. The order is imposed by
-dependency, not preference.
+Three sequential blocks were planned, one session and one pull request each, in an order imposed by
+dependency rather than preference. **Block 1 shipped on 2026-07-29** and closed the first two absorbed
+items with it, so it has left this list: its record is
+`docs/handoffs/2026-07-29 - handoff - single-representation-soft-delete.md`,
+`docs/specs/2026-07-29-single-representation-soft-delete.md` and
+`docs/adr/0007-single-representation-soft-delete.md`. The two below remain, and the third absorbed
+item is still carried by block 3.
 
-- **Block 1: uniform soft delete.** Absorbs two of the former items: `softDeletedAt` is stamped inside
-  the persistence adapter (`PinRepository.kt:195`, `BoardRepository.kt:50`), and soft delete and
-  restore no longer bump `updatedAt`. The block generalises Ebean's `@SoftDelete` to pins and boards
-  with the boolean derived by the mapper, turns `User.softDeleted` into `softDeletedAt`, and makes
-  account retention read that instant instead of `users.when_modified`, which Ebean rewrites on every
-  write to the row. Carries the Konsist assertion banning `Instant.now()` in the persistence layer.
 - **Block 2: end of `AuditedBaseModel`.** Not covered by any former item, surfaced while scoping them.
   `tasks.when_modified` drives the deletion of terminal tasks and moves on any row write, the same
   defect as account retention. `Task` receives `terminalStateAt`, `SessionToken` and `HashedPassword`
-  receive `createdAt`, seven dead audit columns are dropped, and a Konsist assertion bans
-  `@WhenCreated` / `@WhenModified`.
+  receive `createdAt`, the dead audit columns are dropped, and a Konsist assertion bans
+  `@WhenCreated` / `@WhenModified`. **Start by re-deriving how many columns that is**: section 6 of
+  the specification says seven in its prose while its own table sums to eight, and a frozen document
+  is not corrected in place, so the count is settled in block 2's own specification. Section 6.5 also
+  expects a table rebuild for a column drop, which block 1 measured not to happen: the generator
+  emitted a plain `alter table users drop column deleted` and the store applied it in place.
 - **Block 3: current-password determinism.** Absorbs the third former item, the
   `findCurrentPasswordHash` tie-breaker. A `(user_id, created_at)` unique constraint plus a
   configurable minimum interval between password changes (default 30 s), with
@@ -65,6 +68,89 @@ dependency, not preference.
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
 ### P2 — Operational debt (flagged in handoffs; not UI blockers)
+
+- **Inverse associations on the persistence models.** The module maps twelve entities and not one
+  `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of a
+  board" can only be asked from the join table. Two consequences: the soft-delete work needs two
+  extension functions on `QPinBoardModel` that would otherwise be plain `PinQueries` / `BoardQueries`
+  calls, and `savePinTags` / `savePinBoards` (`PinRepository.kt:83-147`) synchronise join rows by hand,
+  reading, diffing and deleting, which is what a mapped collection does for you. **The cycle is not the
+  obstacle**, contrary to what `PinBoardModel`'s KDoc suggests: Kotlin compiles type cycles inside a
+  module and the project already has one between `models` and `models.bases`
+  (`AuthoredBaseModel` imports `UserModel`, which extends `BaseModel`). What has to be proven first is
+  Ebean's behaviour on the paths this project uses: `ModelRepository.saveAndReturn` is `merge` on a
+  detached bean, and a detached bean carrying an empty or uninitialised collection is ambiguous
+  (no change, or empty the collection), which every pin save would go through; and whether adding an
+  association flips `BeanDescriptor.isDeleteByStatement`, which decides how delete queries compile
+  (see `docs/adr/0007-single-representation-soft-delete.md`, fact 3). Its own lot, with its own tests.
+  New 2026-07-29.
+
+- **`ModelRepository` inherits Ebean finders that no soft-delete guard can see.** It extends
+  `io.ebean.BeanRepository`, so each of the seven repositories holding one also holds the public
+  `findAll()`, `findById(id)`, `findByIdOrEmpty(id)` and `db()` inherited from `BeanFinder`
+  (`ebean-api/src/main/java/io/ebean/BeanFinder.java:87-116` at tag `v19.0.0`, the nearest tag to the
+  pinned 19.2.0). Each roots a read on the entity class, or hands out the `Database` that can, while
+  naming no query bean and writing no `softDeletedAt` predicate: the two Konsist assertions and the
+  `SoftDeleteStateFilteredOutsideQueries` rule both key on those two shapes, so a recycled row read
+  through one comes back with nothing raised. Nothing calls them today, the field being used for
+  `saveAndReturn` only at all seven sites, so this is an open door rather than a defect. Closing it
+  means `ModelRepository` holding a `Database` instead of extending `BeanRepository` and exposing
+  `saveAndReturn` alone, plus a Konsist assertion barring `BeanRepository` and `BeanFinder` as
+  production supertypes. The cost is small and bounded: one class rewritten around `Database.merge`,
+  which is what `BeanRepository.merge` already delegates to (`BeanRepository.java:200-202`, same tag),
+  and its seven callers untouched. It does not close the wider hole, since anything holding a
+  `Database` can still root an unfiltered query and no rule sees that either. **P2**: the surface is
+  unused, so it costs nothing today and the first call through it is what would make it urgent. New
+  2026-07-29.
+- **A session token can outlive the tombstone that should have killed it, by one insert.** What
+  stops a tombstoned account from being used is **revocation, not filtering**: `AccountDeleter`
+  marks the user and revokes every session in one transaction, while the read path asks nothing
+  about the account's state. `SessionTokenAuthenticator` resolves a token through
+  `findByTokenHash`, which roots on `session_tokens` alone, and `SessionTokenModelMapper`
+  dereferences the `user` association, a load that names no query bean and writes no
+  `softDeletedAt` predicate, so neither the Konsist assertions nor the detekt rule can see it.
+  The window: a session insert whose own active-user check passed just before the tombstone
+  committed, and which lands just after `deleteAllForUser` has run, produces a token nothing
+  revoked. **Defence in depth, not an exploitable hole**: the window is one insert wide, it needs
+  the account's own credentials, and the account deletion task deletes that user's tokens seconds
+  later. Closing it means the read path filtering too, cheapest as an extension on
+  `QSessionTokenModel` declared beside the query constructors (the shape `withActivePin` and
+  `withActiveBoard` already use on `QPinBoardModel`) so `findByTokenHash` returns nothing for a
+  tombstoned owner; the alternative, resolving the owner and inserting the token in one
+  transaction, closes the race at the write end instead and costs every authenticated request
+  nothing. Surfaced reviewing the single-representation soft delete, 2026-07-29.
+
+- **Four `!!` in the soft-delete transitions of the pin and board repositories.**
+  `PinRepository.softDeletePin` and `restorePin` (`PinRepository.kt:196,204`) and
+  `BoardRepository.softDeleteBoard` and `restoreBoard` (`BoardRepository.kt:50,58`) each end on
+  `findOne()!!`. `agents/modules/kotlin.md` forbids `!!` outright: a value that cannot be null is
+  modelled non-nullable, one that can is handled, and this one can. The row is fetched by the id of
+  an entity the use case has just read, so the window is a concurrent hard delete, and the assertion
+  turns it into a `NullPointerException` out of the adapter instead of a domain error. The single
+  representation rewrote all four lines and kept the `!!` deliberately: what to do with an absent row
+  is a behaviour decision nobody has taken (return quietly, as `markPendingDeletion` and
+  `permanentlyDeleteUser` do, or throw a domain error the presentation layer maps), and taking it
+  there would have been fixing what was not asked. Inventoried here instead, as that branch's plan
+  said it would be. New 2026-07-29.
+
+- **One tombstoned owner stops the export retention sweep for every other user.**
+  `ReapExpiredUserDataExports.reap` re-saves each expired `READY` export with no per-item guard, and
+  `UserDataExportRepository.save` throws `UserModelDoesNotExistError` for a tombstoned owner, so one
+  such export aborts the batch: it loses its archive bytes and keeps its `READY` state, and every
+  export behind it is left unswept. Pre-existing, not a regression: `@SoftDelete` hid the same row
+  from the same lookup. Settle first whether a tombstoned owner's exports should be swept at all or
+  left to the account deletion task, since that decides whether the fix is a per-item guard or a
+  narrower query. Surfaced reviewing the single-representation soft delete, 2026-07-29.
+
+- **Test sources read the wall clock freely.** Production code takes every instant from the `Clock`
+  port and the `WallClockRead` rule holds it there, but `detekt.yml` excludes `**/test/**` and
+  `**/testFixtures/**` from that rule, so tests call `Instant.now()` and its three siblings at will:
+  a grep over the test sources counts 266 reads across 54 files. That figure is a rough upper bound
+  rather than the rule's own count, since some of those lines are code snippets inside string
+  literals in the rule's own tests, which no syntax tree ever sees; measuring it by activating the
+  rule against test sources is the first step of the work. Closing it means the test sources taking
+  a fixed clock, most plausibly carried by the shared test bases. Its own lot rather than part of
+  the soft-delete work: the files it touches have nothing to do with recycling. New 2026-07-29.
 
 - **`imageStore.discard` can mask the original error in failure handlers.** `SetPinImage` and
   `DownloadPinImage` call `imageStore.discard(staged)` inside their `catch (e)` rollback blocks; a

@@ -47,7 +47,7 @@ class AccountDeletionCleanerTest : BaseTest() {
     )
 
     private val userId = randomUUID()
-    private val user = User(id = userId, name = "u", softDeleted = true, createdAt = Instant.now())
+    private val user = User(id = userId, name = "u", softDeletedAt = Instant.now(), createdAt = Instant.now())
 
     private fun buildPin() = Pin(
         id = randomUUID(), author = user, sourceContextUrl = "https://ctx",

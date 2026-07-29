@@ -6,13 +6,10 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportAlreadyInProgressException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.exceptions.UserModelDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserDataExportModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserDataExportModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserDataExportModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserDataExportModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPaginationHelper
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.UserDataExportModelSortStrategy
@@ -32,10 +29,6 @@ class UserDataExportRepository(
     private val database: Database,
 ) : UserDataExportRepositoryInterface {
     private val sqlRepository = ModelRepository(entityClass = UserDataExportModel::class, database = database)
-    private val paginationHelper = ModelPaginationHelper<UserDataExportModel, QUserDataExportModel>()
-
-    private fun resolveUser(userId: UUID): UserModel =
-        QUserModel().id.equalTo(userId).findOne() ?: throw UserModelDoesNotExistError()
 
     private fun persist(model: UserDataExportModel): UserDataExport = sqlRepository.saveAndReturn(model).toDomain()
 
@@ -56,7 +49,7 @@ class UserDataExportRepository(
      * for the unique-index violation.
      */
     override fun save(export: UserDataExport): UserDataExport {
-        val model = export.toModel(resolveUser(export.userId))
+        val model = export.toModel(ActiveUserModels.resolve(export.userId))
         if (export.state != UserDataExportState.PENDING) return persist(model)
         return try {
             persist(model)
@@ -78,7 +71,7 @@ class UserDataExportRepository(
                 ?.let { QUserDataExportModel().id.equalTo(it.pivotId).findOne() }
                 ?.let { ModelCursor(pivot = it, direction = cursor.direction) }
         val modelPage =
-            paginationHelper.getPage(
+            ModelPaginationHelper.getPage(
                 cursor = modelCursor,
                 pageSize = pageSize,
                 baseQuery = QUserDataExportModel().user.id.equalTo(userId),

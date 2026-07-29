@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionBoardAlreadySoftDeletedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionBoardDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardDeletionBoardNotSoftDeletedError
@@ -11,8 +12,10 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
@@ -20,7 +23,14 @@ import java.util.UUID.randomUUID
 
 class BoardRecycleBinTest {
     private val boardRepository: BoardRepositoryInterface = mockk()
-    private val useCase = BoardRecycleBin(boardRepository = boardRepository)
+    private val clock = mockk<Clock>()
+    private val transitionInstant = Instant.parse("2026-07-29T08:30:00Z")
+    private val useCase = BoardRecycleBin(boardRepository = boardRepository, clock = clock)
+
+    @BeforeEach
+    fun stubClock() {
+        every { clock.now() } returns transitionInstant
+    }
 
     private fun createBoard(author: User, softDeletedAt: Instant? = null) = Board(
         id = randomUUID(),
@@ -39,16 +49,34 @@ class BoardRecycleBinTest {
         // Given
         val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val board = createBoard(author = user)
-        val recycled = board.copy(softDeletedAt = Instant.now())
+        val recycled = board.copy(softDeletedAt = transitionInstant)
         every { boardRepository.findBoardById(board.id) } returns board
-        every { boardRepository.softDeleteBoard(board) } returns recycled
+        every { boardRepository.softDeleteBoard(board = board, at = any()) } returns recycled
 
         // When
         val result = useCase.softDelete(boardId = board.id, user = user)
 
         // Then
         assertEquals(recycled, result)
-        verify { boardRepository.softDeleteBoard(board) }
+        verify { boardRepository.softDeleteBoard(board = board, at = any()) }
+    }
+
+    @Test
+    fun `Given an owned active board, Then softDelete hands the repository the clock's instant`() {
+        // Given
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val board = createBoard(author = user)
+        val stampedInstant = slot<Instant>()
+        every { boardRepository.findBoardById(board.id) } returns board
+        every { boardRepository.softDeleteBoard(board = board, at = any()) } returns
+            board.copy(softDeletedAt = transitionInstant)
+
+        // When
+        useCase.softDelete(boardId = board.id, user = user)
+
+        // Then
+        verify { boardRepository.softDeleteBoard(board = board, at = capture(stampedInstant)) }
+        assertEquals(transitionInstant, stampedInstant.captured)
     }
 
     @Test
@@ -100,14 +128,31 @@ class BoardRecycleBinTest {
         val board = createBoard(author = user, softDeletedAt = Instant.now())
         val restored = board.copy(softDeletedAt = null)
         every { boardRepository.findBoardById(board.id) } returns board
-        every { boardRepository.restoreBoard(board) } returns restored
+        every { boardRepository.restoreBoard(board = board, at = any()) } returns restored
 
         // When
         val result = useCase.restore(boardId = board.id, user = user)
 
         // Then
         assertEquals(restored, result)
-        verify { boardRepository.restoreBoard(board) }
+        verify { boardRepository.restoreBoard(board = board, at = any()) }
+    }
+
+    @Test
+    fun `Given an owned recycled board, Then restore hands the repository the clock's instant`() {
+        // Given
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val board = createBoard(author = user, softDeletedAt = Instant.now())
+        val stampedInstant = slot<Instant>()
+        every { boardRepository.findBoardById(board.id) } returns board
+        every { boardRepository.restoreBoard(board = board, at = any()) } returns board.copy(softDeletedAt = null)
+
+        // When
+        useCase.restore(boardId = board.id, user = user)
+
+        // Then
+        verify { boardRepository.restoreBoard(board = board, at = capture(stampedInstant)) }
+        assertEquals(transitionInstant, stampedInstant.captured)
     }
 
     @Test

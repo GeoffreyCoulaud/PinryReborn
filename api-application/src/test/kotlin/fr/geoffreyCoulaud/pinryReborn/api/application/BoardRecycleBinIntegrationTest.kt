@@ -1,5 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import io.quarkus.test.junit.QuarkusTest
@@ -9,7 +11,10 @@ import jakarta.inject.Inject
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.Matchers.emptyIterable
 import org.hamcrest.Matchers.hasSize
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 @QuarkusTest
 class BoardRecycleBinIntegrationTest : IntegrationTest() {
@@ -19,6 +24,13 @@ class BoardRecycleBinIntegrationTest : IntegrationTest() {
 
     @Inject
     lateinit var boardCreator: BoardCreator
+
+    @Inject
+    lateinit var boardRepository: BoardRepositoryInterface
+
+    /** The stored board, whatever its state. `updatedAt` is on no output DTO, so it is read here. */
+    private fun reloadBoard(boardId: UUID): Board =
+        requireNotNull(boardRepository.findBoardById(boardId)) { "the board should still be stored" }
 
     // --- Soft delete ---
 
@@ -85,7 +97,56 @@ class BoardRecycleBinIntegrationTest : IntegrationTest() {
             .body("boards[0].id", equalTo(board.id.toString()))
     }
 
+    @Test
+    fun `Given an active board, Then soft delete moves its updatedAt to the deletion instant`() {
+        // Given
+        val auth = createAuthenticatedUser()
+        val board = boardCreator.create(author = auth.user, name = "Trip", description = "")
+        val updatedAtBeforeDeletion = reloadBoard(board.id).updatedAt
+        waitForTheClockToTick()
+
+        // When
+        given()
+            .authenticatedAs(auth)
+            .`when`()
+            .delete("/api/v1/boards/${board.id}")
+            .then()
+            .statusCode(204)
+
+        // Then - recycling is a modification, and both instants come from the same stamp
+        val recycled = reloadBoard(board.id)
+        assertTrue(
+            recycled.updatedAt.isAfter(updatedAtBeforeDeletion),
+            "updatedAt should move when the board is recycled",
+        )
+        assertEquals(recycled.softDeletedAt, recycled.updatedAt)
+    }
+
     // --- Restore ---
+
+    @Test
+    fun `Given a recycled board, Then restoring it moves its updatedAt again`() {
+        // Given
+        val auth = createAuthenticatedUser()
+        val board = boardCreator.create(author = auth.user, name = "Trip", description = "")
+        given().authenticatedAs(auth).delete("/api/v1/boards/${board.id}")
+        val updatedAtWhileRecycled = reloadBoard(board.id).updatedAt
+        waitForTheClockToTick()
+
+        // When
+        given()
+            .authenticatedAs(auth)
+            .`when`()
+            .post("/api/v1/boards/recycled/${board.id}/restore")
+            .then()
+            .statusCode(200)
+
+        // Then
+        assertTrue(
+            reloadBoard(board.id).updatedAt.isAfter(updatedAtWhileRecycled),
+            "updatedAt should move when the board is restored",
+        )
+    }
 
     @Test
     fun `Given a soft-deleted board, Then restoring it brings back its membership`() {

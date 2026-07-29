@@ -59,8 +59,20 @@ abstract class IntegrationTest {
     protected fun RequestSpecification.authenticatedAs(auth: AuthenticatedUser): RequestSpecification =
         header("Authorization", "Bearer ${auth.token}")
 
+    /**
+     * Wait long enough for the next stamped instant to differ from the previous one.
+     *
+     * Stamped instants are truncated to the millisecond, so two writes inside the same millisecond
+     * carry the same value and an "instant moved" assertion cannot tell a fresh stamp from a stale
+     * one.
+     */
+    protected fun waitForTheClockToTick() = Thread.sleep(CLOCK_RESOLUTION_MILLIS)
+
     companion object {
         const val DEFAULT_PASSWORD = "password123"
         private const val HTTP_CREATED = 201
+
+        /** Long enough to cross a millisecond boundary, the resolution stamped instants keep. */
+        private const val CLOCK_RESOLUTION_MILLIS = 2L
     }
 }

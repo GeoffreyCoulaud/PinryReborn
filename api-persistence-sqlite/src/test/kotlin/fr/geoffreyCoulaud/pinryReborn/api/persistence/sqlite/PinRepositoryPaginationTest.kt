@@ -170,7 +170,7 @@ class PinRepositoryPaginationTest : RepositoryTest() {
         // Given
         val user = createAndSaveUser()
         val expectedIds =
-            (1..tiedPinCount).map { repository.softDeletePin(createAndSavePin(user)).id }.toSet()
+            (1..tiedPinCount).map { repository.softDeletePin(createAndSavePin(user), storableNow()).id }.toSet()
         collapseAllPinInstants("soft_deleted_at")
 
         // When

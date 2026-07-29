@@ -6,8 +6,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInt
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.BoardModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QBoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinBoardModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.BoardQueries
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.withActivePin
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Instant
@@ -32,53 +33,55 @@ class BoardRepository(
     override fun saveBoard(board: Board): Board = sqlRepository.saveAndReturn(board.toModel()).toDomain()
 
     override fun findBoardById(id: UUID): Board? =
-        QBoardModel().id.equalTo(id).findOne()?.toDomain()
+        BoardQueries.any().id.equalTo(id).findOne()?.toDomain()
 
     override fun findActiveBoardById(id: UUID): Board? =
-        QBoardModel().id.equalTo(id).softDeletedAt.isNull.findOne()?.toDomain()
+        BoardQueries.active().id.equalTo(id).findOne()?.toDomain()
 
     override fun findActiveBoardsForUser(user: User): List<Board> =
-        QBoardModel().author.id.equalTo(user.id).softDeletedAt.isNull
+        BoardQueries.active().author.id.equalTo(user.id)
             .findList().sortedForListing().map { it.toDomain() }
 
     override fun findRecycledBoardsForUser(user: User): List<Board> =
-        QBoardModel().author.id.equalTo(user.id).softDeletedAt.isNotNull
+        BoardQueries.recycled().author.id.equalTo(user.id)
             .findList().sortedForListing().map { it.toDomain() }
 
-    override fun softDeleteBoard(board: Board): Board {
-        val model = QBoardModel().id.equalTo(board.id).findOne()!!
-        model.softDeletedAt = Instant.now()
+    override fun softDeleteBoard(board: Board, at: Instant): Board {
+        val model = BoardQueries.any().id.equalTo(board.id).findOne()!!
+        model.softDeletedAt = at
+        model.updatedAt = at
         database.save(model)
         return model.toDomain()
     }
 
-    override fun restoreBoard(board: Board): Board {
-        val model = QBoardModel().id.equalTo(board.id).findOne()!!
+    override fun restoreBoard(board: Board, at: Instant): Board {
+        val model = BoardQueries.any().id.equalTo(board.id).findOne()!!
         model.softDeletedAt = null
+        model.updatedAt = at
         database.save(model)
         return model.toDomain()
     }
 
     override fun permanentlyDeleteBoard(board: Board) {
         QPinBoardModel().board.id.equalTo(board.id).delete()
-        QBoardModel().id.equalTo(board.id).delete()
+        BoardQueries.any().id.equalTo(board.id).delete()
     }
 
     override fun permanentlyDeleteAllRecycledBoardsForUser(user: User) {
-        val recycledIds = QBoardModel().author.id.equalTo(user.id).softDeletedAt.isNotNull
+        val recycledIds = BoardQueries.recycled().author.id.equalTo(user.id)
             .findList().map { it.id }
         if (recycledIds.isEmpty()) return
         QPinBoardModel().board.id.isIn(recycledIds).delete()
-        QBoardModel().id.isIn(recycledIds).delete()
+        BoardQueries.any().id.isIn(recycledIds).delete()
     }
 
     override fun permanentlyDeleteAllBoardsForUser(user: User) {
-        val boardIds = QBoardModel().author.id.equalTo(user.id).findList().map { it.id }
+        val boardIds = BoardQueries.any().author.id.equalTo(user.id).findList().map { it.id }
         if (boardIds.isEmpty()) return
         QPinBoardModel().board.id.isIn(boardIds).delete()
-        QBoardModel().id.isIn(boardIds).delete()
+        BoardQueries.any().id.isIn(boardIds).delete()
     }
 
     override fun countActivePinsInBoard(boardId: UUID): Int =
-        QPinBoardModel().board.id.equalTo(boardId).pin.softDeletedAt.isNull.findCount()
+        QPinBoardModel().board.id.equalTo(boardId).withActivePin().findCount()
 }

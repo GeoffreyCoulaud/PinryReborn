@@ -17,5 +17,6 @@ class BoardModel(
     createdAt: Instant,
     // Written by the mapper from the domain entity, never generated. See AuthoredBaseModel.
     @Column(name = "when_modified") var updatedAt: Instant,
-    var softDeletedAt: Instant? = null,
-) : AuthoredBaseModel(id = id, author = author, createdAt = createdAt)
+    override var softDeletedAt: Instant? = null,
+) : AuthoredBaseModel(id = id, author = author, createdAt = createdAt),
+    SoftDeletableModel

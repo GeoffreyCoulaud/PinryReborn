@@ -33,6 +33,11 @@ quarkus-junit = { module = "io.quarkus:quarkus-junit5", version.ref = "quarkus-j
 rest-assured = { module = "io.rest-assured:rest-assured", version.ref = "rest-assured" }
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 
+# Custom detekt rules (the `detekt-rules` module). `detekt-api` is compileOnly there: detekt
+# supplies its own copy at analysis time, so shipping it would risk two versions on the classpath.
+detekt-api = { module = "dev.detekt:detekt-api", version.ref = "detekt" }
+detekt-test = { module = "dev.detekt:detekt-test", version.ref = "detekt" }
+
 # Ebean ORM
 ebean = { module = "io.ebean:ebean", version.ref = "ebean" }
 ebean-sqlite = { module = "io.ebean:ebean-sqlite", version.ref = "ebean" }

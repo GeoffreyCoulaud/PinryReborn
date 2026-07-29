@@ -37,7 +37,7 @@ class ReapTombstonedAccounts(
     @Suppress("TooGenericExceptionCaught")
     fun reap(): Int {
         val cutoff = clock.now().minus(tombstoneGrace)
-        val tombstones = userRepository.findTombstonedUsersModifiedBefore(cutoff)
+        val tombstones = userRepository.findTombstonedUsersSoftDeletedBefore(cutoff)
         for (user in tombstones) {
             try {
                 accountDeletionCleaner.deleteAccountData(user.id)

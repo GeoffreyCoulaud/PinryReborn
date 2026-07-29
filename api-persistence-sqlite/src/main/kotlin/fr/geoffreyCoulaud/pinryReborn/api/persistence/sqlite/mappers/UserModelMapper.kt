@@ -4,13 +4,15 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 
 object UserModelMapper {
-    // toModel never sets `deleted`: new users are active.
-    // Transitions go only through markPendingDeletion/permanentlyDeleteUser.
+    // The recycling instant is mapped both ways. Omitting it here would let any save of a
+    // tombstoned account read back from the store silently resurrect it, the column being the
+    // whole record of the tombstone.
     fun User.toModel() =
         UserModel(
             id = id,
             name = name,
             createdAt = createdAt,
+            softDeletedAt = softDeletedAt,
         )
 
     fun UserModel.toDomain() =
@@ -18,6 +20,6 @@ object UserModelMapper {
             id = id,
             name = name,
             createdAt = createdAt,
-            softDeleted = deleted,
+            softDeletedAt = softDeletedAt,
         )
 }

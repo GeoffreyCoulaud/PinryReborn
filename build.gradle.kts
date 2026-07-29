@@ -97,6 +97,12 @@ subprojects {
         source.from("src/testFixtures/kotlin")
     }
 
+    // The project's own rules (`detekt-rules`), loaded through detekt's service loader. Every
+    // module but the rule module itself, which cannot be on its own analysis classpath.
+    if (project.name != "detekt-rules") {
+        dependencies.add("detektPlugins", project(":detekt-rules"))
+    }
+
     // Analyse against the JDK 25 bytecode target (matches the Kotlin jvmTarget above);
     // detekt 2.0 runs and analyses on the JDK 25 toolchain.
     tasks.withType<dev.detekt.gradle.Detekt>().configureEach {

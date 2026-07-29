@@ -1,6 +1,8 @@
 # 0006. Domain-owned timestamps and a single soft-delete mechanism
 
-Status: Proposed
+Status: Partially superseded by `0007-single-representation-soft-delete.md` (decision 4). The eleven
+other decisions stand. `0007` also records two factual errors in the Context section below, both about
+what the automatic soft-delete predicate covers.
 Date: 2026-07-29
 
 ## Context

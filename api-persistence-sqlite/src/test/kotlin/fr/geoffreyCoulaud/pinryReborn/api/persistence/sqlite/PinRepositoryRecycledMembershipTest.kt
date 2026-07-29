@@ -69,7 +69,7 @@ class PinRepositoryRecycledMembershipTest : RepositoryTest() {
         val user = createAndSaveUser()
         val board = createAndSaveBoard(user)
         val pin = createAndSavePinInBoard(user, board)
-        boardRepository.softDeleteBoard(board)
+        boardRepository.softDeleteBoard(board, storableNow())
 
         // When
         val boards = pinRepository.findBoardsForPinIncludingRecycled(pin.id)
