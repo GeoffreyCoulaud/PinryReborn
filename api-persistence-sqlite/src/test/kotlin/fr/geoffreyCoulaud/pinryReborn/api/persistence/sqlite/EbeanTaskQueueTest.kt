@@ -290,6 +290,8 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val stored = queue.findById(claimed.id)
         assertEquals(TaskState.PENDING, stored?.state)
         assertNull(stored?.leaseId)
+        // A reaped task is live again (PENDING), so terminalStateAt stays null (spec 4.1).
+        assertNull(stored?.terminalStateAt)
     }
 
     @Test
