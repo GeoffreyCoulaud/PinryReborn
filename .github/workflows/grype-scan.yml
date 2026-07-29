@@ -27,7 +27,7 @@ jobs:
 
       - name: Extract SBOM and VEX from image attestations
         # Everything the scan needs comes from the image's own signed attestations
-        # — nothing is read from the repo, so this workflow doesn't even check it out:
+        # (nothing is read from the repo, so this workflow doesn't even check it out):
         #   - Syft-JSON SBOM (type https://syft.dev/bom): scanned instead of the
         #     CycloneDX one because it preserves the image source identity that
         #     image-scoped OpenVEX matching needs (CycloneDX drops it → VEX no-ops);
@@ -38,7 +38,7 @@ jobs:
         # pushed and signed by the build-image job, which lives in the *reusable*
         # workflow validate.yml (release.yml only calls it). For a job that runs
         # inside a reusable workflow, the keyless OIDC certificate identity (SAN) is
-        # the reusable workflow's ref, not the caller's — so the signer identity to
+        # the reusable workflow's ref, not the caller's, so the signer identity to
         # verify against is .github/workflows/validate.yml. It keeps the repository's
         # original case (the OIDC cert identity preserves it); IMAGE is lowercased
         # below (OCI refs must be).
@@ -59,7 +59,7 @@ jobs:
 
       - name: Run Grype against SBOM
         # Scans the SBOM (not the live image) so results are reproducible and fast,
-        # applying the OpenVEX pulled from the image. fail-build is false — findings
+        # applying the OpenVEX pulled from the image. fail-build is false: findings
         # are surfaced via SARIF, not a job failure.
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         id: scan

@@ -6,7 +6,7 @@ sealed class FetchException(message: String, cause: Throwable? = null) : Excepti
 /** URL blocked by policy: disallowed scheme, malformed, or a private/loopback/reserved address. */
 class UrlNotAllowedException(message: String, cause: Throwable? = null) : FetchException(message, cause)
 
-/** The origin refused server access (HTTP 401/403) — the bounce case. */
+/** The origin refused server access (HTTP 401/403): the bounce case. */
 class FetchAccessDeniedException(message: String, cause: Throwable? = null) : FetchException(message, cause)
 
 /** The origin returned 404/410. */

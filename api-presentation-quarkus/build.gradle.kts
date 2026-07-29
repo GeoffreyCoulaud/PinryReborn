@@ -32,7 +32,7 @@ dependencies {
     testImplementation(libs.resteasy.reactive)
     testImplementation(libs.quarkus.security)
     // Needed to unit-test ObjectMapper-consuming collaborators (LoggingRequestResponseFilter,
-    // Base64JsonSerializer, Base64JsonParamConverter*) — compileOnly at main scope, not
+    // Base64JsonSerializer, Base64JsonParamConverter*): compileOnly at main scope, not
     // inherited by the test source set.
     testImplementation(libs.jackson.databind)
     // Transitively provides io.vertx.* and io.quarkus.vertx.http.* on the test classpath, needed to
