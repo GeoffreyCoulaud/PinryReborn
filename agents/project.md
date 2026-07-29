@@ -271,6 +271,11 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   `api-domain/repositories/`; persistence repositories convert through `mappers/`; use cases throw
   domain-specific exceptions (`UserCreationError`, `BoardCreationError`); controllers use the DTOs in
   `dtos/`.
+- **A comment holds in two lines.** Past that it is documentation, and it goes where documentation
+  lives: a spec for a design, an ADR for a decision, the backlog for a defect, a handoff for what was
+  learned. The comment keeps the one sentence that says why, and the reader who wants the rest follows
+  the pointer (settled 2026-07-29, after a review flagged eight comments on a single pull request as
+  walls of text, each of which explained the why correctly).
 - **No top-level functions**: a Kotlin helper belongs to a class, a companion or an object, and
   extension functions are the only free-function exception (`queries/PinBoardQueries.kt` is where the
   exception is taken). Carried by seven execution plans between 2026-07-08 and 2026-07-22
