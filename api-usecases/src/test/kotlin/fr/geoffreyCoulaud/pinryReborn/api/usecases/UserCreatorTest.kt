@@ -13,11 +13,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
@@ -93,19 +93,22 @@ class UserCreatorTest : BaseTest() {
     }
 
     @Test
-    fun `When creating a user with password, then should succeed`() {
+    fun `Given a clock, Then createUserWithPassword stamps the hash with the clock's instant`() {
         // Given
         val name = "John Doe"
         val password = createRandomString()
         every { clock.now() } returns clockInstant
         every { userRepository.findUserByNameIncludingDeleted(any()) } returns null
         every { userRepository.saveUser(any()) } answers { firstArg() }
-        every { passwordHasher.hash(any()) } returns HashedPassword("h", PasswordHashAlgorithm.BCRYPT)
-        every { userPasswordRepository.saveUserPasswordHash(any(), any()) } answers { secondArg() }
+        val stamped = HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = clockInstant)
+        every { passwordHasher.hash(password, clockInstant) } returns stamped
+        val saved = slot<HashedPassword>()
+        every { userPasswordRepository.saveUserPasswordHash(any(), capture(saved)) } returns stamped
 
-        // When, then
-        assertDoesNotThrow {
-            useCase.createUserWithPassword(name = name, password = password)
-        }
+        // When
+        useCase.createUserWithPassword(name = name, password = password)
+
+        // Then the hash handed to the repository carries the instant from the injected Clock
+        assertEquals(clockInstant, saved.captured.createdAt)
     }
 }

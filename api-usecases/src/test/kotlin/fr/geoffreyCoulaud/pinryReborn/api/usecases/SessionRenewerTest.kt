@@ -55,6 +55,7 @@ class SessionRenewerTest {
         verify { repository.saveSessionToken(capture(saved), TokenHasher.sha256("new-token")) }
         assertEquals(user, saved.captured.user)
         assertEquals(true, saved.captured.persistent)
+        assertEquals(now, saved.captured.createdAt)
         verify { repository.deleteById(current.id) }
     }
 

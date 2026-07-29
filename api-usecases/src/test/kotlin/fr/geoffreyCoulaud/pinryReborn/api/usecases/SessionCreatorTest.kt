@@ -59,6 +59,7 @@ class SessionCreatorTest {
         assertEquals(user, saved.captured.user)
         assertEquals(expectedExpiry, saved.captured.expiresAt)
         assertEquals(true, saved.captured.persistent)
+        assertEquals(now, saved.captured.createdAt)
     }
 
     @Test
