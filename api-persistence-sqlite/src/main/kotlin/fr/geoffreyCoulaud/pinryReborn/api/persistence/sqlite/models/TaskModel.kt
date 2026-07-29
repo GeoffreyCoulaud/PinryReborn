@@ -11,11 +11,11 @@ import java.util.UUID
 @Entity
 @Table(name = "tasks")
 // Targets the terminal-task garbage collection sweep: `deleteTerminalBefore` filters WHERE state IN (...) AND
-// when_modified < ?. `state` leads as the more selective predicate; `when_modified` is inherited
-// from AuditedBaseModel and lands as a real column on this table, so the composite spans both.
+// terminal_state_at < ?. `state` leads as the more selective predicate; `terminal_state_at` is the
+// instant a task entered a terminal state, written explicitly on every terminal transition.
 // Without it the sweep is a full scan over a table that accumulates terminal rows forever
 // (spec 2026-07-27-periodic-gc.md section 11, D6).
-@Index(columnNames = ["state", "when_modified"])
+@Index(columnNames = ["state", "terminal_state_at"])
 class TaskModel
     @Suppress("LongParameterList")
     constructor(
@@ -32,6 +32,7 @@ class TaskModel
         var cancelRequested: Boolean = false,
         var dedupKey: String? = null,
         var lastError: String? = null,
+        var terminalStateAt: Instant? = null,
     ) : AuditedBaseModel(id = id) {
     @Version
     var version: Long = 0

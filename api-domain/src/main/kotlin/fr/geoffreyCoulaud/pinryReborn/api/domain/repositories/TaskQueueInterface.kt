@@ -44,8 +44,11 @@ interface TaskQueueInterface {
      */
     fun markCancelledIfRequested(id: UUID, leaseId: String, now: Instant): Boolean
 
-    /** Cancel a PENDING task (guarded WHERE state=PENDING). Returns true if it was cancelled. */
-    fun cancelPending(id: UUID): Boolean
+    /**
+     * Cancel a PENDING task (guarded WHERE state=PENDING), stamping [now] as its terminal instant.
+     * Returns true if it was cancelled.
+     */
+    fun cancelPending(id: UUID, now: Instant): Boolean
 
     /** Request cancellation of a RUNNING task (sets cancelRequested WHERE state=RUNNING). Returns true if set. */
     fun requestCancel(id: UUID): Boolean
@@ -60,7 +63,7 @@ interface TaskQueueInterface {
     fun findById(id: UUID): Task?
 
     /**
-     * Delete tasks in a terminal state (`SUCCEEDED`, `DEAD`, `CANCELLED`) whose `whenModified`
+     * Delete tasks in a terminal state (`SUCCEEDED`, `DEAD`, `CANCELLED`) whose `terminalStateAt`
      * is before [cutoff]. Returns the count of rows deleted. Non-terminal tasks and fresh
      * terminals are untouched.
      */

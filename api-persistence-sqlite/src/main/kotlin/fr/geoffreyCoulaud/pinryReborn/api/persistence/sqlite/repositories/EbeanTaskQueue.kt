@@ -106,6 +106,7 @@ class EbeanTaskQueue(
                 model.lastError = "attempts exhausted"
                 model.leaseId = null
                 model.leaseExpiresAt = null
+                model.terminalStateAt = now
                 database.save(model)
                 transaction.commit()
                 return@use null
@@ -148,6 +149,7 @@ class EbeanTaskQueue(
         leaseGuard(id, leaseId)
             .asUpdate()
             .set("state", TaskState.SUCCEEDED.name)
+            .set("terminalStateAt", now)
             .setRaw("version = version + 1")
             .update() > 0
 
@@ -178,6 +180,7 @@ class EbeanTaskQueue(
             .asUpdate()
             .set("state", TaskState.DEAD.name)
             .set("lastError", lastError)
+            .set("terminalStateAt", now)
             .setRaw("version = version + 1")
             .update() > 0
 
@@ -190,15 +193,20 @@ class EbeanTaskQueue(
             .cancelRequested.equalTo(true)
             .asUpdate()
             .set("state", TaskState.CANCELLED.name)
+            .set("terminalStateAt", now)
             .setRaw("version = version + 1")
             .update() > 0
 
-    override fun cancelPending(id: UUID): Boolean =
+    override fun cancelPending(
+        id: UUID,
+        now: Instant,
+    ): Boolean =
         QTaskModel(database)
             .id.equalTo(id)
             .state.equalTo(TaskState.PENDING.name)
             .asUpdate()
             .set("state", TaskState.CANCELLED.name)
+            .set("terminalStateAt", now)
             .setRaw("version = version + 1")
             .update() > 0
 
@@ -226,7 +234,7 @@ class EbeanTaskQueue(
     override fun deleteTerminalBefore(cutoff: Instant): Int =
         QTaskModel(database)
             .state.isIn(TaskState.SUCCEEDED.name, TaskState.DEAD.name, TaskState.CANCELLED.name)
-            .whenModified.lessThan(cutoff)
+            .terminalStateAt.lessThan(cutoff)
             .delete()
 
     /** Query for the task row identified by [id], guarded by its current [leaseId] (fencing). */
