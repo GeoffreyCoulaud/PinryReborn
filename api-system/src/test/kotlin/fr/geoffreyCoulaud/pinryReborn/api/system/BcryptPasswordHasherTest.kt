@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.Instant
 
 class BcryptPasswordHasherTest {
     private val hasher = BcryptPasswordHasher()
@@ -14,7 +15,7 @@ class BcryptPasswordHasherTest {
         // Given
         val raw = "correct horse battery staple"
         // When
-        val hashed = hasher.hash(raw)
+        val hashed = hasher.hash(raw, Instant.now())
         // Then
         assertEquals(PasswordHashAlgorithm.BCRYPT, hashed.algorithm)
         assertTrue(hasher.matches(raw, hashed))
@@ -23,7 +24,7 @@ class BcryptPasswordHasherTest {
     @Test
     fun `Given a wrong password, Then matches is false`() {
         // Given
-        val hashed = hasher.hash("right")
+        val hashed = hasher.hash("right", Instant.now())
         // When / Then
         assertFalse(hasher.matches("wrong", hashed))
     }

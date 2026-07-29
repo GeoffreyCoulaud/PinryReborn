@@ -8,4 +8,5 @@ data class SessionToken(
     val user: User,
     val expiresAt: Instant,
     val persistent: Boolean,
+    val createdAt: Instant,
 ) : Identifiable

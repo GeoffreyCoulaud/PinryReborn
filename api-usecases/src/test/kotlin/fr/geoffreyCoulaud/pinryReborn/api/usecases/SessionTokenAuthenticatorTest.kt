@@ -26,7 +26,13 @@ class SessionTokenAuthenticatorTest {
 
     @Test
     fun `Given a valid unexpired token, Then authenticate returns its session token`() {
-        val token = SessionToken(randomUUID(), user, expiresAt = now.plusSeconds(60), persistent = false)
+        val token = SessionToken(
+            randomUUID(),
+            user,
+            expiresAt = now.plusSeconds(60),
+            persistent = false,
+            createdAt = now,
+        )
         every { clock.now() } returns now
         every { repository.findByTokenHash(hash) } returns token
 
@@ -41,7 +47,13 @@ class SessionTokenAuthenticatorTest {
 
     @Test
     fun `Given an expired token, Then authenticate throws SessionTokenExpiredError`() {
-        val token = SessionToken(randomUUID(), user, expiresAt = now.minusSeconds(1), persistent = false)
+        val token = SessionToken(
+            randomUUID(),
+            user,
+            expiresAt = now.minusSeconds(1),
+            persistent = false,
+            createdAt = now,
+        )
         every { clock.now() } returns now
         every { repository.findByTokenHash(hash) } returns token
         assertThrows<SessionTokenExpiredError> { authenticator.authenticate(plaintext) }
@@ -49,7 +61,13 @@ class SessionTokenAuthenticatorTest {
 
     @Test
     fun `Given a token expiring exactly now, Then it is treated as expired`() {
-        val token = SessionToken(randomUUID(), user, expiresAt = now, persistent = false)
+        val token = SessionToken(
+            randomUUID(),
+            user,
+            expiresAt = now,
+            persistent = false,
+            createdAt = now,
+        )
         every { clock.now() } returns now
         every { repository.findByTokenHash(hash) } returns token
         assertThrows<SessionTokenExpiredError> { authenticator.authenticate(plaintext) }

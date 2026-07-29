@@ -11,5 +11,6 @@ object SessionTokenModelMapper {
             user = user.toDomain(),
             expiresAt = expiresAt,
             persistent = persistent,
+            createdAt = createdAt,
         )
 }

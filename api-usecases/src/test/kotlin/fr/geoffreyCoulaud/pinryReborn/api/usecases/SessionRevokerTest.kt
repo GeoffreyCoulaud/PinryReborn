@@ -16,7 +16,7 @@ class SessionRevokerTest {
 
     @Test
     fun `Given a current token, Then revokeCurrent deletes it by id`() {
-        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false)
+        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false, createdAt = Instant.now())
         revoker.revokeCurrent(current)
         verify { repository.deleteById(current.id) }
     }

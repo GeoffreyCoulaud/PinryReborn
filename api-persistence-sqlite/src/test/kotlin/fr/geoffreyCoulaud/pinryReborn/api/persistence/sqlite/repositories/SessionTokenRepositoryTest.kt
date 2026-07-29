@@ -26,7 +26,14 @@ class SessionTokenRepositoryTest : RepositoryTest() {
         user: User,
         persistent: Boolean = false,
         expiresAt: Instant = storableNow().plusSeconds(3600),
-    ) = SessionToken(id = randomUUID(), user = user, expiresAt = expiresAt, persistent = persistent)
+        createdAt: Instant = storableNow(),
+    ) = SessionToken(
+        id = randomUUID(),
+        user = user,
+        expiresAt = expiresAt,
+        persistent = persistent,
+        createdAt = createdAt,
+    )
 
     @Test
     fun `Given a saved token, Then findByTokenHash returns it with its user and fields`() {

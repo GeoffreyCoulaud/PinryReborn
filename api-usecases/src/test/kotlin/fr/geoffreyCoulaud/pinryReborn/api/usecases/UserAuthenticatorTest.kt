@@ -34,7 +34,11 @@ class UserAuthenticatorTest : BaseTest() {
         // Given
         val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val password = createRandomString()
-        val hashedPassword = HashedPassword(hash = createRandomString(), algorithm = PasswordHashAlgorithm.BCRYPT)
+        val hashedPassword = HashedPassword(
+            hash = createRandomString(),
+            algorithm = PasswordHashAlgorithm.BCRYPT,
+            createdAt = Instant.now(),
+        )
         val login = BasicAuthLogin(user.name, password)
         every { userRepository.findUserByName(any()) } returns user
         every { userPasswordRepository.findCurrentPasswordHash((any())) } returns hashedPassword
@@ -55,7 +59,11 @@ class UserAuthenticatorTest : BaseTest() {
         val login = BasicAuthLogin(user.name, password)
         every { userRepository.findUserByName(any()) } returns user
         every { userPasswordRepository.findCurrentPasswordHash((any())) } returns null
-        every { passwordHasher.hash(any()) } returns HashedPassword("dummy", PasswordHashAlgorithm.BCRYPT)
+        every { passwordHasher.hash(any(), any()) } returns HashedPassword(
+            "dummy",
+            PasswordHashAlgorithm.BCRYPT,
+            createdAt = Instant.now(),
+        )
         every { passwordHasher.matches(any(), any()) } returns false
 
         // When, Then
@@ -70,7 +78,11 @@ class UserAuthenticatorTest : BaseTest() {
         val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val login = BasicAuthLogin(user.name, createRandomString())
         every { userRepository.findUserByName(any()) } returns null
-        every { passwordHasher.hash(any()) } returns HashedPassword("dummy", PasswordHashAlgorithm.BCRYPT)
+        every { passwordHasher.hash(any(), any()) } returns HashedPassword(
+            "dummy",
+            PasswordHashAlgorithm.BCRYPT,
+            createdAt = Instant.now(),
+        )
         every { passwordHasher.matches(any(), any()) } returns false
 
         // When, Then
@@ -84,7 +96,11 @@ class UserAuthenticatorTest : BaseTest() {
         // Given
         val user = User(id = UUID.randomUUID(), name = createRandomString(), createdAt = Instant.now())
         val login = BasicAuthLogin(user.name, createRandomString())
-        val hashedPassword = HashedPassword(hash = createRandomString(), algorithm = PasswordHashAlgorithm.BCRYPT)
+        val hashedPassword = HashedPassword(
+            hash = createRandomString(),
+            algorithm = PasswordHashAlgorithm.BCRYPT,
+            createdAt = Instant.now(),
+        )
         every { userRepository.findUserByName(any()) } returns user
         every { userPasswordRepository.findCurrentPasswordHash((any())) } returns hashedPassword
         every { passwordHasher.matches(any(), any()) } returns false

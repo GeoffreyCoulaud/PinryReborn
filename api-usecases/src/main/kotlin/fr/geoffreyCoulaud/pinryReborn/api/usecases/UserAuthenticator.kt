@@ -10,6 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UserAuthenticationInvalidPasswordError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UserAuthenticationUserDoesNotExistError
 import jakarta.enterprise.context.ApplicationScoped
+import java.time.Instant
 
 @ApplicationScoped
 class UserAuthenticator(
@@ -21,7 +22,10 @@ class UserAuthenticator(
      * Precomputed once. Pays a constant hashing cost when the user does not exist or has no
      * stored hash, to avoid a timing oracle (username enumeration).
      */
-    private val dummyHash: HashedPassword by lazy { passwordHasher.hash("constant-time-guard") }
+    // Never persisted and never read: a placeholder instant stands in for a Clock this class has no other use for.
+    private val dummyHash: HashedPassword by lazy {
+        passwordHasher.hash("constant-time-guard", Instant.EPOCH)
+    }
 
     fun authenticate(login: Login): User =
         when (login) {

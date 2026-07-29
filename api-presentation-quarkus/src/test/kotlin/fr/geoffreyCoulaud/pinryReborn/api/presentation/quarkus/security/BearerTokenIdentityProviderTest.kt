@@ -36,7 +36,13 @@ class BearerTokenIdentityProviderTest {
 
     @Test
     fun `Given a valid token, Then the identity carries the user, userId and sessionToken`() {
-        val session = SessionToken(randomUUID(), user, Instant.now().plusSeconds(60), persistent = true)
+        val session = SessionToken(
+            randomUUID(),
+            user,
+            Instant.now().plusSeconds(60),
+            persistent = true,
+            createdAt = Instant.now(),
+        )
         every { authenticator.authenticate("good") } returns session
 
         val identity = provider.authenticate(request("good"), context).await().indefinitely()
