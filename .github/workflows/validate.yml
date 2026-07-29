@@ -27,6 +27,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
       - name: Detekt
         run: ./gradlew detekt
+      - name: No long dashes
+        # CI reproduces the gate's parts rather than calling `gate`, so a check added there is not
+        # in CI until it is added here too.
+        run: ./gradlew checkNoLongDashes
 
   test:
     runs-on: ubuntu-latest
