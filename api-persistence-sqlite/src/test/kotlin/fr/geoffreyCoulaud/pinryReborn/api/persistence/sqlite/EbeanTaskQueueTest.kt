@@ -122,6 +122,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Then
         assertTrue(ok)
         assertEquals(TaskState.SUCCEEDED, queue.findById(claimed.id)?.state)
+        assertEquals(now, queue.findById(claimed.id)?.terminalStateAt)
     }
 
     @Test
@@ -149,6 +150,8 @@ class EbeanTaskQueueTest : RepositoryTest() {
         assertEquals(retryAt, stored?.availableAt)
         assertEquals("boom", stored?.lastError)
         assertNull(stored?.leaseId)
+        // A retry keeps the task live, so terminalStateAt stays unset.
+        assertNull(stored?.terminalStateAt)
     }
 
     @Test
@@ -173,6 +176,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         assertTrue(ok)
         assertEquals(TaskState.DEAD, queue.findById(claimed.id)?.state)
         assertEquals("fatal", queue.findById(claimed.id)?.lastError)
+        assertEquals(now, queue.findById(claimed.id)?.terminalStateAt)
     }
 
     @Test
@@ -207,6 +211,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Then
         assertTrue(cancelled)
         assertEquals(TaskState.CANCELLED, queue.findById(claimed.id)?.state)
+        assertEquals(now, queue.findById(claimed.id)?.terminalStateAt)
     }
 
     @Test
@@ -227,11 +232,13 @@ class EbeanTaskQueueTest : RepositoryTest() {
     fun `Given a pending task, Then cancelPending cancels it`() {
         // Given
         val task = queue.enqueue(newTask())
+        val cancelAt = now.plusSeconds(900)
         // When
-        val ok = queue.cancelPending(task.id)
+        val ok = queue.cancelPending(task.id, cancelAt)
         // Then
         assertTrue(ok)
         assertEquals(TaskState.CANCELLED, queue.findById(task.id)?.state)
+        assertEquals(cancelAt, queue.findById(task.id)?.terminalStateAt)
     }
 
     @Test
@@ -239,10 +246,12 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Given
         val claimed = claimFresh()
         // When
-        val ok = queue.cancelPending(claimed.id)
+        val ok = queue.cancelPending(claimed.id, now)
         // Then
         assertFalse(ok)
         assertEquals(TaskState.RUNNING, queue.findById(claimed.id)?.state)
+        // A live task never enters a terminal state, so terminalStateAt stays unset.
+        assertNull(queue.findById(claimed.id)?.terminalStateAt)
     }
 
     @Test
@@ -303,7 +312,8 @@ class EbeanTaskQueueTest : RepositoryTest() {
         queue.reapExpired(now.plusSeconds(120))
 
         // When
-        val reclaimed = queue.claimNext(now.plusSeconds(121), Duration.ofMinutes(1))
+        val killAt = now.plusSeconds(121)
+        val reclaimed = queue.claimNext(killAt, Duration.ofMinutes(1))
 
         // Then
         assertNull(reclaimed)
@@ -311,6 +321,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         assertEquals(TaskState.DEAD, stored?.state)
         assertEquals(1, stored?.attempts)
         assertNull(stored?.leaseId)
+        assertEquals(killAt, stored?.terminalStateAt)
     }
 
     // --- renewLease ---
@@ -363,9 +374,9 @@ class EbeanTaskQueueTest : RepositoryTest() {
     fun `Given terminal and non-terminal tasks, Then deleteTerminalBefore deletes only stale terminals`() {
         // Given: for each terminal state (SUCCEEDED, DEAD, CANCELLED) one stale row back-dated before
         // the cutoff and one fresh row back-dated after it, plus a PENDING and a RUNNING task
-        // back-dated before the cutoff. `when_modified` is `@WhenModified`, which Ebean overwrites on
-        // every save, so the back-date is a raw SQL update rather than a re-save (same idiom as
-        // UserRepositoryTest's tombstone sweep).
+        // back-dated before the cutoff. `terminal_state_at` is a plain column, but it is back-dated
+        // via raw SQL rather than a re-save, to place the row on a specific side of the cutoff
+        // independently of the `now` the transition itself stamped.
         val cutoff = storableNow()
         val beforeCutoff = cutoff.minus(2, ChronoUnit.HOURS)
         val afterCutoff = cutoff.plus(2, ChronoUnit.HOURS)
@@ -374,19 +385,19 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val freshSucceeded = claimFresh().also { queue.markSucceeded(it.id, it.leaseId, now) }
         val staleDead = claimFresh().also { queue.markDead(it.id, it.leaseId, now, "boom") }
         val freshDead = claimFresh().also { queue.markDead(it.id, it.leaseId, now, "boom") }
-        val staleCancelled = queue.enqueue(newTask()).also { queue.cancelPending(it.id) }
-        val freshCancelled = queue.enqueue(newTask()).also { queue.cancelPending(it.id) }
+        val staleCancelled = queue.enqueue(newTask()).also { queue.cancelPending(it.id, now) }
+        val freshCancelled = queue.enqueue(newTask()).also { queue.cancelPending(it.id, now) }
         val oldPending = queue.enqueue(newTask())
         val oldRunning = claimFresh()
 
-        backDateWhenModified(staleSucceeded.id, beforeCutoff)
-        backDateWhenModified(freshSucceeded.id, afterCutoff)
-        backDateWhenModified(staleDead.id, beforeCutoff)
-        backDateWhenModified(freshDead.id, afterCutoff)
-        backDateWhenModified(staleCancelled.id, beforeCutoff)
-        backDateWhenModified(freshCancelled.id, afterCutoff)
-        backDateWhenModified(oldPending.id, beforeCutoff)
-        backDateWhenModified(oldRunning.id, beforeCutoff)
+        backDateTerminalStateAt(staleSucceeded.id, beforeCutoff)
+        backDateTerminalStateAt(freshSucceeded.id, afterCutoff)
+        backDateTerminalStateAt(staleDead.id, beforeCutoff)
+        backDateTerminalStateAt(freshDead.id, afterCutoff)
+        backDateTerminalStateAt(staleCancelled.id, beforeCutoff)
+        backDateTerminalStateAt(freshCancelled.id, afterCutoff)
+        backDateTerminalStateAt(oldPending.id, beforeCutoff)
+        backDateTerminalStateAt(oldRunning.id, beforeCutoff)
 
         // When
         val deleted = queue.deleteTerminalBefore(cutoff)
@@ -408,7 +419,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
     fun `Given no terminal task older than the cutoff, Then deleteTerminalBefore returns zero`() {
         // Given: every task is either non-terminal or a fresh terminal
         val cutoff = storableNow().minus(1, ChronoUnit.HOURS)
-        val freshTerminal = claimFresh().also { queue.markSucceeded(it.id, it.leaseId, now) }
+        val freshTerminal = claimFresh().also { queue.markSucceeded(it.id, it.leaseId, storableNow()) }
         val runningTask = claimFresh()
 
         // When
@@ -420,10 +431,10 @@ class EbeanTaskQueueTest : RepositoryTest() {
         assertNotNull(queue.findById(runningTask.id))
     }
 
-    private fun backDateWhenModified(id: UUID, whenModified: Instant) {
+    private fun backDateTerminalStateAt(id: UUID, terminalStateAt: Instant) {
         database
-            .sqlUpdate("UPDATE tasks SET when_modified = ? WHERE id = ?")
-            .setParameter(1, whenModified)
+            .sqlUpdate("UPDATE tasks SET terminal_state_at = ? WHERE id = ?")
+            .setParameter(1, terminalStateAt)
             .setParameter(2, id)
             .execute()
     }
