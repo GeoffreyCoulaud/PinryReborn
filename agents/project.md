@@ -255,6 +255,11 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   `compileTestKotlin`, and that unresolved-reference output is the red. Paste it from the run; a
   prose description of what failed is what this rule replaced (settled 2026-07-28,
   `docs/adr/0005-adopt-agents-baseline-v3.2.md`).
+- **A structural assertion arrives with the mutation that makes it fail**, pasted in the message of
+  the commit that introduces it, the way a failing test carries its red. An assertion that filters a
+  set down and ends on `assertEmpty()` passes just as well when the filter matches nothing at all, so
+  a green run is not evidence that it holds anything (settled 2026-07-29: four such checks shipped in
+  one branch, three of them caught by mutating the code and watching them fail).
 - **Test names** use backticks and the `Given..., Then...` form, with no "when" in the name:
   `` fun `Given duplicate username, Then throws UserCreationError`() ``.
 - **Test bodies** follow Given-When-Then with explicit `// Given`, `// When` and `// Then` comments.
