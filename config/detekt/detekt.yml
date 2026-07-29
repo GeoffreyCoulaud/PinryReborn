@@ -3,7 +3,11 @@ config:
   warningsAsErrors: false
   checkExhaustiveness: false
   # when writing own rules with new properties, exclude the property path e.g.: ['my_rule_set', '.*>.*>[my_property]']
-  excludes: []
+  #
+  # `pinry-reborn` is the project's own rule set. The module declaring it cannot carry itself as a
+  # detekt plugin, so analysing that module reads this file with no provider to explain the key and
+  # rejects it as misspelled. The provider's own test guards the spelling instead.
+  excludes: ['pinry-reborn.*']
 
 processors:
   active: true
@@ -855,3 +859,23 @@ style:
     active: true
     excludeImports:
       - 'java.util.*'
+
+# The project's own rules, from the `detekt-rules` module. Test sources are excluded for all three:
+# tests legitimately read the wall clock (RepositoryTest.storableNow()) and build query beans.
+pinry-reborn:
+  QueryBeanConstructedByQualifiedName:
+    active: true
+    excludes: ['**/test/**', '**/testFixtures/**']
+  SoftDeleteStateFilteredOutsideQueries:
+    active: true
+    # The rule keys on a property name, so its reach is a path filter. Inside the persistence module
+    # `softDeletedAt` is a column and continuing past it is a query predicate; outside, the same name
+    # is a domain value that may legitimately be compared, and `pin.softDeletedAt.isBefore(x)` would
+    # be a false positive. The `queries` package is excluded because that predicate is its whole
+    # content. Excludes win over includes, so the two compose as written.
+    includes: ['**/api-persistence-sqlite/**']
+    excludes: ['**/test/**', '**/testFixtures/**', '**/queries/**']
+  WallClockRead:
+    active: true
+    # Test sources read the wall clock freely. Accepted for now, not for good.
+    excludes: ['**/test/**', '**/testFixtures/**']

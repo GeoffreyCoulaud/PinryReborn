@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.domain.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import java.time.Instant
 import java.util.UUID
 
 interface BoardRepositoryInterface {
@@ -20,11 +21,16 @@ interface BoardRepositoryInterface {
     /** Find all recycled boards for a user, sorted by name (case-insensitive), id as tie-breaker. */
     fun findRecycledBoardsForUser(user: User): List<Board>
 
-    /** Soft-delete a board by setting its softDeletedAt timestamp. Keeps its pin memberships. */
-    fun softDeleteBoard(board: Board): Board
+    /**
+     * Soft-delete a board, recording [at] as both its softDeletedAt and its updatedAt: recycling is
+     * a modification like any other. Keeps its pin memberships.
+     */
+    fun softDeleteBoard(board: Board, at: Instant): Board
 
-    /** Restore a soft-deleted board by clearing its softDeletedAt timestamp. */
-    fun restoreBoard(board: Board): Board
+    /**
+     * Restore a soft-deleted board by clearing its softDeletedAt, recording [at] as its updatedAt.
+     */
+    fun restoreBoard(board: Board, at: Instant): Board
 
     /** Permanently delete a board and its pin memberships. */
     fun permanentlyDeleteBoard(board: Board)

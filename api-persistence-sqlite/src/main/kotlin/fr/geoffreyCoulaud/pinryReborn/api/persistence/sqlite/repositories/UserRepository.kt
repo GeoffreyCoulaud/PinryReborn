@@ -5,7 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInte
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.UserQueries
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Instant
@@ -24,63 +24,58 @@ class UserRepository(
     private val sqlRepository = ModelRepository(entityClass = UserModel::class, database = database)
 
     override fun findUserById(id: UUID): User? =
-        QUserModel()
+        UserQueries.active()
             .id
             .equalTo(id)
             .findOne()
             ?.toDomain()
 
     override fun findUserByName(name: String): User? =
-        QUserModel()
+        UserQueries.active()
             .name
             .ieq(name)
             .findOne()
             ?.toDomain()
 
     override fun findUserByNameIncludingDeleted(name: String): User? =
-        QUserModel()
+        UserQueries.any()
             .name
             .ieq(name)
-            .setIncludeSoftDeletes()
             .findOne()
             ?.toDomain()
 
     override fun findUserByIdIncludingDeleted(id: UUID): User? =
-        QUserModel()
+        UserQueries.any()
             .id
             .equalTo(id)
-            .setIncludeSoftDeletes()
             .findOne()
             ?.toDomain()
 
     override fun saveUser(user: User): User = sqlRepository.saveAndReturn(user.toModel()).toDomain()
 
-    override fun markPendingDeletion(user: User) {
+    // Rooted on the active accounts: a repeated deletion request then finds nothing and returns,
+    // instead of re-stamping the instant and pushing the retention deadline further away every time.
+    override fun markPendingDeletion(user: User, at: Instant) {
         val model =
-            QUserModel()
+            UserQueries.active()
+                .id
+                .equalTo(user.id)
+                .findOne() ?: return
+        model.softDeletedAt = at
+        database.save(model)
+    }
+
+    override fun permanentlyDeleteUser(user: User) {
+        val model =
+            UserQueries.any()
                 .id
                 .equalTo(user.id)
                 .findOne() ?: return
         database.delete(model)
     }
 
-    override fun permanentlyDeleteUser(user: User) {
-        val model =
-            QUserModel()
-                .id
-                .equalTo(user.id)
-                .setIncludeSoftDeletes()
-                .findOne() ?: return
-        database.deletePermanent(model)
-    }
-
-    override fun findTombstonedUsersModifiedBefore(cutoff: Instant): List<User> =
-        QUserModel()
-            .deleted
-            .isTrue
-            .whenModified
-            .lessThan(cutoff)
-            .setIncludeSoftDeletes()
+    override fun findTombstonedUsersSoftDeletedBefore(cutoff: Instant): List<User> =
+        UserQueries.tombstonedBefore(cutoff)
             .findList()
             .map { it.toDomain() }
 }

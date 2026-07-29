@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Page
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
+import java.time.Instant
 import java.util.UUID
 
 // 12 methods trips detekt's default per-interface threshold. Suppressed rather than split,
@@ -50,14 +51,15 @@ interface PinRepositoryInterface {
     fun findAllPinIdsForUser(user: User): List<UUID>
 
     /**
-     * Soft-delete a pin by setting its softDeletedAt timestamp
+     * Soft-delete a pin, recording [at] as both its softDeletedAt and its updatedAt: recycling is
+     * a modification like any other.
      */
-    fun softDeletePin(pin: Pin): Pin
+    fun softDeletePin(pin: Pin, at: Instant): Pin
 
     /**
-     * Restore a soft-deleted pin by clearing its softDeletedAt timestamp
+     * Restore a soft-deleted pin by clearing its softDeletedAt, recording [at] as its updatedAt.
      */
-    fun restorePin(pin: Pin): Pin
+    fun restorePin(pin: Pin, at: Instant): Pin
 
     /**
      * Permanently delete a pin and its tag associations

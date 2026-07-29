@@ -83,11 +83,22 @@ class UserDataExportRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a tombstoned user, Then saving an export for it throws UserModelDoesNotExistError`() {
+        // Given: the row survives a tombstone, so the lookup behind this write is the only thing
+        // that keeps a deleted account from queueing more work against its own data
+        val user = createAndSaveUser()
+        userRepository.markPendingDeletion(user, storableNow())
+
+        // When / Then
+        assertThrows(UserModelDoesNotExistError::class.java) { repository.save(pendingExport(user.id)) }
+    }
+
+    @Test
     fun `Given an export whose owner is later soft-deleted, Then reading it back does not crash`() {
         // Given
         val user = createAndSaveUser()
         val export = repository.save(pendingExport(user.id).copy(state = UserDataExportState.DELETED))
-        userRepository.markPendingDeletion(user)
+        userRepository.markPendingDeletion(user, storableNow())
 
         // When
         val found = repository.findById(export.id)

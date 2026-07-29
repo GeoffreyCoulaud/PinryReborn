@@ -76,7 +76,7 @@ class UserCreatorTest : BaseTest() {
         // Given
         val name = createRandomString()
         every { userRepository.findUserByNameIncludingDeleted(name) } returns
-            User(id = randomUUID(), name = name, softDeleted = true, createdAt = Instant.now())
+            User(id = randomUUID(), name = name, softDeletedAt = Instant.now(), createdAt = Instant.now())
         // When / Then
         assertThrows<UsernameAlreadyTakenError> { useCase.createUser(name) }
     }

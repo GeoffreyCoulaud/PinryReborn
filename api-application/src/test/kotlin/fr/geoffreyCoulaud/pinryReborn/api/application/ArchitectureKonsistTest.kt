@@ -3,12 +3,19 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.architecture.KoArchitectureCreator.assertArchitecture
 import com.lemonappdev.konsist.api.architecture.Layer
+import com.lemonappdev.konsist.api.ext.list.withImport
 import com.lemonappdev.konsist.api.ext.list.withName
 import com.lemonappdev.konsist.api.ext.list.withNameStartingWith
+import com.lemonappdev.konsist.api.ext.list.withPackage
+import com.lemonappdev.konsist.api.ext.list.withParentInterfaceOf
+import com.lemonappdev.konsist.api.ext.list.withPropertyNamed
 import com.lemonappdev.konsist.api.ext.list.withoutName
 import com.lemonappdev.konsist.api.ext.list.withoutNameStartingWith
+import com.lemonappdev.konsist.api.ext.list.withoutParentInterfaceOf
+import com.lemonappdev.konsist.api.ext.list.withoutPath
 import com.lemonappdev.konsist.api.verify.assertEmpty
 import com.lemonappdev.konsist.api.verify.assertNotEmpty
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.SoftDeletableModel
 import org.junit.jupiter.api.Test
 
 /**
@@ -18,10 +25,20 @@ import org.junit.jupiter.api.Test
  * regardless of where this test runs; it is placed in `api-application` (the only module without
  * the Kover branch-coverage gate) to avoid a near-empty dedicated module.
  *
- * The two "scope is not empty" tests guard against a mistyped `moduleName` silently making an
+ * The three "scope is not empty" tests guard against a mistyped `moduleName` silently making an
  * import assertion pass on an empty file list.
  */
 class ArchitectureKonsistTest {
+    /**
+     * The persistence models that declared themselves recyclable, which is what the two assertions
+     * below derive their reach from instead of naming types.
+     */
+    private val recyclableModels =
+        Konsist
+            .scopeFromProduction(moduleName = "api-persistence-sqlite")
+            .classes()
+            .withParentInterfaceOf(SoftDeletableModel::class)
+
     @Test
     fun `Given api-usecases production, Then its scope is not empty`() {
         Konsist.scopeFromProduction(moduleName = "api-usecases").files.assertNotEmpty()
@@ -79,24 +96,6 @@ class ArchitectureKonsistTest {
     }
 
     @Test
-    fun `Given api-domain and api-usecases, Then they read the wall clock only through the Clock port`() {
-        // `java.time.Instant` is an allowed import (entities carry instants), so the import rules above
-        // cannot catch a direct `Instant.now()`. It matters twice over: a hidden clock makes a use case
-        // untestable, and it bypasses SystemClock, whose truncation keeps a stamped instant equal to
-        // itself across a save-then-read. Matched on file text because the offence is a call, not an
-        // import.
-        val wallClockReads =
-            listOf("Instant.now(", "LocalDate.now(", "LocalDateTime.now(", "System.currentTimeMillis(")
-        listOf("api-domain", "api-usecases").forEach { module ->
-            Konsist
-                .scopeFromProduction(moduleName = module)
-                .files
-                .filter { file -> wallClockReads.any { file.text.contains(it) } }
-                .assertEmpty()
-        }
-    }
-
-    @Test
     fun `Given api-domain, Then it imports only its own package and pure value types`() {
         // Drop the allowed imports (own package + pure value types); anything left is a violation,
         // and `assertEmpty` reports each one by name.
@@ -123,6 +122,41 @@ class ArchitectureKonsistTest {
             .scopeFromProduction()
             .imports
             .withName("io.smallrye.common.annotation.Identifier")
+            .assertEmpty()
+    }
+
+    @Test
+    fun `Given api-persistence-sqlite production, Then some model declares itself recyclable`() {
+        recyclableModels.assertNotEmpty()
+    }
+
+    @Test
+    fun `Given the persistence models, Then each one carrying a recycling instant is recyclable`() {
+        // Opting out of the marker would be the way around every rule that reads it, so a model
+        // that carries the instant has to declare itself. Scoped to the persistence models on
+        // purpose: the domain entities carry the same property and answer to no query bean.
+        Konsist
+            .scopeFromProduction(moduleName = "api-persistence-sqlite")
+            .classes()
+            .withPackage("..persistence.sqlite.models..")
+            .withPropertyNamed("softDeletedAt")
+            .withoutParentInterfaceOf(SoftDeletableModel::class)
+            .assertEmpty()
+    }
+
+    @Test
+    fun `Given production sources, Then none outside queries and pagination names a recyclable query bean`() {
+        // Ebean's generator names a model's query bean after the model, so the barred imports are
+        // computed from what declared itself recyclable and no type name is written here. Two
+        // packages are exempt: `queries` builds those queries, and `pagination` carries the type in
+        // a supertype and in every signature without ever constructing one, so satisfying the
+        // assertion would mean moving that file to escape it.
+        val queryBeanNames = recyclableModels.map { "Q${it.name}" }
+        Konsist
+            .scopeFromProduction()
+            .files
+            .withoutPath("..persistence.sqlite.queries..", "..persistence.sqlite.pagination..")
+            .withImport { it.name.substringAfterLast(".") in queryBeanNames }
             .assertEmpty()
     }
 }

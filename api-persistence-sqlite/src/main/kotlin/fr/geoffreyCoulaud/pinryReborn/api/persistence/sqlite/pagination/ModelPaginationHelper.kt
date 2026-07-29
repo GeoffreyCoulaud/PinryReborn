@@ -5,8 +5,12 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection.FORWARD
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
 import io.ebean.typequery.QueryBean
 
-class ModelPaginationHelper<M : BaseModel, Q : QueryBean<M, Q>> {
-    fun getPage(
+/**
+ * Cursor pagination over any model, stateless, its two types read off the call site's arguments so
+ * no caller has to name a query bean to reach it.
+ */
+object ModelPaginationHelper {
+    fun <M : BaseModel, Q : QueryBean<M, Q>> getPage(
         cursor: ModelCursor<M>?,
         pageSize: Int,
         baseQuery: Q,

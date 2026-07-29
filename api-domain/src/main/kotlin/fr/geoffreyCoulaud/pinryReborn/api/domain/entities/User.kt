@@ -7,5 +7,5 @@ data class User(
     override val id: UUID,
     val name: String,
     val createdAt: Instant,
-    val softDeleted: Boolean = false,
+    val softDeletedAt: Instant? = null,
 ) : Identifiable

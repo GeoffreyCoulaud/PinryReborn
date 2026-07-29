@@ -25,7 +25,6 @@ import java.util.UUID.randomUUID
  */
 class ModelPaginationHelperTest : RepositoryTest() {
     private val userRepository = UserRepository(database)
-    private val helper = ModelPaginationHelper<PinModel, QPinModel>()
     private val strategy = PinModelSortStrategy.CreatedAtAsc()
 
     private fun createUser(): User =
@@ -39,7 +38,7 @@ class ModelPaginationHelperTest : RepositoryTest() {
         user: User,
         cursor: ModelCursor<PinModel>?,
         pageSize: Int,
-    ) = helper.getPage(
+    ) = ModelPaginationHelper.getPage(
         cursor = cursor,
         pageSize = pageSize,
         baseQuery = baseQueryFor(user),

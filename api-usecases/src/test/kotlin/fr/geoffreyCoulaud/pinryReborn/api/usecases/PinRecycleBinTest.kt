@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinAlreadySoftDeletedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinDoesNotExistError
@@ -14,9 +15,12 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinNotS
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
@@ -29,15 +33,22 @@ class PinRecycleBinTest {
     private val imageStore = mockk<ImageStore>(relaxed = true)
     private val clearPinDownload = mockk<ClearPinDownload>(relaxed = true)
     private val renditionCache = mockk<RenditionCache>()
+    private val clock = mockk<Clock>()
+    private val transitionInstant = Instant.parse("2026-07-29T08:30:00Z")
     private val useCase = PinRecycleBin(
         pinRepository = pinRepository,
         imageRepository = imageRepository,
         imageStore = imageStore,
         clearPinDownload = clearPinDownload,
         renditionCache = renditionCache,
+        clock = clock,
     )
 
-    init { every { renditionCache.evictImage(any()) } returns Unit }
+    @BeforeEach
+    fun stubClockAndRenditionCache() {
+        every { renditionCache.evictImage(any()) } returns Unit
+        every { clock.now() } returns transitionInstant
+    }
 
     private fun createPin(author: User, softDeletedAt: Instant? = null) = Pin(
         id = randomUUID(),
@@ -73,15 +84,34 @@ class PinRecycleBinTest {
         val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
         val pin = createPin(author = user)
         every { pinRepository.findPinById(pin.id) } returns pin
-        every { pinRepository.softDeletePin(pin) } returns pin.copy(softDeletedAt = Instant.now())
+        every { pinRepository.softDeletePin(pin = pin, at = any()) } returns
+            pin.copy(softDeletedAt = transitionInstant)
 
         // When
         useCase.softDelete(pinId = pin.id, user = user)
 
         // Then
-        verify { pinRepository.softDeletePin(pin) }
+        verify { pinRepository.softDeletePin(pin = pin, at = any()) }
         verify(exactly = 0) { imageRepository.deleteByPinId(any()) }
         verify(exactly = 0) { imageStore.delete(any()) }
+    }
+
+    @Test
+    fun `Given an owned active pin, Then soft delete hands the repository the clock's instant`() {
+        // Given
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val pin = createPin(author = user)
+        val stampedInstant = slot<Instant>()
+        every { pinRepository.findPinById(pin.id) } returns pin
+        every { pinRepository.softDeletePin(pin = pin, at = any()) } returns
+            pin.copy(softDeletedAt = transitionInstant)
+
+        // When
+        useCase.softDelete(pinId = pin.id, user = user)
+
+        // Then
+        verify { pinRepository.softDeletePin(pin = pin, at = capture(stampedInstant)) }
+        assertEquals(transitionInstant, stampedInstant.captured)
     }
 
     @Test
@@ -132,16 +162,33 @@ class PinRecycleBinTest {
         val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
         val pin = createPin(author = user, softDeletedAt = Instant.now())
         every { pinRepository.findPinById(pin.id) } returns pin
-        every { pinRepository.restorePin(pin) } returns pin.copy(softDeletedAt = null)
+        every { pinRepository.restorePin(pin = pin, at = any()) } returns pin.copy(softDeletedAt = null)
 
         // When
         val result = useCase.restore(pinId = pin.id, user = user)
 
         // Then
-        verify { pinRepository.restorePin(pin) }
+        verify { pinRepository.restorePin(pin = pin, at = any()) }
         assert(result.softDeletedAt == null)
         verify(exactly = 0) { imageRepository.deleteByPinId(any()) }
         verify(exactly = 0) { imageStore.delete(any()) }
+    }
+
+    @Test
+    fun `Given an owned recycled pin, Then restore hands the repository the clock's instant`() {
+        // Given
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val stampedInstant = slot<Instant>()
+        every { pinRepository.findPinById(pin.id) } returns pin
+        every { pinRepository.restorePin(pin = pin, at = any()) } returns pin.copy(softDeletedAt = null)
+
+        // When
+        useCase.restore(pinId = pin.id, user = user)
+
+        // Then
+        verify { pinRepository.restorePin(pin = pin, at = capture(stampedInstant)) }
+        assertEquals(transitionInstant, stampedInstant.captured)
     }
 
     @Test

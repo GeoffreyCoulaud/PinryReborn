@@ -1,5 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
@@ -10,6 +12,8 @@ import org.hamcrest.CoreMatchers.notNullValue
 import org.hamcrest.CoreMatchers.nullValue
 import org.hamcrest.Matchers.emptyIterable
 import org.hamcrest.Matchers.hasSize
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.UUID
 
@@ -18,6 +22,13 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
 
     @Inject
     lateinit var pinCreator: PinCreator
+
+    @Inject
+    lateinit var pinRepository: PinRepositoryInterface
+
+    /** The stored pin, whatever its state. `updatedAt` is on no output DTO, so it is read here. */
+    private fun reloadPin(pinId: UUID): Pin =
+        requireNotNull(pinRepository.findPinById(pinId)) { "the pin should still be stored" }
 
     // --- Soft delete ---
 
@@ -79,6 +90,37 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
             .statusCode(200)
             .body("id", equalTo(pin.id.toString()))
             .body("softDeletedAt", notNullValue())
+    }
+
+    @Test
+    fun `Given an active pin, Then soft delete moves its updatedAt to the deletion instant`() {
+        // Given
+        val auth = createAuthenticatedUser()
+        val pin = pinCreator.createPin(
+            author = auth.user,
+            sourceContextUrl = "https://example.com",
+            sourceMediaUrl = "https://example.com/img.jpg",
+            description = "Recycled",
+            tags = emptyList(),
+        )
+        val updatedAtBeforeDeletion = reloadPin(pin.id).updatedAt
+        waitForTheClockToTick()
+
+        // When
+        given()
+            .authenticatedAs(auth)
+            .`when`()
+            .delete("/api/v1/pins/${pin.id}")
+            .then()
+            .statusCode(204)
+
+        // Then - recycling is a modification, and both instants come from the same stamp
+        val recycled = reloadPin(pin.id)
+        assertTrue(
+            recycled.updatedAt.isAfter(updatedAtBeforeDeletion),
+            "updatedAt should move when the pin is recycled",
+        )
+        assertEquals(recycled.softDeletedAt, recycled.updatedAt)
     }
 
     @Test
@@ -353,6 +395,36 @@ class PinSoftDeleteIntegrationTest : IntegrationTest() {
             .then()
             .statusCode(200)
             .body("pins", hasSize<Any>(1))
+    }
+
+    @Test
+    fun `Given soft-deleted pin, Then restore moves its updatedAt again`() {
+        // Given
+        val auth = createAuthenticatedUser()
+        val pin = pinCreator.createPin(
+            author = auth.user,
+            sourceContextUrl = "https://example.com",
+            sourceMediaUrl = "https://example.com/img.jpg",
+            description = "Restored",
+            tags = emptyList(),
+        )
+        given().authenticatedAs(auth).delete("/api/v1/pins/${pin.id}")
+        val updatedAtWhileRecycled = reloadPin(pin.id).updatedAt
+        waitForTheClockToTick()
+
+        // When
+        given()
+            .authenticatedAs(auth)
+            .`when`()
+            .post("/api/v1/pins/recycled/${pin.id}/restore")
+            .then()
+            .statusCode(200)
+
+        // Then
+        assertTrue(
+            reloadPin(pin.id).updatedAt.isAfter(updatedAtWhileRecycled),
+            "updatedAt should move when the pin is restored",
+        )
     }
 
     @Test

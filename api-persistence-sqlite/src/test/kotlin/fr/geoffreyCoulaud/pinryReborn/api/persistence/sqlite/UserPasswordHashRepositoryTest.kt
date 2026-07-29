@@ -47,6 +47,19 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a tombstoned user, Then saveUserPasswordHash throws UserModelDoesNotExistError`() {
+        // Given: the row survives a tombstone, so the lookup behind this write is the only thing
+        // that keeps a deleted account from acquiring a new credential
+        val user = user()
+        users.markPendingDeletion(user, storableNow())
+
+        // When, Then
+        assertThrows(UserModelDoesNotExistError::class.java) {
+            repository.saveUserPasswordHash(user, hash("hash"))
+        }
+    }
+
+    @Test
     fun `Given a nonexistent user, Then saveUserPasswordHash throws UserModelDoesNotExistError`() {
         // Given
         val nonexistentUser = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())

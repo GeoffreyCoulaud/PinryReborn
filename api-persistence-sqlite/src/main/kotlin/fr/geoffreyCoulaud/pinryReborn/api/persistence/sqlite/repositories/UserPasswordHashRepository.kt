@@ -3,11 +3,9 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.exceptions.UserModelDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserPasswordHashModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserPasswordHashModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserPasswordHashModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserPasswordHashModel
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
@@ -22,8 +20,7 @@ class UserPasswordHashRepository(
         user: User,
         hashedPassword: HashedPassword,
     ): HashedPassword {
-        val userModel = QUserModel().id.equalTo(user.id).findOne() ?: throw UserModelDoesNotExistError()
-        val hashedPasswordModel = hashedPassword.toModel(userModel)
+        val hashedPasswordModel = hashedPassword.toModel(ActiveUserModels.resolve(user.id))
         return sqlRepository.saveAndReturn(hashedPasswordModel).toDomain()
     }
 

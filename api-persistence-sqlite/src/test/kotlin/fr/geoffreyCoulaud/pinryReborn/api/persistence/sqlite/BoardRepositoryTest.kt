@@ -85,7 +85,7 @@ class BoardRepositoryTest : RepositoryTest() {
         val recycledBoard = createAndSaveBoard("Recycled", user)
 
         // When
-        val softDeleted = boardRepository.softDeleteBoard(recycledBoard)
+        val softDeleted = boardRepository.softDeleteBoard(recycledBoard, storableNow())
 
         // Then
         assertNotNull(softDeleted.softDeletedAt)
@@ -94,19 +94,52 @@ class BoardRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a deletion instant, Then softDeleteBoard stores it as both softDeletedAt and updatedAt`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("Board", user)
+        val deletionInstant = Instant.parse("2026-01-02T03:04:05Z")
+
+        // When
+        boardRepository.softDeleteBoard(board, deletionInstant)
+
+        // Then - the instant reaches the columns unchanged, read back from the store
+        val stored = requireNotNull(boardRepository.findBoardById(board.id))
+        assertEquals(deletionInstant, stored.softDeletedAt)
+        assertEquals(deletionInstant, stored.updatedAt)
+    }
+
+    @Test
     fun `Given a recycled board, Then restore makes it active again`() {
         // Given
         val user = createAndSaveUser()
         val board = createAndSaveBoard("Board", user)
-        val softDeleted = boardRepository.softDeleteBoard(board)
+        val softDeleted = boardRepository.softDeleteBoard(board, storableNow())
 
         // When
-        val restored = boardRepository.restoreBoard(softDeleted)
+        val restored = boardRepository.restoreBoard(softDeleted, storableNow())
 
         // Then
         assertNull(restored.softDeletedAt)
         assertEquals(listOf(board.id), boardRepository.findActiveBoardsForUser(user).map { it.id })
         assertTrue(boardRepository.findRecycledBoardsForUser(user).isEmpty())
+    }
+
+    @Test
+    fun `Given a restoration instant, Then restoreBoard stores it as updatedAt and clears softDeletedAt`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("Board", user)
+        val softDeleted = boardRepository.softDeleteBoard(board, storableNow())
+        val restorationInstant = Instant.parse("2026-02-03T04:05:06Z")
+
+        // When
+        boardRepository.restoreBoard(softDeleted, restorationInstant)
+
+        // Then - the instant reaches the column unchanged, read back from the store
+        val stored = requireNotNull(boardRepository.findBoardById(board.id))
+        assertEquals(restorationInstant, stored.updatedAt)
+        assertNull(stored.softDeletedAt)
     }
 
     @Test
@@ -116,7 +149,7 @@ class BoardRepositoryTest : RepositoryTest() {
         val board = createAndSaveBoard("Board", user)
         createAndSavePin(user, boards = listOf(board))
         val softDeletedPin = createAndSavePin(user, boards = listOf(board))
-        pinRepository.softDeletePin(softDeletedPin)
+        pinRepository.softDeletePin(softDeletedPin, storableNow())
 
         // When
         val count = boardRepository.countActivePinsInBoard(board.id)
@@ -152,8 +185,8 @@ class BoardRepositoryTest : RepositoryTest() {
         val recycledBoard2 = createAndSaveBoard("R2", user)
         val activeBoard = createAndSaveBoard("Active", user)
         val pinInRecycledBoard = createAndSavePin(user, boards = listOf(recycledBoard1))
-        boardRepository.softDeleteBoard(recycledBoard1)
-        boardRepository.softDeleteBoard(recycledBoard2)
+        boardRepository.softDeleteBoard(recycledBoard1, storableNow())
+        boardRepository.softDeleteBoard(recycledBoard2, storableNow())
 
         // When
         // If the pin_board_model rows were not deleted first, this would fail with a foreign
@@ -189,7 +222,7 @@ class BoardRepositoryTest : RepositoryTest() {
         val activeBoard = createAndSaveBoard("Active", user)
         val recycledBoard = createAndSaveBoard("Recycled", user)
         val pinInActiveBoard = createAndSavePin(user, boards = listOf(activeBoard))
-        boardRepository.softDeleteBoard(recycledBoard)
+        boardRepository.softDeleteBoard(recycledBoard, storableNow())
 
         // When
         // If the pin_board_model rows were not deleted first, this would fail with a foreign
@@ -235,7 +268,7 @@ class BoardRepositoryTest : RepositoryTest() {
         // Given
         val user = createAndSaveUser()
         val board = createAndSaveBoard("Board", user)
-        boardRepository.softDeleteBoard(board)
+        boardRepository.softDeleteBoard(board, storableNow())
 
         // When
         val result = boardRepository.findActiveBoardById(board.id)
@@ -262,7 +295,7 @@ class BoardRepositoryTest : RepositoryTest() {
         // Given
         val user = createAndSaveUser()
         val board = createAndSaveBoard("Board", user)
-        boardRepository.softDeleteBoard(board)
+        boardRepository.softDeleteBoard(board, storableNow())
 
         // When
         val result = boardRepository.findBoardById(board.id)

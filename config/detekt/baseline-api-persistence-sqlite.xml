@@ -2,6 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:ModelPaginationHelper.kt:ModelPaginationHelper$fun getPage: ModelPage&lt;M&gt;</ID>
+    <ID>CyclomaticComplexMethod:ModelPaginationHelper.kt:ModelPaginationHelper$fun &lt;M : BaseModel, Q : QueryBean&lt;M, Q&gt;&gt; getPage: ModelPage&lt;M&gt;</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -1,9 +1,12 @@
 # Domain-owned timestamps and a single soft-delete mechanism
 
 Date: 2026-07-29
-Status: pending approval
+Status: Section 5 (block 1) superseded by
+`docs/specs/2026-07-29-single-representation-soft-delete.md`; sections 6 and 7 (blocks 2 and 3) in
+force, as is decision D4's replacement there.
 Branch: `docs/domain-owned-timestamps` (this specification and its ADR only)
-ADR: `docs/adr/0006-domain-owned-timestamps.md`
+ADR: `docs/adr/0006-domain-owned-timestamps.md`, partially superseded by
+`docs/adr/0007-single-representation-soft-delete.md`
 Supersedes nothing. Related: `docs/specs/2026-07-22-user-data-export.md` (section 4 defines the
 archive layout whose `updatedAt` semantics section 3 D2 below settles).
 Depends on: `api-domain` entities and repository interfaces, `api-persistence-sqlite` models, mappers

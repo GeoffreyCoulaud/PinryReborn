@@ -64,6 +64,20 @@ class SessionTokenRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a tombstoned user, Then saveSessionToken throws UserModelDoesNotExistError`() {
+        // Given: an account that has been tombstoned still has its row, so the lookup behind this
+        // write is the only thing standing between a deleted account and a fresh session
+        val user = createUser()
+        userRepository.markPendingDeletion(user, storableNow())
+        val token = sessionToken(user)
+
+        // When, Then
+        assertThrows(UserModelDoesNotExistError::class.java) {
+            repository.saveSessionToken(token, tokenHash = "hash-tombstoned-user")
+        }
+    }
+
+    @Test
     fun `Given a saved token, Then deleteById removes it`() {
         val user = createUser()
         val token = sessionToken(user)
