@@ -81,26 +81,33 @@ terminal paths write the instant; the sweep filters it; the retention use case i
 - `api-persistence-sqlite`:
   - `models/TaskModel.kt`: `var terminalStateAt: Instant? = null`; the index becomes
     `@Index(columnNames = ["state", "terminal_state_at"])`. `TaskModel` keeps `: AuditedBaseModel(id)`
-    for now.
+    for now. The KDoc at `:13-17` describes the `when_modified` index and is rewritten to name
+    `terminal_state_at`.
   - `repositories/EbeanTaskQueue.kt`: `markSucceeded`, `markDead`, `markCancelledIfRequested` and
     `cancelPending` each add `.set("terminalStateAt", now)` to their `asUpdate()` (D18: a bulk update
     does not honour `@WhenModified`); `cancelPending` gains the `now` parameter; the `claimNext`
     exhausted kill (`:104-112`) sets `model.terminalStateAt = now` before its `database.save`;
     `deleteTerminalBefore` filters `.terminalStateAt.lessThan(cutoff)` (`:229`).
   - `mappers/TaskModelMapper.kt`: round-trip `terminalStateAt`.
+- `api-usecases`: `tasks/CancelTask.kt` injects `Clock` and calls `cancelPending(id, clock.now())`
+  (its `cancel(id)` signature is unchanged, so the controller is unaffected); its test
+  `tasks/CancelTaskTest.kt` updates the `cancelPending` mock to the two-argument form. The existing
+  `cancelPending` calls in `EbeanTaskQueueTest` (`:231,242,377,378`) gain the `now` argument.
 - Migration: `dbmigration/1.15.sql` and `model/1.15.model.xml` (add `tasks.terminal_state_at`; drop
   and recreate the tasks index). Read before commit; the thing to look for is that the index change
   is an in-place drop-and-recreate, not a table rebuild.
 
-**Red, one commit** (repository-level; no use-case change, since `ReapTerminalTasks` already passes the
-cutoff):
+**Red, one commit** (repository-level: `ReapTerminalTasks` is unchanged since it already passes the
+cutoff, and `CancelTask` is a mechanical follower of the port change rather than a new behaviour):
 
 `EbeanTaskQueueTest`: each of the five terminal transitions writes `terminalStateAt` equal to the
 `now` handed in, including `cancelPending` with its new parameter and the `claimNext` exhausted kill; a
 live task has null `terminalStateAt`, so retry and reap do not write it; `deleteTerminalBefore` keeps
 and drops tasks on the two sides of the cutoff. The `backDateWhenModified` helper becomes a back-date
-of `terminal_state_at`. Red is `compileTestKotlin` failing on the unresolved `terminalStateAt`, pasted
-from `./gradlew :api-persistence-sqlite:compileTestKotlin`.
+of `terminal_state_at`. The comment at `EbeanTaskQueueTest.kt:364-368` that justifies the raw-SQL
+back-date by citing `@WhenModified`'s overwrite-on-save is rewritten: `terminal_state_at` is a plain
+column, no longer auto-stamped. Red is `compileTestKotlin` failing on the unresolved `terminalStateAt`,
+pasted from `./gradlew :api-persistence-sqlite:compileTestKotlin`.
 
 **Implementation**: as listed.
 
@@ -171,10 +178,25 @@ injection on `UserAuthenticator`, the call is taken there and recorded, not defe
    asserting `PasswordChanger` now uses the injected `Clock`). Asserted on the value passed, not on
    stubbing.
 2. Repository test: `findCurrentPasswordHash` returns the hash whose `createdAt` is latest, ordering on
-   `.createdAt` (the property rename from `.whenCreated`).
+   `.createdAt` (the property rename from `.whenCreated`). Its fixture today relies on `Thread.sleep(2)`
+   plus Ebean's auto-stamping to produce two distinct `when_created` values
+   (`UserPasswordHashRepositoryTest.kt:30`); once the instant is use-case-supplied that timing trick is
+   replaced by two explicit `createdAt` values on the fixtures, because the property is no longer
+   auto-stamped.
+3. **Mechanical sweep, not a separate red.** Making `createdAt` required and changing
+   `PasswordHasher.hash` to `hash(raw, createdAt)` breaks every construction site at compile time. The
+   ones the behaviour reds above do not already cover are fixture updates: seven test files building
+   `SessionToken(...)` (`SessionTokenRepositoryTest`, `SessionControllerTest`, `SessionDtoMapperTest`,
+   `BearerTokenIdentityProviderTest`, `SessionRenewerTest`, `SessionRevokerTest`,
+   `SessionTokenAuthenticatorTest`) and six building `HashedPassword(...)` or mocking `hash(...)`
+   (`UserPasswordHashRepositoryTest`, `PasswordChangerTest`, `ReauthenticatorTest`,
+   `UserAuthenticatorTest`, `UserCreatorTest`, `BcryptPasswordHasherTest`). Each gains
+   `createdAt = <instant>` (a fixed instant in fixtures, `clock.now()` where a `Clock` is in play) so the
+   module compiles. The implementer finds them through the compile errors; the gate is what proves none
+   was missed.
 
 Both reds are `compileTestKotlin` failures (the `createdAt` members do not exist yet), pasted from the
-run.
+run; the sweep is the compile fallout of the same members, fixed in the implementation.
 
 **Implementation**: as listed.
 
