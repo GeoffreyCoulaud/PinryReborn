@@ -31,7 +31,13 @@ class SessionRenewerTest {
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
     private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
-    private val current = SessionToken(randomUUID(), user, expiresAt = now.plusSeconds(10), persistent = true)
+    private val current = SessionToken(
+        randomUUID(),
+        user,
+        expiresAt = now.plusSeconds(10),
+        persistent = true,
+        createdAt = now,
+    )
 
     // Passthrough so the transactional block runs in the behavioral tests; overridden where a test
     // needs to prove the writes live inside the block.
@@ -95,7 +101,13 @@ class SessionRenewerTest {
 
     @Test
     fun `Given an ephemeral current token, Then renew keeps persistent false and uses the ephemeral TTL`() {
-        val ephemeralCurrent = SessionToken(randomUUID(), user, expiresAt = now.plusSeconds(5), persistent = false)
+        val ephemeralCurrent = SessionToken(
+            randomUUID(),
+            user,
+            expiresAt = now.plusSeconds(5),
+            persistent = false,
+            createdAt = now,
+        )
         every { tokenGenerator.generateToken() } returns "new-token"
         every { clock.now() } returns now
 

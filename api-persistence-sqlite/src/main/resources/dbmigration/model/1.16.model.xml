@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="pendingDrops">
+        <dropColumn columnName="when_modified" tableName="session_tokens"/>
+        <dropColumn columnName="when_modified" tableName="tags"/>
+        <dropColumn columnName="when_created" tableName="tasks"/>
+        <dropColumn columnName="when_modified" tableName="tasks"/>
+        <dropColumn columnName="when_created" tableName="user_data_exports"/>
+        <dropColumn columnName="when_modified" tableName="user_data_exports"/>
+        <dropColumn columnName="when_modified" tableName="users"/>
+        <dropColumn columnName="when_modified" tableName="user_password_hashes"/>
+    </changeSet>
+</migration>

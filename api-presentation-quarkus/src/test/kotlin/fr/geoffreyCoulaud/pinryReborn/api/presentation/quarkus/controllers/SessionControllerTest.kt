@@ -62,7 +62,13 @@ class SessionControllerTest {
 
     @Test
     fun `Given a current session, Then getCurrentSession returns its metadata without a token`() {
-        val current = SessionToken(randomUUID(), user, Instant.parse("2026-08-01T00:00:00Z"), persistent = true)
+        val current = SessionToken(
+            randomUUID(),
+            user,
+            Instant.parse("2026-08-01T00:00:00Z"),
+            persistent = true,
+            createdAt = Instant.now(),
+        )
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         val dto = controller.getCurrentSession()
         assertEquals(current.expiresAt, dto.expiresAt)
@@ -72,7 +78,7 @@ class SessionControllerTest {
 
     @Test
     fun `Given a current session, Then renewSession delegates to the renewer and returns the new token`() {
-        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false)
+        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false, createdAt = Instant.now())
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         every { renewer.renew(current) } returns issued
         val response = controller.renewSession()
@@ -82,7 +88,7 @@ class SessionControllerTest {
 
     @Test
     fun `Given a current session, Then revokeCurrentSession deletes the current token`() {
-        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false)
+        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false, createdAt = Instant.now())
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         controller.revokeCurrentSession()
         verify { revoker.revokeCurrent(current) }

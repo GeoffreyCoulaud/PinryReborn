@@ -29,6 +29,7 @@ class SessionRenewer(
                     user = current.user,
                     expiresAt = expiresAt,
                     persistent = current.persistent,
+                    createdAt = clock.now(),
                 ),
                 tokenHash = TokenHasher.sha256(token),
             )

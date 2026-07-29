@@ -9,6 +9,7 @@ object UserPasswordHashModelMapper {
         HashedPassword(
             hash = hash,
             algorithm = algorithm,
+            createdAt = createdAt,
         )
 
     fun HashedPassword.toModel(userModel: UserModel): UserPasswordHashModel =
@@ -16,5 +17,6 @@ object UserPasswordHashModelMapper {
             user = userModel,
             hash = hash,
             algorithm = algorithm,
+            createdAt = createdAt,
         )
 }

@@ -28,7 +28,10 @@ class UserCreator(
             // Create the user as usual
             val user = createUserInternal(name)
             // Hash and save the password
-            userPasswordRepository.saveUserPasswordHash(user = user, hashedPassword = passwordHasher.hash(password))
+            userPasswordRepository.saveUserPasswordHash(
+                user = user,
+                hashedPassword = passwordHasher.hash(password, clock.now()),
+            )
             user
         }
 

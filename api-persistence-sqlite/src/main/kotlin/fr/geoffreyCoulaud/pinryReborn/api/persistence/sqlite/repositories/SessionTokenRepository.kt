@@ -24,6 +24,7 @@ class SessionTokenRepository(
             tokenHash = tokenHash,
             expiresAt = sessionToken.expiresAt,
             persistent = sessionToken.persistent,
+            createdAt = sessionToken.createdAt,
         )
         return sqlRepository.saveAndReturn(model).toDomain()
     }

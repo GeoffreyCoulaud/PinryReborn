@@ -29,7 +29,7 @@ class UserPasswordHashRepository(
             .user.id
             .equalTo(user.id)
             .orderBy()
-            .whenCreated
+            .createdAt
             .desc()
             .findList()
             .firstOrNull()

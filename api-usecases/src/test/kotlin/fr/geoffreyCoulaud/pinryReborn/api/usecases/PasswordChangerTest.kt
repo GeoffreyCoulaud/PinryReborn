@@ -30,7 +30,7 @@ class PasswordChangerTest : BaseTest() {
 
     private val now = Instant.parse("2026-07-29T00:00:00Z")
     private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
-    private val current = HashedPassword("current-hash", PasswordHashAlgorithm.BCRYPT)
+    private val current = HashedPassword("current-hash", PasswordHashAlgorithm.BCRYPT, createdAt = Instant.now())
 
     @Test
     fun `Given valid inputs, Then the new hash is appended, stamped from the clock, and all sessions revoked`() {
@@ -70,7 +70,7 @@ class PasswordChangerTest : BaseTest() {
     fun `Given a previously-used new password, Then it throws PasswordPreviouslyUsedError`() {
         every { passwords.findCurrentPasswordHash(user) } returns current
         every { hasher.matches("old", current) } returns true
-        val older = HashedPassword("older", PasswordHashAlgorithm.BCRYPT)
+        val older = HashedPassword("older", PasswordHashAlgorithm.BCRYPT, createdAt = Instant.now())
         every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current, older)
         every { hasher.matches("reused", current) } returns false
         every { hasher.matches("reused", older) } returns true

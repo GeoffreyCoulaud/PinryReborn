@@ -169,8 +169,8 @@ The three values `modules/backend.md` expects this file to declare.
 - **The migration history is append-only until beta**, when it will be flattened into a single
   generated baseline. Two known costs are accepted meanwhile: `1.2` is a hand-written
   case-insensitive unique index that `@Index(definition = ...)` would express today, and
-  `users`/`pins`/`boards`/`tags` keep `when_created` and `when_modified` column names that no longer
-  match the domain's `createdAt` and `updatedAt`.
+  `users`/`pins`/`boards`/`tags` keep `when_created` (and `pins`/`boards` also `when_modified`) column
+  names that no longer match the domain's `createdAt` and `updatedAt`.
 - **A query rooted on a recyclable model is built by its `Queries` object** (decided 2026-07-29): a
   model whose rows are recycled implements the `SoftDeletableModel` marker, and every query rooted
   on it says which state it means through `active()`, `recycled()` or `any()` rather than

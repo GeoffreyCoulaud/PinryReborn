@@ -27,7 +27,13 @@ class SessionCreator(
             val expiresAt = expiryPolicy.expiryFrom(clock.now(), persistent)
             sessionTokenRepository.saveSessionToken(
                 sessionToken =
-                    SessionToken(id = randomUUID(), user = user, expiresAt = expiresAt, persistent = persistent),
+                    SessionToken(
+                        id = randomUUID(),
+                        user = user,
+                        expiresAt = expiresAt,
+                        persistent = persistent,
+                        createdAt = clock.now(),
+                    ),
                 tokenHash = TokenHasher.sha256(token),
             )
             IssuedSession(token, expiresAt, expiryPolicy.renewAfterFor(expiresAt, persistent))

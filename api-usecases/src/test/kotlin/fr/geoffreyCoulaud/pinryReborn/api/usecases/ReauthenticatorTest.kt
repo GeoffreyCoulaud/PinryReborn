@@ -20,7 +20,7 @@ class ReauthenticatorTest : BaseTest() {
     private val hasher = mockk<PasswordHasher>()
     private val reauth = Reauthenticator(passwords, hasher)
     private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
-    private val hash = HashedPassword("h", PasswordHashAlgorithm.BCRYPT)
+    private val hash = HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = Instant.now())
 
     @Test
     fun `Given the correct factor, Then it passes`() {

@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.AuditedBaseModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
 import io.ebean.annotation.Index
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -20,4 +20,7 @@ class SessionTokenModel(
     @Column(unique = true) var tokenHash: String,
     var expiresAt: Instant,
     var persistent: Boolean,
-) : AuditedBaseModel(id = id)
+    // Reuses the historical `when_created` column: the property is now mapper-written from the
+    // domain `createdAt` the use case stamps, no longer auto-stamped (D19).
+    @Column(name = "when_created") var createdAt: Instant,
+) : BaseModel(id = id)

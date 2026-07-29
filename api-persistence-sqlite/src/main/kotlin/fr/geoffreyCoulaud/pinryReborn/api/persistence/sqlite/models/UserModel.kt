@@ -1,7 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
-import io.ebean.annotation.WhenModified
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
@@ -17,9 +16,4 @@ class UserModel(
     @Column(name = "when_created") var createdAt: Instant,
     override var softDeletedAt: Instant? = null,
 ) : BaseModel(id = id),
-    SoftDeletableModel {
-    // Technical debt: nothing maps this column to the domain and nothing reads it, yet it is
-    // stamped on every write. To be dropped with the other dead audit columns.
-    @WhenModified
-    lateinit var whenModified: Instant
-}
+    SoftDeletableModel

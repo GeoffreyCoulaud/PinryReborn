@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.AuditedBaseModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
 import io.ebean.annotation.Index
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
@@ -33,7 +33,7 @@ class TaskModel
         var dedupKey: String? = null,
         var lastError: String? = null,
         var terminalStateAt: Instant? = null,
-    ) : AuditedBaseModel(id = id) {
+    ) : BaseModel(id = id) {
     @Version
     var version: Long = 0
 }
