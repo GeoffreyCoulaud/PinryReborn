@@ -18,9 +18,9 @@ class MePasswordIntegrationTest : IntegrationTest() {
         given().authenticatedAs(auth).contentType("application/json")
             .body(changeBody("password123", "newpassword1")).put("/api/v1/me/password")
             .then().statusCode(204)
-        // Then — old token rejected
+        // Then: old token rejected
         given().authenticatedAs(auth).get("/api/v1/me").then().statusCode(401)
-        // Then — new password logs in, old does not
+        // Then: new password logs in, old does not
         login(auth.user.name, "newpassword1").then().statusCode(201)
         login(auth.user.name, "password123").then().statusCode(401)
     }

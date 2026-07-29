@@ -53,7 +53,7 @@ item is still carried by block 3.
   configurable minimum interval between password changes (default 30 s), with
   `PASSWORD_CHANGE_COLLISION` (409) and `PASSWORD_CHANGED_TOO_SOON` (429).
 
-### P1 — Client ergonomics (needed for the web UI and browser extension)
+### P1: Client ergonomics (needed for the web UI and browser extension)
 
 - **Browser-extension CORS origin.** Deferred from the CORS sub-project (decision B1): the extension
   does not exist yet and has no stable ID, so no origin is wired for it. When it ships, add its
@@ -67,7 +67,7 @@ item is still carried by block 3.
   Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
-### P2 — Operational debt (flagged in handoffs; not UI blockers)
+### P2: Operational debt (flagged in handoffs; not UI blockers)
 
 - **Inverse associations on the persistence models.** The module maps twelve entities and not one
   `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of a
@@ -216,11 +216,11 @@ item is still carried by block 3.
 - **Audience mechanics (public / private).** Until this lands everything stays `@Authenticated` and owner-scoped (
   non-owner → 403); no anonymous browsing, no public gallery, no shareable links. It will interact with boards (public /
   shared boards) and with the profile items.
-- **Two-factor / step-up authentication** — TOTP + Passkey/WebAuthn, with a possible short-lived "sudo" elevation token
+- **Two-factor / step-up authentication**: TOTP + Passkey/WebAuthn, with a possible short-lived "sudo" elevation token
   for sensitive actions.
 
 Gated on audience mechanics :
 
 - **Hard-copy of a public pin or board** from user B into user A's own collection: a real, independent copy, not a soft
   link.
-- **Public profiles** — the deferred slice of profile management.
+- **Public profiles**: the deferred slice of profile management.

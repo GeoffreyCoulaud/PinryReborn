@@ -18,7 +18,7 @@ import java.util.concurrent.CountDownLatch
  * serialization comes from the connection pool itself rather than from any in-memory locking. This
  * test drives several threads at [EbeanTaskQueue.claimNext] concurrently to prove that guarantee:
  * every enqueued task is claimed exactly once, none lost, none double-claimed, and with ZERO
- * exceptions (in particular no [io.ebean.OptimisticLockException]) — the atomic select+update
+ * exceptions (in particular no [io.ebean.OptimisticLockException]): the atomic select+update
  * transaction in [EbeanTaskQueue.claimNext] serializes the claim on the single connection instead
  * of relying on optimistic-lock retries to paper over a lost race.
  */

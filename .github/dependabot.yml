@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Gradle dependencies (libs.versions.toml + build scripts) — one grouped
+  # Gradle dependencies (libs.versions.toml + build scripts): one grouped
   # weekly PR covering every update.
   - package-ecosystem: "gradle"
     directory: "/"
@@ -13,7 +13,7 @@ updates:
         patterns:
           - "*"
 
-  # GitHub Actions pinned to commit SHAs — one grouped weekly PR.
+  # GitHub Actions pinned to commit SHAs: one grouped weekly PR.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -25,7 +25,7 @@ updates:
         patterns:
           - "*"
 
-  # Base image of the Dockerfile — one grouped weekly PR.
+  # Base image of the Dockerfile: one grouped weekly PR.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
