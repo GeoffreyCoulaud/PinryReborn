@@ -1,8 +1,7 @@
 #!/bin/sh
-# Keep the committed OpenAPI spec in sync (generate-openapi.sh regenerates it, stages it,
-# and exits non-zero if it changed so the commit is re-run up to date), and reject
-# em/en-dashes in staged additions (no-em-dash rule, AGENTS.md Conventions): the diff must
-# contain none, in any file, so the check carries no pathspec filter.
+# A fast local shortcut, not a barrier: an uninstalled hook checks nothing, so the gate holds the
+# dash rule over the whole tree and CI holds the OpenAPI document. Both are checked here first
+# because a commit is cheaper to fix than a pushed branch.
 set -e
 
 em=$(printf '\342\200\224')  # U+2014 EM DASH

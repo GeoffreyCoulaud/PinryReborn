@@ -68,6 +68,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
       - name: Build Quarkus artifact
         run: ./gradlew :api-application:quarkusBuild
+      - name: OpenAPI document is in sync
+        # The build above regenerates it, so this costs nothing here. The pre-commit hook does the
+        # same locally, and a hook nobody installed regenerates nothing.
+        run: git diff --exit-code -- docs/openapi.json
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Log in to GHCR
