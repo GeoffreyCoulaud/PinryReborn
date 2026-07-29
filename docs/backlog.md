@@ -69,6 +69,14 @@ item is still carried by block 3.
 
 ### P2: Operational debt (flagged in handoffs; not UI blockers)
 
+- **detekt runs without type resolution, and the tasks that have it are red.** `check` depends on
+  `:detekt`, so `detektMain` and `detektTest` are run by neither the gate nor CI. Measured 2026-07-29:
+  `detektMain` fails in four of the twelve modules, `api-presentation-quarkus` 16 findings,
+  `api-persistence-sqlite` 11, `api-usecases` 5, `api-application` 1, the other eight clean. All of it
+  predates the work that found it. The decision needed is either type-resolution detekt in the gate
+  with those 33 findings cleared, or a recorded choice to run detekt without it. Being neither is the
+  defect: a task that is red and never run says nothing about the code and everything about the setup.
+  New 2026-07-29.
 - **Inverse associations on the persistence models.** The module maps twelve entities and not one
   `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of a
   board" can only be asked from the join table. Two consequences: the soft-delete work needs two
