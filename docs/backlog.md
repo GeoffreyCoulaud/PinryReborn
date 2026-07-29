@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-29 (block 1 of the domain-owned timestamps work delivered and removed).
+Last reviewed: 2026-07-30 (blocks 1 and 2 of the domain-owned timestamps work delivered and removed; block 3 remains).
 
 ## How to use this file
 
@@ -21,7 +21,7 @@ Last reviewed: 2026-07-29 (block 1 of the domain-owned timestamps work delivered
 
 ## Open items
 
-### P0: Domain-owned timestamps (specified 2026-07-29, two blocks left of three)
+### P0: Domain-owned timestamps (specified 2026-07-29, one block left of three)
 
 Specified as one piece of work in `docs/specs/2026-07-29-domain-owned-timestamps.md`, with
 `docs/adr/0006-domain-owned-timestamps.md`. It absorbed three items that sat in P2 until 2026-07-29
@@ -32,26 +32,20 @@ is wider than they recorded, so the work also unifies the two soft-delete mechan
 `AuditedBaseModel`.
 
 Three sequential blocks were planned, one session and one pull request each, in an order imposed by
-dependency rather than preference. **Block 1 shipped on 2026-07-29** and closed the first two absorbed
-items with it, so it has left this list: its record is
-`docs/handoffs/2026-07-29 - handoff - single-representation-soft-delete.md`,
+dependency rather than preference. **Blocks 1 and 2 have shipped** (2026-07-29 and 2026-07-30) and
+closed all three absorbed items except the password-hash determinism block 3 carries. Records: block 1
+in `docs/handoffs/2026-07-29 - handoff - single-representation-soft-delete.md`,
 `docs/specs/2026-07-29-single-representation-soft-delete.md` and
-`docs/adr/0007-single-representation-soft-delete.md`. The two below remain, and the third absorbed
-item is still carried by block 3.
+`docs/adr/0007-single-representation-soft-delete.md`; block 2 in
+`docs/handoffs/2026-07-30 - handoff - end-of-audited-base-model.md` and
+`docs/specs/2026-07-29-end-of-audited-base-model.md`. One remains:
 
-- **Block 2: end of `AuditedBaseModel`.** Not covered by any former item, surfaced while scoping them.
-  `tasks.when_modified` drives the deletion of terminal tasks and moves on any row write, the same
-  defect as account retention. `Task` receives `terminalStateAt`, `SessionToken` and `HashedPassword`
-  receive `createdAt`, the dead audit columns are dropped, and a Konsist assertion bans
-  `@WhenCreated` / `@WhenModified`. **Start by re-deriving how many columns that is**: section 6 of
-  the specification says seven in its prose while its own table sums to eight, and a frozen document
-  is not corrected in place, so the count is settled in block 2's own specification. Section 6.5 also
-  expects a table rebuild for a column drop, which block 1 measured not to happen: the generator
-  emitted a plain `alter table users drop column deleted` and the store applied it in place.
 - **Block 3: current-password determinism.** Absorbs the third former item, the
   `findCurrentPasswordHash` tie-breaker. A `(user_id, created_at)` unique constraint plus a
   configurable minimum interval between password changes (default 30 s), with
-  `PASSWORD_CHANGE_COLLISION` (409) and `PASSWORD_CHANGED_TOO_SOON` (429).
+  `PASSWORD_CHANGE_COLLISION` (409) and `PASSWORD_CHANGED_TOO_SOON` (429). Block 2 already added
+  `HashedPassword.createdAt` (domain-stamped from `Clock`) and ordered `findCurrentPasswordHash` on
+  it, so block 3 adds only the constraint, the interval, and the two error codes.
 
 ### P1: Client ergonomics (needed for the web UI and browser extension)
 
@@ -68,6 +62,12 @@ item is still carried by block 3.
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
 ### P2: Operational debt (flagged in handoffs; not UI blockers)
+
+- **Stale test comment names a gone property.** `PinRepositoryPaginationTest.kt:19` says pins share a
+  `whenCreated` to explain the same-clock-tick cursor tie-break, but pins carry `createdAt` now (the
+  column is still `when_created`; the Kotlin property was renamed during block 1's soft-delete work). A
+  one-word comment fix. Surfaced by the block 2 holistic review, 2026-07-30; pre-existing drift, not
+  this branch's.
 
 - **detekt runs without type resolution, and the tasks that have it are red.** `check` depends on
   `:detekt`, so `detektMain` and `detektTest` are run by neither the gate nor CI. Measured 2026-07-29:
