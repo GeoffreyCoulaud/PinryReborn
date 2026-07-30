@@ -3,11 +3,13 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BaseError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportTooSoonError
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.UriInfo
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class BaseErrorMapperTest {
@@ -182,5 +184,24 @@ class BaseErrorMapperTest {
     @Test
     fun `Given EXPORT_GONE, Then status is GONE`() {
         assertEquals(Response.Status.GONE, statusFor(ErrorCode.EXPORT_GONE))
+    }
+
+    @Test
+    fun `Given a ThrottledError, Then the response carries a numeric Retry-After header`() {
+        // Given
+        val exception = ExportTooSoonError(retryAfterSeconds = 42)
+        // When
+        val response = mapper.toResponse(exception)
+        // Then
+        assertEquals(429, response.status)
+        assertEquals("42", response.getHeaderString("Retry-After"))
+        assertEquals("EXPORT_TOO_SOON", (response.entity as ProblemDetail).code)
+    }
+
+    @Test
+    fun `Given a plain BaseError, Then no Retry-After header is present`() {
+        val exception = BaseError(message = "boom", code = ErrorCode.USERNAME_ALREADY_EXISTS)
+        val response = mapper.toResponse(exception)
+        assertNull(response.getHeaderString("Retry-After"))
     }
 }
