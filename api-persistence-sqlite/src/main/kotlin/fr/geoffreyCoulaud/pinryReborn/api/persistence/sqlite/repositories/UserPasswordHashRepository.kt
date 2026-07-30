@@ -22,8 +22,9 @@ class UserPasswordHashRepository(
         user: User,
         hashedPassword: HashedPassword,
     ): HashedPassword {
-        // resolve() throws UserModelDoesNotExistError (a PersistenceException) for a tombstoned or
-        // absent user; it stays outside the try so that is never reported as a collision.
+        // resolve() throws UserModelDoesNotExistError (the project's own PersistenceException, not the
+        // jakarta one caught below) for a tombstoned or absent user; it stays outside the try so the two
+        // error paths stay distinct.
         val hashedPasswordModel = hashedPassword.toModel(ActiveUserModels.resolve(user.id))
         return try {
             sqlRepository.saveAndReturn(hashedPasswordModel).toDomain()
