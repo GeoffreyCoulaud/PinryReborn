@@ -243,7 +243,11 @@ its implementation has not introduced yet), pasted from the run.
 - **Catching `PersistenceException` can mask a different failure as a 409.** Accepted for the same
   reason as the export: the only writes to `user_password_hashes` are hash inserts by an authenticated
   user, so the unique constraint is the realistic cause. The user lookup stays outside the try block
-  so a missing user is never mistaken for a collision.
+  to keep the "user absent" and "insert constraint" error paths distinct: `UserModelDoesNotExistError`
+  extends the project's own `PersistenceException` (`...sqlite.exceptions.PersistenceException`, a
+  `java.lang.Exception` subtype), not the `jakarta.persistence.PersistenceException` the catch is on,
+  so it would not be caught either way; the separation is a defensive clarity choice, not a
+  correctness requirement.
 - **`PasswordChanger` leaves CDI auto-discovery.** It gains a producer in the composition root, the
   `UserDataExportRequester` precedent. `MeController` and the bean's other consumers are unchanged; the
   ripple is the producer and the test constructors that gain a `minimumInterval` argument.
@@ -253,4 +257,8 @@ its implementation has not introduced yet), pasted from the run.
 - **Two new public error codes are a contract change** on the password-change endpoint. Mandated
   escalation to Spec is satisfied by this document; the codes are additive, so no existing client
   response changes.
+- **The interval counts the signup hash (D10/D21).** It reads the current hash's `createdAt`, and the
+  seed hash written at signup is a successful write, so under the production default (`PT30S`) a user
+  cannot change their password for 30 s after signing up. The test override `PT0S` keeps the existing
+  signup-then-change integration tests green.
 - **One migration on an append-only history**, already slated for flattening at beta.
