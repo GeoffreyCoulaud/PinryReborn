@@ -55,6 +55,8 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.BOARD_INVALID_MEMBERSHIP -> Response.Status.BAD_REQUEST.statusCode
             ErrorCode.REAUTHENTICATION_FAILED -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.PASSWORD_PREVIOUSLY_USED -> UNPROCESSABLE_ENTITY_STATUS_CODE
+            ErrorCode.PASSWORD_CHANGED_TOO_SOON -> Response.Status.TOO_MANY_REQUESTS.statusCode
+            ErrorCode.PASSWORD_CHANGE_COLLISION -> Response.Status.CONFLICT.statusCode
             ErrorCode.UNSUPPORTED_REAUTHENTICATION_FACTOR -> Response.Status.BAD_REQUEST.statusCode
             ErrorCode.EXPORT_ALREADY_IN_PROGRESS -> Response.Status.CONFLICT.statusCode
             ErrorCode.EXPORT_TOO_SOON -> Response.Status.TOO_MANY_REQUESTS.statusCode
