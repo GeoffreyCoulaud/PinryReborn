@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <addUniqueConstraint constraintName="ix_user_password_hashes_user_created" tableName="user_password_hashes" columnNames="user_id,when_created" oneToOne="false" nullableColumns=""/>
+    </changeSet>
+</migration>
