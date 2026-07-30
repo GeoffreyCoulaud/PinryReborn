@@ -194,6 +194,12 @@ in `docs/handoffs/2026-07-29 - handoff - single-representation-soft-delete.md`,
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27.
+- **`Retry-After` is not exposed to cross-origin clients.** `application.properties:21` sets
+  `quarkus.http.cors.exposed-headers=Location` only, so a browser SPA or extension calling the API
+  cross-origin cannot read the `Retry-After` header set by the export 429 (`EXPORT_TOO_SOON`) and, after
+  block 3, the password-change 429 (`PASSWORD_CHANGED_TOO_SOON`). Pre-existing for exports; surfaced
+  while planning block 3 (2026-07-31). Additive fix: add `Retry-After` to `exposed-headers`. New
+  2026-07-31.
 
 ### Features
 
