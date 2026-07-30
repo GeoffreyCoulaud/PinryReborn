@@ -1,4 +1,4 @@
-<!-- agents-baseline v3.2.0 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place -->
 
 # AGENTS.md
 
@@ -22,6 +22,12 @@ Change the minimum that satisfies the request.
   and ask for the path.
 - **Do not fix what was not asked.** Adjacent defects are named in the final message or proposed for
   the backlog. _Observable: no diff hunk is unexplainable by the request._
+- **The boy-scout rule.** An adjacent defect that is **trivial, obviously correct, and contained**
+  (a stale comment, a typo, a one-line fix on a hunk already in scope) is fixed in the change that
+  finds it, not backlogged. All three must hold: trivial (no design decision, no new test surface),
+  obviously correct (a reader sees it is right at a glance), and contained (one site, on a hunk
+  already touched). Anything beyond is still named or backlogged. A boy-scout fix is flagged in the
+  final message ("also fixed a stale comment at X").
 - **Do not create unrequested files**, including `CLAUDE.md`/`AGENTS.md` additions.
 - **Do not refactor opportunistically.** Renames and style sweeps are their own task, proposed separately.
 
@@ -57,6 +63,15 @@ Nothing is asserted without the command that established it, nothing changed wit
 - **Fix the design, do not work around it.** Three smells that the design is the defect: the same
   explanatory comment repeated at several sites; a domain type widened to nullable to spare existing
   callers; a workaround for a tool limitation nobody verified.
+- **Name the root cause, not only the symptom.** When an adjacent defect is a symptom of a design
+  smell (repeated explanatory comment, type widened to nullable to spare callers, workaround for
+  a limitation nobody verified) name the root cause and propose the refactor that removes it, as
+  a backlog item or a separate task. "Do not fix what was not asked" forbids doing it inline; it does
+  not forbid naming the root. _Observable: any backlog entry born from a structural symptom names the
+  design smell and the refactor that removes it._
+- **Refactor as a first-class solution.** During Discuss and Design, consider refactor when you see
+  several related fixes or a workaround. Propose it to the human; the human arbitrates, the ADR
+  records the decision. Never refactor inline without being asked.
 - **Never move or rename something to escape a constraint**: satisfy it or report a blocker.
 - **A setting that should not exist is not fixed by a good default**: say it should not be there.
 
@@ -201,6 +216,12 @@ Two regimes; `agents/project.md` declares which document belongs to which.
 - **Conventional commits**: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`, `test:`, `refactor:`.
 - **Clean tree before reporting completion.** Tool artefacts are cleaned or gitignored, never
   committed. _Observable: `git status --porcelain` shown at wrap._
+- **Write in plain language.** Lead with the point; use the active voice and the present
+  tense; keep sentences short; prefer common words; avoid hidden verbs and filler; reach
+  for lists, tables and headings where they carry structure faster than prose. This covers
+  everything you write for the repository (documents, commit messages, code comments, the
+  docs tree) and every message to the user. Use another register, language or level of
+  detail only when the user explicitly asks for one.
 - **Never use an em dash or en dash anywhere** humans read (code, docs, commits, UI, logs). Use a
   colon, period, parentheses or hyphen. Exception: agent-only scratch artefacts.
 - **A convention that must persist goes in `agents/project.md`**, not session memory: memory is invisible

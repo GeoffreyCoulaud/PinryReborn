@@ -1,4 +1,4 @@
-<!-- agents-baseline v3.2.0 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place -->
 
 # Review mandate: holistic
 
@@ -39,3 +39,8 @@ Read the spec, then the full diff. Report findings as
    resolve? Renumbering or reordering sections silently breaks anchors pointing into them.
 9. **Diff hygiene.** Files that should not have changed, refactors nobody requested, generated or
    build artefacts, leftover scaffolding, formatting churn unrelated to the work.
+10. **Self-sufficient comments.** A code comment states the why where it stands. A comment that
+    defers to an identifier the reader must open elsewhere (decision ID, spec section, ticket number,
+    raw PR or issue reference) explains nothing without that document and is a finding. The reader
+    of the line should not have to leave the line. External references (RFCs, industry norms) and
+    clickable links are acceptable when they provide enough context.

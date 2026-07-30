@@ -1,4 +1,4 @@
-<!-- agents-baseline v3.2.0 | generic file, identical in every project | do not edit in place -->
+<!-- agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place -->
 
 # Review mandate: task
 
