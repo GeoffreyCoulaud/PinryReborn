@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.bases.BaseModel
+import io.ebean.annotation.Index
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -12,6 +13,7 @@ import java.time.Instant
 
 @Entity
 @Table(name = "user_password_hashes")
+@Index(name = "ix_user_password_hashes_user_created", columnNames = ["user_id", "when_created"], unique = true)
 class UserPasswordHashModel(
     @ManyToOne var user: UserModel,
     var hash: String,
