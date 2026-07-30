@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BaseError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ThrottledError
 import jakarta.ws.rs.core.Context
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.UriInfo
@@ -19,7 +20,11 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
         // Fall back for status codes with no matching Response.Status constant (e.g. 422
         // Unprocessable Entity, not part of jakarta.ws.rs 4.0's Response.Status enum).
         val title = if (resolvedStatus == null) UNPROCESSABLE_ENTITY_TITLE else resolvedStatus.reasonPhrase
-        return problemResponse(status, title, exception.message, exception.code.name, uriInfo).build()
+        val builder = problemResponse(status, title, exception.message, exception.code.name, uriInfo)
+        if (exception is ThrottledError) {
+            builder.header("Retry-After", exception.retryAfterSeconds)
+        }
+        return builder.build()
     }
 
     /** Returns the raw HTTP status code, since not every mapped status has a [Response.Status] constant. */
