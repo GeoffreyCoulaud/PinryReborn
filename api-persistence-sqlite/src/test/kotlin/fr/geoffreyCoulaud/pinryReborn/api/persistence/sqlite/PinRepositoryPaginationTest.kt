@@ -16,7 +16,7 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 /**
- * Pins created in the same clock tick share a `whenCreated`. Without a tie-breaker the cursor
+ * Pins created in the same clock tick share a `createdAt`. Without a tie-breaker the cursor
  * cannot advance past such a group, so a caller draining the pages loops forever on the same rows.
  * These tests drain the pages with a hard page budget: an unfixed strategy blows the budget instead
  * of hanging the suite.

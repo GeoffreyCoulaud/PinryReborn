@@ -127,9 +127,9 @@ class ArchitectureKonsistTest {
 
     @Test
     fun `Given production sources, Then none imports the Ebean generated-timestamp annotations`() {
-        // The domain owns every business instant (D1, D6): a column Ebean auto-stamps on insert or
-        // update is not a source of truth, so @WhenCreated and @WhenModified are barred from
-        // production. `assertEmpty` names every importing file if the ban regresses.
+        // The domain owns every business instant: a column Ebean auto-stamps on insert or update is
+        // not a source of truth, so @WhenCreated and @WhenModified are barred from production.
+        // `assertEmpty` names every importing file if the ban regresses.
         Konsist
             .scopeFromProduction()
             .imports

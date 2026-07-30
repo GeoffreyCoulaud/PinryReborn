@@ -63,12 +63,6 @@ in `docs/handoffs/2026-07-29 - handoff - single-representation-soft-delete.md`,
 
 ### P2: Operational debt (flagged in handoffs; not UI blockers)
 
-- **Stale test comment names a gone property.** `PinRepositoryPaginationTest.kt:19` says pins share a
-  `whenCreated` to explain the same-clock-tick cursor tie-break, but pins carry `createdAt` now (the
-  column is still `when_created`; the Kotlin property was renamed during block 1's soft-delete work). A
-  one-word comment fix. Surfaced by the block 2 holistic review, 2026-07-30; pre-existing drift, not
-  this branch's.
-
 - **detekt runs without type resolution, and the tasks that have it are red.** `check` depends on
   `:detekt`, so `detektMain` and `detektTest` are run by neither the gate nor CI. Measured 2026-07-29:
   `detektMain` fails in four of the twelve modules, `api-presentation-quarkus` 16 findings,
