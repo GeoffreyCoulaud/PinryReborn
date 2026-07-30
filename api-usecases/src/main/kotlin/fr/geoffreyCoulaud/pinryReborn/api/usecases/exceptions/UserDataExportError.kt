@@ -9,8 +9,9 @@ open class UserDataExportError(message: String, code: ErrorCode, cause: Throwabl
 class ExportAlreadyInProgressError(cause: Throwable? = null) :
     UserDataExportError("An export is already in progress", ErrorCode.EXPORT_ALREADY_IN_PROGRESS, cause)
 
-class ExportTooSoonError(val retryAfterSeconds: Long) :
-    UserDataExportError("Another export was requested too recently", ErrorCode.EXPORT_TOO_SOON)
+class ExportTooSoonError(override val retryAfterSeconds: Long) :
+    UserDataExportError("Another export was requested too recently", ErrorCode.EXPORT_TOO_SOON),
+    ThrottledError
 
 class ExportDoesNotExistError : UserDataExportError("Export does not exist", ErrorCode.EXPORT_DOES_NOT_EXIST)
 
