@@ -44,7 +44,7 @@ Copied verbatim from the project baseline and the spec; every task's requirement
 | `api-usecases/.../PasswordChanger.kt` | Modify | Interval check + collision catch; loses `@ApplicationScoped`; gains `minimumInterval`. |
 | `api-persistence-sqlite/.../repositories/UserPasswordHashRepository.kt` | Modify | Catch `PersistenceException` on the insert, throw the domain exception. |
 | `api-persistence-sqlite/.../models/UserPasswordHashModel.kt` | Modify | Composite unique `@Index`. |
-| `api-persistence-sqlite/.../dbmigration/1.18.sql` (+ model) | Create | The unique index. Generated, then read. |
+| `api-persistence-sqlite/.../dbmigration/1.18*` (+ model) | Create | The unique index. Generated, then read. Ebean may name it `1.18.sql` or `1.18__<desc>.sql`. |
 | `api-presentation-quarkus/.../config/AuthConfig.kt` | Modify | `passwordChangeMinimumInterval()` default `PT30S`. |
 | `api-application/.../wiring/PasswordChangerProducer.kt` | Create | CDI producer that constructs `PasswordChanger` with the interval from `AuthConfig`. |
 | `api-application/.../resources/application.properties` (main + test) | Modify | Document the default `PT30S`; override to `PT0S` in tests. |
@@ -297,7 +297,7 @@ Adds the interval check (D21) and the collision rethrow, and wires the interval 
 - Consumes: `ThrottledError` (Task 1), `PasswordChangedTooSoonError`, `PasswordChangeCollisionError`, `PasswordChangeCollisionException` (Task 2).
 - Produces: `PasswordChanger` constructed with `minimumInterval: Duration` (consumed by `MeController` via the producer, and by Task 5's integration test).
 
-**Note on the existing tests:** `PasswordChangerTest` today sets `current.createdAt = Instant.now()` while `clock.now()` returns a fixed past instant. Once the interval check reads `current.createdAt`, that mismatch refuses every change. Step 1 replaces `current` with a controlled instant, so the pre-existing tests stay green.
+**Note on the existing tests:** `PasswordChangerTest` today sets `current.createdAt = Instant.now()` while `clock.now()` returns a fixed past instant. Once the interval check reads `current.createdAt`, that mismatch refuses every change. Step 1 replaces `current` with a controlled instant, so the pre-existing tests stay green. The new `changePassword` also reads `clock.now()` before the history check, so the existing `Given a previously-used new password` test (which passes reauthentication but never stubs the clock) must gain a clock stub or it throws `MockKException` before it reaches the history check. The other pre-existing tests are unaffected (the valid-change test already stubs the clock; the two reauth-failure tests throw before the clock is read).
 
 - [ ] **Step 1: Refactor the test fixture, then write the failing tests**
 
@@ -312,6 +312,22 @@ In `PasswordChangerTest`, change the constructor call and the `current` fixture 
     // One minute before `now`, so the pre-existing tests sit outside the 30 s interval.
     private val current =
         HashedPassword("current-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now.minus(Duration.ofMinutes(1)))
+```
+
+In the existing `Given a previously-used new password` test, add the clock stub the interval check now reads (before the history check runs):
+
+```kotlin
+    @Test
+    fun `Given a previously-used new password, Then it throws PasswordPreviouslyUsedError`() {
+        every { passwords.findCurrentPasswordHash(user) } returns current
+        every { hasher.matches("old", current) } returns true
+        every { clock.now() } returns now
+        val older = HashedPassword("older", PasswordHashAlgorithm.BCRYPT, createdAt = Instant.now())
+        every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current, older)
+        every { hasher.matches("reused", current) } returns false
+        every { hasher.matches("reused", older) } returns true
+        assertThrows<PasswordPreviouslyUsedError> { changer.changePassword(user, "old", "reused") }
+    }
 ```
 
 Add the new tests:
@@ -432,8 +448,8 @@ class PasswordChanger(
         if (current == null || !passwordHasher.matches(currentPassword, current)) throw ReauthenticationError()
         val now = clock.now()
         if (current.createdAt.isAfter(now.minus(minimumInterval))) {
-            val elapsed = Duration.between(current.createdAt, now).seconds
-            val retryAfterSeconds = (minimumInterval.toSeconds() - elapsed).coerceAtLeast(1)
+            val retryAfterSeconds =
+                Duration.between(now.minus(minimumInterval), current.createdAt).seconds.coerceAtLeast(1)
             throw PasswordChangedTooSoonError(retryAfterSeconds)
         }
         val history = userPasswordRepository.findAllPasswordHashesForUser(user)
@@ -593,7 +609,7 @@ Generate the migration (the generator is a `JavaExec`; no pending drops here, so
 ./gradlew :api-persistence-sqlite:generateDbMigration
 ```
 
-Read `api-persistence-sqlite/src/main/resources/dbmigration/1.18.sql` before committing. Confirm it contains a `create unique index ix_user_password_hashes_user_created on user_password_hashes (user_id, when_created)` and nothing else. If Ebean emits a different column list or a table rebuild, stop and reconcile against the Ebean documentation (`ebean.io/docs/mapping` and `/setup/dbmigration`) before proceeding; do not commit a migration you have not read.
+Read the generated migration file before committing (Ebean names it `1.18.sql` or `1.18__<desc>.sql`, as it did for `1.14__dropsFor_1.13`). Confirm it contains a `create unique index ix_user_password_hashes_user_created on user_password_hashes (user_id, when_created)` and nothing else. If Ebean emits a different column list or a table rebuild, stop and reconcile against the Ebean documentation (`ebean.io/docs/mapping` and `/setup/dbmigration`) before proceeding; do not commit a migration you have not read.
 
 In `UserPasswordHashRepository.saveUserPasswordHash`, keep the user lookup OUTSIDE the try (it throws `UserModelDoesNotExistError`, which is a `PersistenceException`) and translate only the insert failure (import `jakarta.persistence.PersistenceException` and `PasswordChangeCollisionException`):
 
@@ -682,7 +698,7 @@ class MePasswordRateLimitIntegrationTest : IntegrationTest() {
 - [ ] **Step 2: Run to verify the behaviour**
 
 Run: `./gradlew :api-application:test --tests "MePasswordRateLimitIntegrationTest"`
-Expected: PASS once Tasks 1 to 4 are in. (If run before Task 3 it fails to start: `PasswordChanger` is unsatisfied. If the header is missing it fails on the `Retry-After` assertion, which is the regression guard for Task 1's centralisation.) This test is a contract guard; it is committed together with its assertion rather than red-then-green in isolation, because the red is "the feature is not built yet", already covered by Tasks 1 to 4.
+Expected: PASS once Tasks 1 to 4 are in. (If run before Task 3 it fails to start: `PasswordChanger` is unsatisfied. If the header is missing it fails on the `Retry-After` assertion, which is the regression guard for Task 1's centralisation.) This test is a contract guard; it is committed together with its assertion rather than red-then-green in isolation, because the red is "the feature is not built yet", already covered by Tasks 1 to 4. This is an accepted exception to the Global Constraint's red-first rule, recorded here so the implementer does not force a red-then-green cycle on a test that cannot compile in isolation.
 
 - [ ] **Step 3: Commit the test**
 
