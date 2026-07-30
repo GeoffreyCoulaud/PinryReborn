@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
+import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordChangeCollisionException
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.exceptions.UserModelDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserPasswordHashRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
@@ -73,6 +74,17 @@ class UserPasswordHashRepositoryTest : RepositoryTest() {
         // When, Then
         assertThrows(UserModelDoesNotExistError::class.java) {
             repository.saveUserPasswordHash(nonexistentUser, hashedPassword)
+        }
+    }
+
+    @Test
+    fun `Given two hashes at the same instant, Then the second is refused as a PasswordChangeCollisionException`() {
+        // Given
+        val user = user()
+        repository.saveUserPasswordHash(user, hash("first", anInstant))
+        // When / Then
+        assertThrows(PasswordChangeCollisionException::class.java) {
+            repository.saveUserPasswordHash(user, hash("second", anInstant))
         }
     }
 }
