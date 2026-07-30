@@ -152,6 +152,16 @@ class BaseErrorMapperTest {
     }
 
     @Test
+    fun `Given PASSWORD_CHANGED_TOO_SOON, Then status is TOO_MANY_REQUESTS`() {
+        assertEquals(Response.Status.TOO_MANY_REQUESTS, statusFor(ErrorCode.PASSWORD_CHANGED_TOO_SOON))
+    }
+
+    @Test
+    fun `Given PASSWORD_CHANGE_COLLISION, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.PASSWORD_CHANGE_COLLISION))
+    }
+
+    @Test
     fun `Given UNSUPPORTED_REAUTHENTICATION_FACTOR, Then status is BAD_REQUEST`() {
         assertEquals(Response.Status.BAD_REQUEST, statusFor(ErrorCode.UNSUPPORTED_REAUTHENTICATION_FACTOR))
     }
