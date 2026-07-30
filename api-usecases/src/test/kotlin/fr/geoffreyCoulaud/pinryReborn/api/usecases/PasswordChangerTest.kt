@@ -86,7 +86,7 @@ class PasswordChangerTest : BaseTest() {
     }
 
     @Test
-    fun `Given a change inside the minimum interval, Then it throws PasswordChangedTooSoonError with the remaining seconds`() {
+    fun `Given a change inside the minimum interval, Then it throws PasswordChangedTooSoonError`() {
         // Given
         val recent = HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = now.minusSeconds(10))
         every { passwords.findCurrentPasswordHash(user) } returns recent
@@ -108,9 +108,9 @@ class PasswordChangerTest : BaseTest() {
         every { passwords.findAllPasswordHashesForUser(user) } returns listOf(boundary)
         every { hasher.matches("new", boundary) } returns false
         every { clock.now() } returns now
-        every { hasher.hash("new", now) } returns HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
-        every { passwords.saveUserPasswordHash(any(), any()) } returns
-            HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
+        val newHash = HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
+        every { hasher.hash("new", now) } returns newHash
+        every { passwords.saveUserPasswordHash(any(), any()) } returns newHash
         // When / Then
         changer.changePassword(user, "old", "new")
         verify { passwords.saveUserPasswordHash(any(), any()) }
@@ -131,9 +131,9 @@ class PasswordChangerTest : BaseTest() {
         every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current)
         every { hasher.matches("new", current) } returns false
         every { clock.now() } returns now
-        every { hasher.hash("new", now) } returns HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
-        every { passwords.saveUserPasswordHash(any(), any()) } returns
-            HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
+        val newHash = HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
+        every { hasher.hash("new", now) } returns newHash
+        every { passwords.saveUserPasswordHash(any(), any()) } returns newHash
         changer.changePassword(user, "old", "new")
     }
 
@@ -146,7 +146,8 @@ class PasswordChangerTest : BaseTest() {
         every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current)
         every { hasher.matches("new", current) } returns false
         every { clock.now() } returns now
-        every { hasher.hash("new", now) } returns HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
+        val newHash = HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
+        every { hasher.hash("new", now) } returns newHash
         every { passwords.saveUserPasswordHash(any(), any()) } throws PasswordChangeCollisionException()
         // When / Then
         assertThrows<PasswordChangeCollisionError> { changer.changePassword(user, "old", "new") }

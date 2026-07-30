@@ -12,6 +12,9 @@ interface AuthConfig {
     @WithDefault("PT12H")
     fun ephemeralTtl(): Duration
 
+    @WithDefault("PT30S")
+    fun passwordChangeMinimumInterval(): Duration
+
     @WithDefault("0.75")
     fun renewThreshold(): Double
 }
