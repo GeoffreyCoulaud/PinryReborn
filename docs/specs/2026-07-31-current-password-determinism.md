@@ -126,8 +126,9 @@ if (current.createdAt.isAfter(now.minus(minimumInterval))) {
 }
 ```
 
-`retryAfterSeconds` is `minimumInterval.toSeconds() - Duration.between(current.createdAt, now).seconds`,
-`coerceAtLeast(1)`, the same shape as `ExportTooSoonError` (`UserDataExportRequester.kt:62`). The check
+`retryAfterSeconds` is `Duration.between(now.minus(minimumInterval), current.createdAt).seconds`,
+`coerceAtLeast(1)`, the same expression as `ExportTooSoonError` (`UserDataExportRequester.kt:62`, where
+`earliest = now.minus(minimumInterval)` and `last` is the prior instant). The check
 runs before the transaction, with the reauthentication (`PasswordChanger.kt:22`) and history
 (`PasswordChanger.kt:23-24`) checks; the transaction still does the save and `revokeAll`
 (`PasswordChanger.kt:25-28`).
