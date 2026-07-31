@@ -13,7 +13,11 @@ import java.time.Instant
 
 @Entity
 @Table(name = "user_password_hashes")
-@Index(name = "ix_user_password_hashes_user_created", definition = "create unique index ix_user_password_hashes_user_created on user_password_hashes (user_id, when_created)")
+@Index(
+    name = "ix_user_password_hashes_user_created",
+    definition = "create unique index ix_user_password_hashes_user_created " +
+        "on user_password_hashes (user_id, when_created)",
+)
 class UserPasswordHashModel(
     @ManyToOne var user: UserModel,
     var hash: String,
