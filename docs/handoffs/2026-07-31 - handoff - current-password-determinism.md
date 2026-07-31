@@ -47,8 +47,9 @@ overrides to `PT0S` so the existing signup-then-change integration tests stay gr
 "ix_user_password_hashes_user_created", columnNames = ["user_id", "when_created"], unique = true)`.
 `UserPasswordHashRepository.saveUserPasswordHash` wraps the insert in `catch
 (jakarta.persistence.PersistenceException)` and throws the domain exception; the user lookup
-(`ActiveUserModels.resolve`) stays outside the try. Migration `1.18.sql` is hand-written as
-`create unique index ...` (the `1.2.sql` precedent), see the pitfall below.
+(`ActiveUserModels.resolve`) stays outside the try, and only a unique-constraint violation is
+translated (any other persistence failure propagates as a genuine 500). Migration `1.18` is
+generated via `@Index(definition = "create unique index ...")` (see the pitfall below).
 
 **Tests.** `UserPasswordHashRepositoryTest` (same-instant second hash refused as a collision);
 `PasswordChangerTest` (inside refusal with `retryAfterSeconds`, boundary success, D10 failed-attempt
@@ -57,12 +58,19 @@ export regression); `MePasswordRateLimitIntegrationTest` (end-to-end 429 under a
 
 ## Pitfalls learned
 
-- **Ebean's SQLite dialect cannot emit a unique constraint.** `@Index(... unique = true)` made the
-  generator try `alter table ... add constraint ... unique (...)`, which SQLite does not support, so
-  the generated `1.18.sql` was a `-- not supported:` comment that enforces nothing. The red
-  repository test caught it. The fix is the project's existing `1.2.sql` precedent: hand-write the
-  migration as `create unique index ...` and keep the generated `1.18.model.xml`. Worth a Gotchas
-  entry in `agents/project.md` (see Improve input).
+- **`@Index(unique = true)` is a no-op on SQLite; use `@Index(definition = ...)`.** `@Index(...,
+  unique = true)` made the generator try `alter table ... add constraint ... unique (...)`, which
+  SQLite does not support, so the generated `1.18.sql` was a `-- not supported:` comment that
+  enforced nothing. The red repository test caught it. An earlier hand-written `create unique index`
+  (the `1.2.sql` precedent) was replaced on review with `@Index(definition = "create unique index
+  ...")`, which lets Ebean generate the migration itself. Worth a Gotchas entry in
+  `agents/project.md` (see Improve input).
+- **A broad `catch (PersistenceException)` misreports unrelated failures as a collision.** The first
+  draft translated every persistence failure to a 409. Review caught it: only a unique-constraint
+  violation (discriminated by the typed `SQLiteException.resultCode`, `SQLITE_CONSTRAINT_UNIQUE` vs
+  the other constraint codes that share vendor errorCode 19) becomes a 409; everything else (NOT
+  NULL, connection, ...) propagates as a genuine 500. The export precedent
+  (`UserDataExportRepository`) still has the broad shape and is a candidate for the same narrowing.
 - **Two unrelated `PersistenceException` types.** `UserModelDoesNotExistError` extends the project's
   own `PersistenceException` (`api-persistence-sqlite/.../exceptions/PersistenceException.kt`, a
   `java.lang.Exception` subtype), not the `jakarta.persistence.PersistenceException` the repository
@@ -114,11 +122,12 @@ export regression); `MePasswordRateLimitIntegrationTest` (end-to-end 429 under a
 
 ## Improve input (failures the gate did not catch)
 
-- **Ebean's SQLite dialect comments out `ALTER TABLE ADD CONSTRAINT UNIQUE`.** The plan assumed the
-  generator would emit the migration; it emitted a no-op. The red test caught it, but a future unique
-  constraint will hit the same wall. Candidate remedy: a Gotchas line in `agents/project.md` (and
-  possibly the shared baseline, since it is true of Ebean-on-SQLite anywhere) recording that a unique
-  constraint must be hand-written as `create unique index`, the `1.2.sql` precedent.
+- **`@Index(unique = true)` silently produces a no-op migration on SQLite.** The plan assumed the
+  generator would emit the constraint; it emitted a `-- not supported` comment. The red test caught
+  it, and review pointed to the real fix: `@Index(definition = "create unique index ...")` generates
+  the migration correctly. Candidate remedy: a Gotchas line in `agents/project.md` (and possibly the
+  shared baseline, since it is true of Ebean-on-SQLite anywhere) recording that a unique constraint
+  on SQLite uses `@Index(definition = ...)`, never `unique = true`.
 - **A comment and two docs asserted a `PersistenceException` subtype relation that does not hold.**
   The project has its own `PersistenceException` alongside the JPA one, and a reviewer (not the gate)
   had to catch the conflation. Candidate remedy: none structural (it is comment accuracy), but the
