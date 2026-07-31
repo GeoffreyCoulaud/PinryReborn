@@ -109,10 +109,12 @@ maps to `user_id`). Two hashes for one user can no longer share an instant, so t
 ordering in `findCurrentPasswordHash` (`UserPasswordHashRepository.kt:27-36`) is total per user and
 the read is deterministic.
 
-The annotation form (a composite unique index) follows Ebean's convention and is verified against the
-Ebean documentation at Act time, not recalled; the generated `1.18.sql` is read before it is
-committed, and the constraint is pinned by `DbMigrationModelCoverageTest` and by the repository test
-in section 5.
+The annotation form is `@Index(definition = "create unique index ...")`. `@Index(..., unique = true)`
+is a no-op on SQLite: Ebean's dialect tries `alter table ... add constraint ... unique (...)`, which
+SQLite does not support, and writes a `-- not supported` comment that enforces nothing (verified at
+Act time by generating the migration, not recalled). The `definition` form makes Ebean emit the
+`create unique index` itself; the generated `1.18.sql` is read before it is committed, and the
+constraint is pinned by `DbMigrationModelCoverageTest` and by the repository test in section 5.
 
 ### 4.2 The minimum interval
 
@@ -162,19 +164,22 @@ The 409 path mirrors the export (`UserDataExportRepository.kt:51-59`). The persi
 translates its driver exception into a domain type, and the use case translates that into the error
 the presentation layer maps:
 
-- `UserPasswordHashRepository.saveUserPasswordHash` wraps the save in `try { ... } catch (error:
-  PersistenceException) { throw PasswordChangeCollisionException(cause = error) }`. The domain
-  exception `PasswordChangeCollisionException` lives in `api-domain/security`, beside the other
-  password types, because `api-persistence-sqlite` must not depend on `api-usecases`.
+- `UserPasswordHashRepository.saveUserPasswordHash` wraps the insert in `try { ... } catch (error:
+  PersistenceException) { translateIfCollision(error) }`, where only a unique-constraint violation is
+  translated to `PasswordChangeCollisionException(cause = error)`. The domain exception
+  `PasswordChangeCollisionException` lives in `api-domain/security`, beside the other password types,
+  because `api-persistence-sqlite` must not depend on `api-usecases`.
 - `PasswordChanger` catches `PasswordChangeCollisionException` around the save and rethrows
   `PasswordChangeCollisionError`.
 
-The same caveat the export records applies: SQLite surfaces the violation as a plain
-`PersistenceException` wrapping a `SQLiteException` with no reliable structured code, so the guard is
-scoped by what is being written (every call inserts a hash row) rather than by inspecting the message.
-The residual risk of reporting a different persistence failure as a 409 is accepted: the only writes
-to this table are hash inserts by an authenticated user, so the unique constraint is the realistic
-cause.
+SQLite surfaces a unique violation as a `PersistenceException` wrapping a `SQLiteException` whose
+typed `resultCode` (`SQLITE_CONSTRAINT_UNIQUE`) discriminates it from the other constraint failures
+(NOT NULL, FOREIGN KEY, ...) that share vendor errorCode 19. Only the unique violation becomes a 409;
+any other persistence failure propagates unchanged as a genuine 500. The user lookup
+(`ActiveUserModels.resolve`) stays outside the try so its `UserModelDoesNotExistError` (the project's
+own `PersistenceException`, not the jakarta one the catch is on) is never involved. The export
+precedent (`UserDataExportRepository.save`) uses a broader catch scoped by write type and is a
+candidate for the same narrowing.
 
 ### 4.4 Centralised 429 rendering
 
@@ -240,14 +245,15 @@ its implementation has not introduced yet), pasted from the run.
 - **The interval is a soft guard checked outside the transaction.** Two concurrent requests from the
   same user can both pass it and both insert; the unique constraint catches that and produces the 409.
   The interval is not asked to close the concurrent case.
-- **Catching `PersistenceException` can mask a different failure as a 409.** Accepted for the same
-  reason as the export: the only writes to `user_password_hashes` are hash inserts by an authenticated
-  user, so the unique constraint is the realistic cause. The user lookup stays outside the try block
-  to keep the "user absent" and "insert constraint" error paths distinct: `UserModelDoesNotExistError`
-  extends the project's own `PersistenceException` (`...sqlite.exceptions.PersistenceException`, a
-  `java.lang.Exception` subtype), not the `jakarta.persistence.PersistenceException` the catch is on,
-  so it would not be caught either way; the separation is a defensive clarity choice, not a
-  correctness requirement.
+- **Only unique-constraint violations become a 409.** The catch translates a `PersistenceException`
+  to `PasswordChangeCollisionException` only when the wrapped `SQLiteException.resultCode` is
+  `SQLITE_CONSTRAINT_UNIQUE`; any other persistence failure (NOT NULL, connection, ...) propagates
+  unchanged as a genuine 500. The user lookup stays outside the try block to keep the "user absent"
+  and "insert constraint" error paths distinct: `UserModelDoesNotExistError` extends the project's
+  own `PersistenceException` (`...sqlite.exceptions.PersistenceException`, a `java.lang.Exception`
+  subtype), not the `jakarta.persistence.PersistenceException` the catch is on, so it would not be
+  caught either way; the separation is a defensive clarity choice. The export precedent still uses a
+  broader catch and is a candidate for the same narrowing.
 - **`PasswordChanger` leaves CDI auto-discovery.** It gains a producer in the composition root, the
   `UserDataExportRequester` precedent. `MeController` and the bean's other consumers are unchanged; the
   ripple is the producer and the test constructors that gain a `minimumInterval` argument.
