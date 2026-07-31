@@ -14,6 +14,9 @@ import java.io.File
  * attribute holding raw index DDL, which covers partial and expression indexes, and the attribute is
  * part of the migration model (`CreateIndex.definition`, diffed by `MIndex.compare`). Read the source
  * rather than assuming.
+ *
+ * The no-op rule below catches a related failure: a migration Ebean cannot render is written as
+ * `-- not supported: ...` and applies silently, enforcing nothing.
  */
 class DbMigrationModelCoverageTest {
     private val migrationDirectory = File("src/main/resources/dbmigration")
@@ -26,48 +29,40 @@ class DbMigrationModelCoverageTest {
             "1.2",
         )
 
+    private val sqlScripts: List<File> =
+        migrationDirectory
+            .listFiles()
+            ?.toList()
+            .orEmpty()
+            .filter { it.name.endsWith(".sql") }
+
     @Test
     fun `Given the migration scripts, Then each one is backed by a generated model or documented here`() {
-        // Given
-        val versions =
-            migrationDirectory
-                .listFiles()
-                ?.toList()
-                .orEmpty()
-                .filter { it.name.endsWith(".sql") }
-                .map { it.name.removeSuffix(".sql") }
-
-        // When
         val withoutModel =
-            versions.filterNot { File(migrationDirectory, "model/$it.model.xml").exists() }
-
-        // Then
+            sqlScripts
+                .map { it.name.removeSuffix(".sql") }
+                .filterNot { File(migrationDirectory, "model/$it.model.xml").exists() }
         assertEquals(handWritten, withoutModel.toSet())
     }
 
     @Test
     fun `Given the migration directory, Then it is where this test expects it`() {
         // Guards against a silent pass if the working directory or the layout ever moves: an empty
-        // listing would make the assertion above trivially true.
+        // listing would make the assertions above trivially true.
         assertEquals(true, migrationDirectory.isDirectory)
     }
 
     @Test
-    fun `Given the migration scripts, Then none is an Ebean no-op`() {
-        // Ebean's SQLite dialect writes "-- not supported: ..." (and emits nothing else) when it
-        // cannot render a change: @Index(unique = true) becomes an unsupported
-        // ALTER TABLE ADD CONSTRAINT UNIQUE, so the migration applies silently and enforces nothing.
-        // Such a no-op must never be committed. A unique index on SQLite uses
-        // @Index(definition = "create unique index ..."), which the generator renders.
-        val noOps =
-            migrationDirectory
-                .listFiles()
-                ?.toList()
-                .orEmpty()
-                .filter { it.name.endsWith(".sql") }
-                .filter { file ->
-                    file.readText().lineSequence().any { it.contains("-- not supported", ignoreCase = true) }
-                }
-        assertEquals(emptyList<File>(), noOps)
+    fun `Given the migration scripts, Then none carries an Ebean no-op marker`() {
+        // Ebean's SQLite dialect writes "-- not supported: ..." (and nothing else) when it cannot
+        // render a change: @Index(unique = true) becomes an unsupported ALTER TABLE ADD CONSTRAINT
+        // UNIQUE, so the migration applies silently and enforces nothing. Such a no-op must never be
+        // committed. A unique index on SQLite uses @Index(definition = "create unique index ..."),
+        // which the generator renders.
+        val noOpMigrations =
+            sqlScripts.filter { script ->
+                script.readText().lineSequence().any { it.startsWith("-- not supported") }
+            }
+        assertEquals(emptyList<File>(), noOpMigrations)
     }
 }
