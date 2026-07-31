@@ -293,6 +293,12 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   refusal and no CI run. Push and open a PR.
 - **Editing an applied migration breaks startup.** The checksum changes and Ebean refuses the
   history. A correction is a new migration, never an edit.
+- **A unique constraint on SQLite is `@Index(definition = "create unique index ...")`, never
+  `unique = true`.** `unique = true` makes Ebean's dialect try `ALTER TABLE ADD CONSTRAINT UNIQUE`,
+  which SQLite does not support, so the generated migration is a `-- not supported:` comment that
+  applies silently and enforces nothing. The `definition` attribute makes Ebean emit the
+  `create unique index` itself (the modern form for the hand-written `1.2` index).
+  `DbMigrationModelCoverageTest` now fails if any committed migration carries that no-op marker.
 - **The `pre-commit` hook rewrites `docs/openapi.json`**, stages it, and exits non-zero when it
   changed, so the commit has to be re-run. That is the hook working, not a failure. It also rejects
   em-dashes and en-dashes in staged text additions (no-em-dash rule, AGENTS.md Conventions): use a
