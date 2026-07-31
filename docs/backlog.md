@@ -37,6 +37,19 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
 
 ### P2: Operational debt (flagged in handoffs; not UI blockers)
 
+- **Broad `catch (PersistenceException)` translations can misreport unrelated failures.** Adapters
+  that translate a `jakarta.persistence.PersistenceException` into a domain error by catching it
+  wholesale let a NOT NULL, foreign-key or connection failure on the same write surface as the
+  translated outcome instead of a 500. Known instance: `UserDataExportRepository.save`
+  (`UserDataExportRepository.kt:51-59`) catches `PersistenceException` and throws
+  `ExportAlreadyInProgressException` (the export 409), justified only by write type ("only a PENDING
+  write can hit that index"). PR #46 narrowed the password-hash catch
+  (`UserPasswordHashRepository.saveUserPasswordHash`) to translate only a unique-constraint
+  violation, discriminated by the wrapped `SQLiteException`'s typed `resultCode`
+  (`SQLITE_CONSTRAINT_UNIQUE`, distinct from the other constraint codes that share vendor errorCode
+  19), which the export's own KDoc had called unusable. Apply the same narrowing to the export catch
+  (and audit the other `catch (PersistenceException)` sites), or record why its write-type scoping is
+  enough. New 2026-08-01, surfaced by the PR #46 review.
 - **detekt runs without type resolution, and the tasks that have it are red.** `check` depends on
   `:detekt`, so `detektMain` and `detektTest` are run by neither the gate nor CI. Measured 2026-07-29:
   `detektMain` fails in four of the twelve modules, `api-presentation-quarkus` 16 findings,
