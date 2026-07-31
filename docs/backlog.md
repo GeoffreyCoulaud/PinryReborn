@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-30 (blocks 1 and 2 of the domain-owned timestamps work delivered and removed; block 3 remains).
+Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered; the P0 entry is removed, its record in the handoff and git history).
 
 ## How to use this file
 
@@ -20,32 +20,6 @@ Last reviewed: 2026-07-30 (blocks 1 and 2 of the domain-owned timestamps work de
 ---
 
 ## Open items
-
-### P0: Domain-owned timestamps (specified 2026-07-29, one block left of three)
-
-Specified as one piece of work in `docs/specs/2026-07-29-domain-owned-timestamps.md`, with
-`docs/adr/0006-domain-owned-timestamps.md`. It absorbed three items that sat in P2 until 2026-07-29
-(`softDeletedAt` stamped in the adapter, soft delete not bumping `updatedAt`, and the
-`findCurrentPasswordHash` tie-breaker): they were one defect with three faces, a business instant
-invented by the persistence adapter rather than stamped by a use case. Scoping them showed the defect
-is wider than they recorded, so the work also unifies the two soft-delete mechanisms and deletes
-`AuditedBaseModel`.
-
-Three sequential blocks were planned, one session and one pull request each, in an order imposed by
-dependency rather than preference. **Blocks 1 and 2 have shipped** (2026-07-29 and 2026-07-30) and
-closed all three absorbed items except the password-hash determinism block 3 carries. Records: block 1
-in `docs/handoffs/2026-07-29 - handoff - single-representation-soft-delete.md`,
-`docs/specs/2026-07-29-single-representation-soft-delete.md` and
-`docs/adr/0007-single-representation-soft-delete.md`; block 2 in
-`docs/handoffs/2026-07-30 - handoff - end-of-audited-base-model.md` and
-`docs/specs/2026-07-29-end-of-audited-base-model.md`. One remains:
-
-- **Block 3: current-password determinism.** Absorbs the third former item, the
-  `findCurrentPasswordHash` tie-breaker. A `(user_id, created_at)` unique constraint plus a
-  configurable minimum interval between password changes (default 30 s), with
-  `PASSWORD_CHANGE_COLLISION` (409) and `PASSWORD_CHANGED_TOO_SOON` (429). Block 2 already added
-  `HashedPassword.createdAt` (domain-stamped from `Clock`) and ordered `findCurrentPasswordHash` on
-  it, so block 3 adds only the constraint, the interval, and the two error codes.
 
 ### P1: Client ergonomics (needed for the web UI and browser extension)
 
