@@ -51,4 +51,23 @@ class DbMigrationModelCoverageTest {
         // listing would make the assertion above trivially true.
         assertEquals(true, migrationDirectory.isDirectory)
     }
+
+    @Test
+    fun `Given the migration scripts, Then none is an Ebean no-op`() {
+        // Ebean's SQLite dialect writes "-- not supported: ..." (and emits nothing else) when it
+        // cannot render a change: @Index(unique = true) becomes an unsupported
+        // ALTER TABLE ADD CONSTRAINT UNIQUE, so the migration applies silently and enforces nothing.
+        // Such a no-op must never be committed. A unique index on SQLite uses
+        // @Index(definition = "create unique index ..."), which the generator renders.
+        val noOps =
+            migrationDirectory
+                .listFiles()
+                ?.toList()
+                .orEmpty()
+                .filter { it.name.endsWith(".sql") }
+                .filter { file ->
+                    file.readText().lineSequence().any { it.contains("-- not supported", ignoreCase = true) }
+                }
+        assertEquals(emptyList<File>(), noOps)
+    }
 }
