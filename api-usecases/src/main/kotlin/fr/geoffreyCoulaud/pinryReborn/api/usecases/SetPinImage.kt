@@ -48,7 +48,7 @@ class SetPinImage(
         val probeResult = try {
             imageProbe.probe(staged, maxPixels)
         } catch (e: ImageProbeException) {
-            imageStore.discard(staged)
+            imageStore.discardQuietly(staged)
             // Keep the client-facing message fixed (consistent with the other ImageError
             // siblings); the underlying probe detail is preserved via `cause` for logs, not
             // echoed to the API caller.
@@ -76,7 +76,7 @@ class SetPinImage(
             imageStore.promote(staged, storageKey)
             imageRepository.save(image)
         } catch (e: Exception) {
-            imageStore.discard(staged)
+            imageStore.discardQuietly(staged)
             // Best-effort: a cleanup failure here must not mask `e`, which is the cause the caller
             // needs to see. The orphan (if any) is reclaimed by the periodic garbage collection.
             imageStore.deleteQuietly(storageKey)
