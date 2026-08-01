@@ -5,9 +5,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.BackoffPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
+import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 
 /**
  * Executes an already-claimed task through its registered [TaskHandler] and settles it
@@ -41,7 +43,7 @@ class TaskProcessor(
                     // no-ops if the task is no longer RUNNING under this lease (already reaped/settled).
                     renewLease = { taskQueue.renewLease(claimed.id, claimed.leaseId, clock.now().plus(leaseDuration)) }
                 }
-            val outcome = runHandler(handler, claimed.payload, context)
+            val outcome = runHandler(handler, claimed.id, claimed.payload, context)
             val now = clock.now()
             if (taskQueue.markCancelledIfRequested(claimed.id, claimed.leaseId, now)) {
                 return
@@ -56,6 +58,7 @@ class TaskProcessor(
             is Permanent -> taskQueue.markDead(claimed.id, claimed.leaseId, now, outcome.message)
             is Retryable ->
                 if (claimed.attempts >= claimed.maxAttempts) {
+                    logger.warn { "task ${claimed.id} exhausted retries, marking dead: ${outcome.message}" }
                     taskQueue.markDead(claimed.id, claimed.leaseId, now, outcome.message)
                 } else {
                     val retryAt = backoffPolicy.nextAttemptAt(claimed.attempts, now)
@@ -65,13 +68,19 @@ class TaskProcessor(
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun runHandler(handler: TaskHandler, payload: String, context: TaskContext): Outcome =
+    private fun runHandler(handler: TaskHandler, taskId: UUID, payload: String, context: TaskContext): Outcome =
         try {
             handler.handle(payload, context)
             Success
         } catch (e: PermanentTaskException) {
             Permanent(e.reason)
         } catch (e: Exception) {
+            // Swallowed into a retryable outcome; logged so a repeatedly-failing handler is visible.
+            logger.warn(e) { "task $taskId handler threw a retryable failure" }
             Retryable(e.message ?: "transient failure")
         }
+
+    private companion object {
+        private val logger = KotlinLogging.logger {}
+    }
 }
