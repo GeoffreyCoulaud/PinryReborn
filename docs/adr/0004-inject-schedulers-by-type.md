@@ -1,6 +1,6 @@
 # 0004. Inject worker schedulers by type
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-27
 
 ## Context
