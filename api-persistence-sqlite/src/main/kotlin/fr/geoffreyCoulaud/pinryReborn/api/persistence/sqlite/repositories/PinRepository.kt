@@ -194,7 +194,9 @@ class PinRepository(
         PinQueries.any().author.id.equalTo(user.id).findList().map { it.id }
 
     override fun softDeletePin(pin: Pin, at: Instant): Pin {
-        val model = PinQueries.any().id.equalTo(pin.id).findOne()!!
+        val model = checkNotNull(PinQueries.any().id.equalTo(pin.id).findOne()) {
+            "pin ${pin.id} vanished between read and soft-delete transition"
+        }
         model.softDeletedAt = at
         model.updatedAt = at
         database.save(model)
@@ -202,7 +204,9 @@ class PinRepository(
     }
 
     override fun restorePin(pin: Pin, at: Instant): Pin {
-        val model = PinQueries.any().id.equalTo(pin.id).findOne()!!
+        val model = checkNotNull(PinQueries.any().id.equalTo(pin.id).findOne()) {
+            "pin ${pin.id} vanished between read and restore transition"
+        }
         model.softDeletedAt = null
         model.updatedAt = at
         database.save(model)
