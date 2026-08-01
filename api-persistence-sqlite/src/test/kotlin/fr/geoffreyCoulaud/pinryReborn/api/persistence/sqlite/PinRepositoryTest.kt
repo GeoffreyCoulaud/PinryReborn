@@ -23,6 +23,8 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.util.UUID.randomUUID
 
+@Suppress("LargeClass") // Core pin repository suite; feature slices live in sibling classes
+// (PinRepositoryPaginationTest, PinRepositoryRecycledMembershipTest, PinModelSortStrategyTest).
 class PinRepositoryTest : RepositoryTest() {
     private val repository = PinRepository(database)
     private val userRepository = UserRepository(database)
