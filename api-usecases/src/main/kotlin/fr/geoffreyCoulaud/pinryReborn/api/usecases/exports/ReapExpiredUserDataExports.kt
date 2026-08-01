@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
 
 /**
@@ -15,6 +16,11 @@ import java.time.Duration
  * [ExportArchiveStore] have no CDI producer until the wiring task (`ExportProducers`, Task 10), so
  * annotating this bean now would fail Quarkus's build-time bean validation in `api-application`.
  * Same precedent as `UserDataExportRequester`.
+ *
+ * Each export is isolated in its own try/catch and a failure (the repository save, in practice) is
+ * logged at WARN rather than aborting the batch: one bad export must not leave the rest unswept
+ * that run. Same shape as `ReapTombstonedAccounts` (see
+ * docs/adr/0003-periodic-gc-and-best-effort-cleanup.md).
  */
 class ReapExpiredUserDataExports(
     private val repository: UserDataExportRepositoryInterface,
@@ -22,14 +28,29 @@ class ReapExpiredUserDataExports(
     private val clock: Clock,
     private val stagedFileMaxAge: Duration,
 ) {
+    /**
+     * Returns the number of expired exports identified, the same accounting the other GC reapers
+     * use: a per-item re-save is best-effort, so a throw is logged and the next export is still
+     * processed.
+     */
+    // The save can throw anything; item-level isolation is the point (class KDoc).
+    @Suppress("TooGenericExceptionCaught")
     fun reap(): Int {
         val now = clock.now()
         val expired = repository.findExpiredReadyExports(now)
         for (export in expired) {
-            export.storageKey?.let { archiveStore.deleteQuietly(it) }
-            repository.save(export.copy(state = UserDataExportState.EXPIRED))
+            try {
+                export.storageKey?.let { archiveStore.deleteQuietly(it) }
+                repository.save(export.copy(state = UserDataExportState.EXPIRED))
+            } catch (e: Exception) {
+                logger.warn(e) { "export reap failed for export ${export.id}" }
+            }
         }
         archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge))
         return expired.size
+    }
+
+    private companion object {
+        private val logger = KotlinLogging.logger {}
     }
 }
