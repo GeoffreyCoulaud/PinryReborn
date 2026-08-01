@@ -83,14 +83,14 @@ class DownloadPinImage(
         try {
             imageProbe.probe(staged, maxPixels)
         } catch (e: ImageProbeException) {
-            imageStore.discard(staged)
+            imageStore.discardQuietly(staged)
             failPermanent(pinId, mapProbe(e))
         } catch (e: Exception) {
             // A probe failure outside the declared ImageProbeException contract (e.g. a native/FFM
             // error) must still route through the failure policy; otherwise the download row is
             // left stuck PENDING and the staged temp file leaks. Treat it as a transient internal
             // error so an exhausted retry becomes terminal FAILED instead of DEAD-with-PENDING-row.
-            imageStore.discard(staged)
+            imageStore.discardQuietly(staged)
             failRetryable(pinId, DownloadReason.INTERNAL_ERROR, context, e)
         }
 
@@ -124,7 +124,7 @@ class DownloadPinImage(
                 imageStore.deleteQuietly(image.storageKey)
             }
         } catch (e: Exception) {
-            imageStore.discard(staged)
+            imageStore.discardQuietly(staged)
             // Best-effort: a cleanup failure must not mask `e`, which the retry policy records
             // and rethrows. The orphan (if any) is reclaimed by the periodic garbage collection.
             imageStore.deleteQuietly(image.storageKey)

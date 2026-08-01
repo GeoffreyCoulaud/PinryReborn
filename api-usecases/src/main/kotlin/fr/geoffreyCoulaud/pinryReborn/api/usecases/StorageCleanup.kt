@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.UUID
 
@@ -23,6 +24,10 @@ object StorageCleanup {
 /** Best-effort [ImageStore.delete]: logs WARN and swallows on failure. */
 fun ImageStore.deleteQuietly(storageKey: String) =
     StorageCleanup.runQuietly("image $storageKey") { delete(storageKey) }
+
+/** Best-effort [ImageStore.discard]: logs WARN and swallows on failure. */
+fun ImageStore.discardQuietly(staged: StagedFile) =
+    StorageCleanup.runQuietly("staged ${staged.path}") { discard(staged) }
 
 /** Best-effort [RenditionCache.evictImage]: logs WARN and swallows on failure. */
 fun RenditionCache.evictImageQuietly(imageId: UUID) =
