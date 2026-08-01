@@ -50,8 +50,10 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
   19), which the export's own KDoc had called unusable. Apply the same narrowing to the export catch
   (and audit the other `catch (PersistenceException)` sites), or record why its write-type scoping is
   enough. New 2026-08-01, surfaced by the PR #46 review.
-- **detekt runs without type resolution, and the tasks that have it are red.** `check` depends on
-  `:detekt`, so `detektMain` and `detektTest` are run by neither the gate nor CI. Measured 2026-07-29:
+- **detekt runs without type resolution, and the tasks that have it are red.** detekt's plain
+  `detekt` task is wired into each module's `check` (the plugin's default), which the `gate` runs per
+  module via `:<module>:check`; the type-resolution tasks `detektMain` and `detektTest` are never
+  referenced, so neither the gate nor CI runs them. Measured 2026-07-29:
   `detektMain` fails in four of the twelve modules, `api-presentation-quarkus` 16 findings,
   `api-persistence-sqlite` 11, `api-usecases` 5, `api-application` 1, the other eight clean. All of it
   predates the work that found it. The decision needed is either type-resolution detekt in the gate
@@ -62,7 +64,7 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
   `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of a
   board" can only be asked from the join table. Two consequences: the soft-delete work needs two
   extension functions on `QPinBoardModel` that would otherwise be plain `PinQueries` / `BoardQueries`
-  calls, and `savePinTags` / `savePinBoards` (`PinRepository.kt:83-147`) synchronise join rows by hand,
+  calls, and `savePinTags` / `savePinBoards` (`PinRepository.kt:82,113`) synchronise join rows by hand,
   reading, diffing and deleting, which is what a mapped collection does for you. **The cycle is not the
   obstacle**, contrary to what `PinBoardModel`'s KDoc suggests: Kotlin compiles type cycles inside a
   module and the project already has one between `models` and `models.bases`
@@ -110,7 +112,7 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
   nothing. Surfaced reviewing the single-representation soft delete, 2026-07-29.
 
 - **Four `!!` in the soft-delete transitions of the pin and board repositories.**
-  `PinRepository.softDeletePin` and `restorePin` (`PinRepository.kt:196,204`) and
+  `PinRepository.softDeletePin` and `restorePin` (`PinRepository.kt:197,205`) and
   `BoardRepository.softDeleteBoard` and `restoreBoard` (`BoardRepository.kt:50,58`) each end on
   `findOne()!!`. `agents/modules/kotlin.md` forbids `!!` outright: a value that cannot be null is
   modelled non-nullable, one that can is handled, and this one can. The row is fetched by the id of
