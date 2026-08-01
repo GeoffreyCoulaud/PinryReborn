@@ -107,6 +107,31 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         assertEquals(user.id, found?.userId)
     }
 
+    @Test
+    fun `Given a tombstoned owner, Then a state-change re-save moves the row without re-resolving the user`() {
+        // Given: the retention sweep re-saves a READY export as EXPIRED once it is past its expiry.
+        // The row outlives its owner's soft-delete (the account cleaner reaps exports after the user),
+        // so a state change must not re-resolve the active user: today resolve() throws
+        // UserModelDoesNotExistError and aborts the whole sweep.
+        val user = createAndSaveUser()
+        val export = repository.save(
+            pendingExport(user.id).copy(
+                state = UserDataExportState.READY,
+                expiresAt = Instant.parse("2026-07-22T00:00:00Z"),
+                storageKey = "archive.zip",
+            ),
+        )
+        userRepository.markPendingDeletion(user, storableNow())
+
+        // When
+        val reSaved = repository.save(export.copy(state = UserDataExportState.EXPIRED))
+
+        // Then
+        assertEquals(UserDataExportState.EXPIRED, reSaved.state)
+        assertEquals(export.id, reSaved.id)
+        assertEquals(user.id, reSaved.userId)
+    }
+
     // --- pending / ready ---
 
     @Test
