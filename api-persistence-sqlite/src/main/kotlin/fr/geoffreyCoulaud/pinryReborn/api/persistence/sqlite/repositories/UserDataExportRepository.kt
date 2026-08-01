@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserDataExportModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserDataExportModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserDataExportModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserDataExportModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPaginationHelper
@@ -16,6 +17,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.UserData
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import java.time.Instant
 import java.util.UUID
 
@@ -33,28 +36,26 @@ class UserDataExportRepository(
     private fun persist(model: UserDataExportModel): UserDataExport = sqlRepository.saveAndReturn(model).toDomain()
 
     /**
-     * The only row this table refuses is a second `PENDING` export for one user, enforced by the
-     * partial unique index. It surfaces through this exact call as a plain
-     * `jakarta.persistence.PersistenceException` wrapping
-     * `org.sqlite.SQLiteException: [SQLITE_CONSTRAINT_UNIQUE] ...` (verified against a live SQLite
-     * database: Ebean/SQLite does NOT translate it to `io.ebean.DuplicateKeyException` here), and
-     * the exception carries no usable structured code, so the guard is scoped by what is being
-     * written rather than by inspecting the message.
+     * A state-change re-save (any state but PENDING) only updates columns on a row that already
+     * exists, so it does not re-resolve the active user: the owner may be tombstoned by now (the
+     * account cleaner reaps exports after the user), and re-resolving would throw
+     * `UserModelDoesNotExistError` and abort the retention sweep. The user id is enough to keep the
+     * foreign key, supplied as an Ebean reference that never loads the row.
      *
-     * Only a `PENDING` write can hit that index, so only a `PENDING` write translates the failure.
-     * A state transition (READY, FAILED, EXPIRED, ...) that fails is a genuine persistence error and
-     * must keep its own type instead of being reported as "an export is already in progress".
-     *
-     * The user lookup stays outside the try block so `UserModelDoesNotExistError` is never mistaken
-     * for the unique-index violation.
+     * A new PENDING export still resolves the active user: that lookup is the guard that keeps a
+     * tombstoned account from queueing more work against its own data. It stays outside the try so
+     * `UserModelDoesNotExistError` is never mistaken for the unique-index violation translated below.
      */
     override fun save(export: UserDataExport): UserDataExport {
+        if (export.state != UserDataExportState.PENDING) {
+            val userReference = database.reference(UserModel::class.java, export.userId)
+            return persist(export.toModel(userReference))
+        }
         val model = export.toModel(ActiveUserModels.resolve(export.userId))
-        if (export.state != UserDataExportState.PENDING) return persist(model)
         return try {
             persist(model)
         } catch (error: PersistenceException) {
-            throw ExportAlreadyInProgressException(cause = error)
+            throw translateIfCollision(error)
         }
     }
 
@@ -125,5 +126,29 @@ class UserDataExportRepository(
 
     override fun deleteAllForUser(userId: UUID) {
         QUserDataExportModel().user.id.equalTo(userId).delete()
+    }
+
+    companion object {
+        // Package-visible for the focused unit tests of the collision decision; not part of the
+        // repository port. The cause structure (PersistenceException wrapping SQLiteException) is
+        // observed empirically against Ebean-on-SQLite and is pinned by the duplicate-insert test.
+        internal fun isUniqueConstraint(error: PersistenceException): Boolean {
+            val sqliteException = error.cause as? SQLiteException ?: return false
+            return sqliteException.resultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE
+        }
+
+        // Always throws (returns Nothing); the catch site has no branch of its own. Only a
+        // unique-constraint violation on the partial pending index becomes the 409
+        // ExportAlreadyInProgress; any other persistence failure (NOT NULL, FK, connection, ...)
+        // must surface as a genuine 500. SQLite wraps both as PersistenceException(SQLiteException)
+        // and both share vendor errorCode 19, so the typed resultCode is the one reliable
+        // discriminator (verified empirically: SQLITE_CONSTRAINT_UNIQUE vs SQLITE_CONSTRAINT_NOTNULL).
+        // Mirrors UserPasswordHashRepository.translateIfCollision. Extracted so the rethrow branch
+        // is unit-testable: a non-unique PersistenceException cannot be produced through the public
+        // save against a real store.
+        internal fun translateIfCollision(error: PersistenceException): Nothing {
+            if (isUniqueConstraint(error)) throw ExportAlreadyInProgressException(cause = error)
+            throw error
+        }
     }
 }
