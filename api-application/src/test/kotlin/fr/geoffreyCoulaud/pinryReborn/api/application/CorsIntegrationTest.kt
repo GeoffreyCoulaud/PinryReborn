@@ -56,6 +56,22 @@ class CorsIntegrationTest : IntegrationTest() {
             .header("Access-Control-Expose-Headers", containsStringIgnoringCase("Location"))
     }
 
+    @Test
+    fun `Given an allowed origin, Then the actual response exposes Retry-After to cross-origin clients`() {
+        // Given
+        val auth = createAuthenticatedUser()
+
+        // When / Then
+        given()
+            .authenticatedAs(auth)
+            .header("Origin", ALLOWED_ORIGIN)
+            .`when`()
+            .get("/api/v1/pins")
+            .then()
+            .statusCode(200)
+            .header("Access-Control-Expose-Headers", containsStringIgnoringCase("Retry-After"))
+    }
+
     companion object {
         /** Pinned in the test `application.properties` as the single allowed origin. */
         private const val ALLOWED_ORIGIN = "https://app.test"
