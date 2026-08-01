@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
 class BoardRepositoryTest : RepositoryTest() {
@@ -42,6 +43,18 @@ class BoardRepositoryTest : RepositoryTest() {
                 createdAt = storableNow(),
                 updatedAt = storableNow(),
             ),
+        )
+
+    // A board whose id is not in the store: the use case read and validated a board a concurrent
+    // hard delete has since removed. Absence at the transition is an illegal state.
+    private fun absentBoard(user: User): Board =
+        Board(
+            id = randomUUID(),
+            author = user,
+            name = "Ghost",
+            description = "",
+            createdAt = storableNow(),
+            updatedAt = storableNow(),
         )
 
     private fun createAndSavePin(
@@ -140,6 +153,33 @@ class BoardRepositoryTest : RepositoryTest() {
         val stored = requireNotNull(boardRepository.findBoardById(board.id))
         assertEquals(restorationInstant, stored.updatedAt)
         assertNull(stored.softDeletedAt)
+    }
+
+    @Test
+    fun `Given a board absent from the store, Then softDeleteBoard throws IllegalStateException naming its id`() {
+        // Given - absence at the transition is an illegal state (concurrent hard delete), not a
+        // missing argument, so it throws rather than NPE-ing on the null model
+        val user = createAndSaveUser()
+        val board = absentBoard(user)
+
+        // When / Then
+        val exception = assertThrows<IllegalStateException> {
+            boardRepository.softDeleteBoard(board, storableNow())
+        }
+        assertTrue(exception.message!!.contains(board.id.toString()))
+    }
+
+    @Test
+    fun `Given a board absent from the store, Then restoreBoard throws IllegalStateException naming its id`() {
+        // Given - same illegal-state condition as softDeleteBoard on an absent row
+        val user = createAndSaveUser()
+        val board = absentBoard(user)
+
+        // When / Then
+        val exception = assertThrows<IllegalStateException> {
+            boardRepository.restoreBoard(board, storableNow())
+        }
+        assertTrue(exception.message!!.contains(board.id.toString()))
     }
 
     @Test
