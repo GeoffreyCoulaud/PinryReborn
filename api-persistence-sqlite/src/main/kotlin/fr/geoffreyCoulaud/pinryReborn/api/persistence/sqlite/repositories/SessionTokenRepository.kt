@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenReposi
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.SessionTokenModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.SessionTokenModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QSessionTokenModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.withActiveUser
 import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Instant
@@ -30,7 +31,7 @@ class SessionTokenRepository(
     }
 
     override fun findByTokenHash(tokenHash: String): SessionToken? =
-        QSessionTokenModel().tokenHash.equalTo(tokenHash).findOne()?.toDomain()
+        QSessionTokenModel().tokenHash.equalTo(tokenHash).withActiveUser().findOne()?.toDomain()
 
     override fun deleteById(id: UUID) {
         QSessionTokenModel().id.equalTo(id).delete()
