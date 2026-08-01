@@ -95,14 +95,16 @@ Sequenced after Task 3 (the known throw is fixed first; this guards the rest).
 
 ### Task 8. detekt type resolution in the gate (spec #8)
 
-Sequenced after Task 0 (BaseModel) and Task 4 (clears four findings). Remaining findings: 35.
+Sequenced after Task 0 (BaseModel) and Task 4 (clears four findings). Remaining findings: 36 (Task
+0 surfaced `BaseModel`'s own `AbstractClassCanBeConcreteClass`, so the accurate total is 40, not 39).
 
 - (a) Wire `detektMain` / `detektTest` into the gate via each module's `check` (`build.gradle.kts`).
 - (b) Suppress with reason: `LongParameterList` on each of its 11 sites (9 DI/framework constructors +
   2 functions: a CDI producer and a test helper) with a "dependency injection by design" reason
   (detekt 2.0.0-alpha.5 has no class-level `ignoreAnnotated` for this rule); and
   `AbstractClassCanBeConcreteClass` on `PersistenceException`, `AuthoredBaseModel`,
-  `SoftDeletableQueries`, `IntegrationTest`, `RepositoryTest` (5).
+  `SoftDeletableQueries`, `BaseModel`, `IntegrationTest`, `RepositoryTest` (6; `BaseModel` was added
+  by Task 0, which made it abstract).
 - (c) Fix mechanically (18): `ForbiddenVoid` (10), `ImplicitDefaultLocale` (2), `NoNameShadowing` (2),
   `UseCheckOrError` (2, tests), `UnusedVariable` (1, verify `ImageController.download` is not a bug),
   `MemberNameEqualsClassName` (1).
