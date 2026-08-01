@@ -97,4 +97,27 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         // Then
         verify { archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge)) }
     }
+
+    @Test
+    fun `Given one export save throws, Then the others are still re-saved and no exception propagates`() {
+        // Given: save throws on the middle export; the loop must continue to the rest
+        every { clock.now() } returns now
+        val export1 = expiredExport(storageKey = null)
+        val export2 = expiredExport(storageKey = null)
+        val export3 = expiredExport(storageKey = null)
+        every { repository.findExpiredReadyExports(now) } returns listOf(export1, export2, export3)
+        every { repository.save(match { it.id == export1.id }) } answers { firstArg() }
+        every { repository.save(match { it.id == export2.id }) } throws RuntimeException("db down")
+        every { repository.save(match { it.id == export3.id }) } answers { firstArg() }
+        every { archiveStore.discardOrphanedStagedFiles(any()) } returns 0
+
+        // When
+        val count = reaper.reap()
+
+        // Then: every export was attempted (the throw was logged, not propagated), count is the batch size
+        verify { repository.save(match { it.id == export1.id && it.state == UserDataExportState.EXPIRED }) }
+        verify { repository.save(match { it.id == export2.id && it.state == UserDataExportState.EXPIRED }) }
+        verify { repository.save(match { it.id == export3.id && it.state == UserDataExportState.EXPIRED }) }
+        assertEquals(3, count)
+    }
 }
