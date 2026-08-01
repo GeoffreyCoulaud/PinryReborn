@@ -59,6 +59,22 @@ class SessionTokenRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a tombstoned owner, Then findByTokenHash returns null`() {
+        // Given: a token issued while the owner was active, then the owner is tombstoned. A
+        // tombstoned account keeps its row and its session tokens, so the read path has to
+        // filter on the owner's state or the token still authenticates a deleted account.
+        val user = createUser()
+        repository.saveSessionToken(sessionToken(user), tokenHash = "hash-tombstoned-owner")
+        userRepository.markPendingDeletion(user, storableNow())
+
+        // When
+        val loaded = repository.findByTokenHash("hash-tombstoned-owner")
+
+        // Then
+        assertNull(loaded)
+    }
+
+    @Test
     fun `Given a nonexistent user, Then saveSessionToken throws UserModelDoesNotExistError`() {
         // Given
         val nonexistentUser = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
