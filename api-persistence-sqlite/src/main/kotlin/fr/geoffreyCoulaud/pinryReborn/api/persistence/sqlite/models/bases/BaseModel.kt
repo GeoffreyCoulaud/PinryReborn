@@ -6,6 +6,6 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 @MappedSuperclass
-class BaseModel(
+abstract class BaseModel(
     @Id var id: UUID = randomUUID(),
 )
