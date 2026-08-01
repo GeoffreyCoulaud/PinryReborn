@@ -47,7 +47,9 @@ class BoardRepository(
             .findList().sortedForListing().map { it.toDomain() }
 
     override fun softDeleteBoard(board: Board, at: Instant): Board {
-        val model = BoardQueries.any().id.equalTo(board.id).findOne()!!
+        val model = checkNotNull(BoardQueries.any().id.equalTo(board.id).findOne()) {
+            "board ${board.id} vanished between read and soft-delete transition"
+        }
         model.softDeletedAt = at
         model.updatedAt = at
         database.save(model)
@@ -55,7 +57,9 @@ class BoardRepository(
     }
 
     override fun restoreBoard(board: Board, at: Instant): Board {
-        val model = BoardQueries.any().id.equalTo(board.id).findOne()!!
+        val model = checkNotNull(BoardQueries.any().id.equalTo(board.id).findOne()) {
+            "board ${board.id} vanished between read and restore transition"
+        }
         model.softDeletedAt = null
         model.updatedAt = at
         database.save(model)
