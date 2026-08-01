@@ -1,15 +1,19 @@
 # Plan: operational debt triage
 
-Date: 2026-08-01
+Date: 2026-08-01 (revised same day to apply the plan review's six findings)
 Spec: `docs/specs/2026-08-01-operational-debt-triage.md`
 Tier: Plan
-PR strategy: one PR (spec + plan + implementation, semantic commits). Branch:
+PR strategy: one PR (spec + plan + implementation, semantic commits). Branch
 `docs/operational-debt-triage` off `main` (9016e2a).
 
 Execution: TDD strict (red committed alone before green, the red pasted in the test commit body),
-subagent-driven, each task reviewed by a fresh subagent on completion, then a holistic review and the
-full gate before the PR. Testing order per module: integration (`api-application`) then use-case unit
-(`api-usecases`, MockK) then repository (`api-persistence-sqlite`, Ebean).
+subagent-driven, each task reviewed by a fresh subagent, then a holistic review and the full gate.
+Testing order per module: integration (`api-application`) then use-case unit (`api-usecases`, MockK)
+then repository (`api-persistence-sqlite`, Ebean).
+
+Logging convention (applies to Tasks 2 and 6): `api-usecases` binds `slf4j-nop` and its tests assert
+outcomes, not log output (`StorageCleanupTest` is the precedent). Tests assert the behaviour; the WARN
+log line is added but not unit-asserted.
 
 ## Tasks (ordered)
 
@@ -19,7 +23,7 @@ Prerequisite for Task 8 (accurate detekt type-res) and an honest-design fix in i
 
 - File: `api-persistence-sqlite/.../models/bases/BaseModel.kt` (`class` to `abstract class`).
 - Why: a `@MappedSuperclass` base, never instantiated; detekt's plugin-less analyzer sees it as final
-  and emits six spurious "cannot be extended" compiler errors.
+  and emits six spurious "cannot be extended" compiler errors on its subclasses.
 - Acceptance: `./gradlew :api-persistence-sqlite:detektMain` reports zero analysis compiler errors;
   gate green (Ebean enhancement unaffected).
 
@@ -35,17 +39,25 @@ Prerequisite for Task 8 (accurate detekt type-res) and an honest-design fix in i
 
 - Files: `api-usecases/.../StorageCleanup.kt` (add `discardQuietly`), `SetPinImage.kt`,
   `DownloadPinImage.kt` (use it in the rollback catch blocks).
-- Test: use-case unit asserting a throwing `discard` in a rollback logs at WARN and the original error
-  propagates.
+- Test: use-case unit asserting a throwing `discard` in a rollback does not mask the original error,
+  which still propagates (the WARN is not asserted; see the logging convention).
 - Acceptance: spec #3.
 
-### Task 3. Narrow the export `catch (PersistenceException)` (spec #4)
+### Task 3. Harden `UserDataExportRepository.save` (spec #2 root cause + spec #4 catch narrow)
 
-- File: `api-persistence-sqlite/.../repositories/UserDataExportRepository.kt` (translate only
-  `SQLITE_CONSTRAINT_UNIQUE` via `SQLiteException.resultCode`; rethrow the rest). Mirror
-  `UserPasswordHashRepository.translateIfCollision`.
-- Test: repository test asserting a non-unique-constraint persistence failure propagates (not 409).
-- Acceptance: spec #4.
+Merged: both edits are the same method and interact (the resolve removal reshapes the catch site Task 4
+of the spec narrows), so one task, not two.
+
+- Root cause: a state-change re-save (READY to EXPIRED) must not re-resolve the user (the association
+  already exists on the row), so `save` does not throw `UserModelDoesNotExistError` for a tombstoned
+  owner (load and mutate the existing model, or resolve outside the throwing path).
+- Catch narrow: translate only `SQLITE_CONSTRAINT_UNIQUE` (via `SQLiteException.resultCode`), rethrow
+  everything else. Mirror `UserPasswordHashRepository.translateIfCollision`.
+- Boy-scout: the existing `save` comment claims the `PersistenceException` "carries no usable
+  structured code", contradicted by the password-hash sibling; rewrite it on this hunk.
+- Test: repository test (state-change save for a tombstoned owner does not throw) + (a non-unique-
+  constraint persistence failure propagates as 500, not 409).
+- Acceptance: spec #2 (save half) + #4.
 
 ### Task 4. `checkNotNull` for the four `!!` (spec #5)
 
@@ -67,48 +79,57 @@ Prerequisite for Task 8 (accurate detekt type-res) and an honest-design fix in i
 
 - File: `api-usecases/.../tasks/TaskProcessor.kt` (WARN on handler failure and on the DEAD
   transition).
-- Test: use-case unit asserting the failure and DEAD paths emit a log (settle the capture mechanism in
-  implementation; the `api-usecases` logger precedent is `StorageCleanup` / `ReapTombstonedAccounts`).
+- Test: use-case unit asserting the failure-to-DEAD behaviour (the WARN is not asserted; see the
+  logging convention). The failure path is already behaviour-tested; this task adds the operational
+  log line and the test confirms the path still routes to DEAD.
 - Acceptance: spec #6.
 
-### Task 7. Export sweep: root cause + per-item guard (spec #2)
+### Task 7. Per-item guard in `ReapExpiredUserDataExports.reap` (spec #2 reap half)
 
-- Files: `UserDataExportRepository.save` (a state-change re-save must not re-resolve the user, so it
-  does not throw for a tombstoned owner), `ReapExpiredUserDataExports.reap` (per-item guard so one
-  failure does not abort the batch).
-- Test: repository test (state-change save for a tombstoned owner does not throw) + use-case test
-  (reap continues past a tombstoned owner's export).
-- Acceptance: spec #2.
+Sequenced after Task 3 (the known throw is fixed first; this guards the rest).
+
+- File: `api-usecases/.../exports/ReapExpiredUserDataExports.kt` (wrap each item so one failure does
+  not abort the batch).
+- Test: use-case unit asserting the sweep continues past an item whose save throws.
+- Acceptance: spec #2 (reap half).
 
 ### Task 8. detekt type resolution in the gate (spec #8)
 
 Sequenced after Task 0 (BaseModel) and Task 4 (clears four findings). Remaining findings: 35.
 
 - (a) Wire `detektMain` / `detektTest` into the gate via each module's `check` (`build.gradle.kts`).
-- (b) Configure `LongParameterList` with `ignoreAnnotated` on the CDI scope annotations (11).
-- (c) Suppress `AbstractClassCanBeConcreteClass` with a reason on `PersistenceException`,
-  `AuthoredBaseModel`, `SoftDeletableQueries`, `IntegrationTest`, `RepositoryTest` (5).
-- (d) Fix mechanically (18): `ForbiddenVoid` (10), `ImplicitDefaultLocale` (2), `NoNameShadowing` (2),
+- (b) Suppress with reason: `LongParameterList` on each of its 11 sites (9 DI/framework constructors +
+  2 functions: a CDI producer and a test helper) with a "dependency injection by design" reason
+  (detekt 2.0.0-alpha.5 has no class-level `ignoreAnnotated` for this rule); and
+  `AbstractClassCanBeConcreteClass` on `PersistenceException`, `AuthoredBaseModel`,
+  `SoftDeletableQueries`, `IntegrationTest`, `RepositoryTest` (5).
+- (c) Fix mechanically (18): `ForbiddenVoid` (10), `ImplicitDefaultLocale` (2), `NoNameShadowing` (2),
   `UseCheckOrError` (2, tests), `UnusedVariable` (1, verify `ImageController.download` is not a bug),
   `MemberNameEqualsClassName` (1).
-- (e) Examine `SpreadOperator` in `Application.kt` (1): keep with a reason or fix.
+- (d) Examine `SpreadOperator` in `Application.kt` (1): keep with a reason or fix.
+- (e) Baselines: regenerate or consciously re-confirm `config/detekt/baseline-*.xml` after wiring,
+  because type resolution can shift finding signatures (the nine baselined IDs were generated for the
+  non-type-resolution `detekt` task). The 39-finding figure is post-baseline.
 - Acceptance: `./gradlew detektMain detektTest` green; the gate runs both.
 
 ### Task 9. Deterministic tests via a fixed clock (spec #9)
 
 Sequenced last (high-churn, no business logic). Depends on Task 8's gate wiring so `WallClockRead`
-enforces on test sources.
+can enforce on test sources.
 
 - (a) Measure: activate `WallClockRead` against test sources for the real count.
-- (b) Carry a fixed `Clock` via the shared test bases (`BaseTest`, `IntegrationTest`,
-  `RepositoryTest`); replace `Instant.now()` and siblings.
-- (c) Remove the test-source exclusion from `WallClockRead`.
-- Acceptance: `WallClockRead` green on test sources; tests take the fixed clock from their base.
+- (b) Carry a fixed `Clock` via the shared test bases. `BaseTest` and the seam live in the
+  `testFixtures` source set, which stays excluded from `WallClockRead` (it hosts the `FixedClock` seam
+  that reads `Instant.now()` once); `test/` sources take the injected clock and must not read the wall
+  clock.
+- (c) Remove only the `**/test/**` exclusion from `WallClockRead` (keep `**/testFixtures/**`).
+- Acceptance: `WallClockRead` green on `test/` sources; tests take the fixed clock from their base.
 
 ## Sequencing and dependencies
 
-Task 0 first (prerequisite). Tasks 1 to 7 are independent and small; any order. Task 8 after Task 0
-and Task 4. Task 9 last. Within each task, red before green.
+Task 0 first (prerequisite). Tasks 1, 2, 4, 5, 6 independent and small. Task 3 before Task 7 (same
+subsystem: fix the known throw, then guard the batch). Task 8 after Task 0 and Task 4. Task 9 last
+(after Task 8). Within each task, red before green.
 
 ## Out of scope
 

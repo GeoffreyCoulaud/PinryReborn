@@ -111,11 +111,12 @@ Sub-process, with the violation triage already done in the discussion that produ
      `UseCheckOrError` (2, tests), `UnusedVariable` (1, `ImageController` `download`, verify it is not
      a bug where the result should be used), `MemberNameEqualsClassName` (1, `TrigramSimilarity`).
    - **Resolved by item 5 (4).** The `UnsafeCallOnNullableType` findings are the four `!!`.
-   - **Configure (11).** `LongParameterList` via `ignoreAnnotated` on the CDI scope annotations:
-     these constructors are dependency injection by design, not a smell.
-   - **Suppress with reason (5).** `AbstractClassCanBeConcreteClass` on `PersistenceException`,
-     `AuthoredBaseModel`, `SoftDeletableQueries`, `IntegrationTest`, `RepositoryTest`: abstract by
-     intent (base or marker classes, not for direct instantiation).
+   - **Suppress with reason (16).** `LongParameterList` on each of its 11 sites (9 DI/framework
+     constructors + 2 functions: a CDI producer and a test helper) with a "dependency injection by
+     design" reason (detekt 2.0.0-alpha.5 has no class-level `ignoreAnnotated` for this rule, so
+     per-site `@Suppress` is the only annotation-based option); and `AbstractClassCanBeConcreteClass`
+     on `PersistenceException`, `AuthoredBaseModel`, `SoftDeletableQueries`, `IntegrationTest`,
+     `RepositoryTest` (abstract by intent: base or marker classes, not for direct instantiation).
    - **Examine (1).** `SpreadOperator` in `Application.kt`: a necessary vararg forward, or fixable.
 
 - Acceptance: `./gradlew detektMain detektTest` is green; the gate runs both; the persistence module
