@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.util.UUID.randomUUID
 
@@ -449,6 +450,31 @@ class PinRepositoryTest : RepositoryTest() {
         val stored = requireNotNull(repository.findPinById(pin.id))
         assertEquals(restorationInstant, stored.updatedAt)
         assertNull(stored.softDeletedAt)
+    }
+
+    @Test
+    fun `Given a pin absent from the store, Then softDeletePin throws IllegalStateException naming its id`() {
+        // Given - the use case read and validated a pin a concurrent hard delete has since removed;
+        // absence at the transition is an illegal state, not a missing argument
+        val absentPin = createPin()
+
+        // When / Then
+        val exception = assertThrows<IllegalStateException> {
+            repository.softDeletePin(absentPin, storableNow())
+        }
+        assertTrue(exception.message!!.contains(absentPin.id.toString()))
+    }
+
+    @Test
+    fun `Given a pin absent from the store, Then restorePin throws IllegalStateException naming its id`() {
+        // Given - same illegal-state condition as softDeletePin on an absent row
+        val absentPin = createPin()
+
+        // When / Then
+        val exception = assertThrows<IllegalStateException> {
+            repository.restorePin(absentPin, storableNow())
+        }
+        assertTrue(exception.message!!.contains(absentPin.id.toString()))
     }
 
     @Test
