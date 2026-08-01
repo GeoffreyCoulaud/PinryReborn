@@ -662,7 +662,9 @@ style:
   ForbiddenVoid:
     active: true
     ignoreOverridden: false
-    ignoreUsageInGenerics: false
+    # `Void` in a generic position is the JAX-RS no-body idiom (`RestResponse<Void>` from
+    # `noContent()`; `Unit` does not compile). A direct `fun f(): Void` return stays flagged.
+    ignoreUsageInGenerics: true
   FunctionOnlyReturningConstant:
     active: true
     ignoreOverridableFunction: true
