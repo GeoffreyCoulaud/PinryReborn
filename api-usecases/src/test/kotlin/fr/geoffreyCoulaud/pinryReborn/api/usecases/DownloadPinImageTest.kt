@@ -347,6 +347,24 @@ class DownloadPinImageTest {
     }
 
     @Test
+    fun `Given the rollback discard throws, Then the task fails with the original cause`() {
+        stubUntilStage()
+        every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)
+        val promoteError = RuntimeException("disk full")
+        every { store.promote(any(), any()) } throws promoteError
+        every { store.discard(staged()) } throws RuntimeException("discard boom")
+
+        val thrown = assertThrows(RuntimeException::class.java) {
+            subject.download(pinId, ctx(attempt = 1, max = 3), 100, 100)
+        }
+
+        // The staged-temp discard failure must not mask the original promote failure; the retry
+        // policy records the original cause and rethrows it.
+        assertEquals(promoteError, thrown)
+        verify { downloads.recordLastError(pinId, "disk full", now) }
+    }
+
+    @Test
     fun `Given the no-op-swap delete throws, Then the task still succeeds`() {
         stubUntilStage()
         every { probe.probe(any(), any()) } returns ProbeResult(ImageFormat.PNG, 1, 1, animated = false)

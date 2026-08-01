@@ -231,4 +231,21 @@ class SetPinImageTest : BaseTest() {
         assertEquals(promoteError, thrown)
         verify { store.discard(staged) }
     }
+
+    @Test fun `Given the rollback discard throws, Then the original promote error is preserved`() {
+        val p = pin()
+        val promoteError = RuntimeException("disk full")
+        every { pins.findPinById(p.id) } returns p
+        every { store.stage(any(), 30) } returns staged
+        every { probe.probe(staged, 50) } returns ProbeResult(ImageFormat.PNG, 4, 5, animated = false)
+        every { images.findByPinId(p.id) } returns null
+        every { clock.now() } returns Instant.EPOCH
+        every { store.promote(any(), any()) } throws promoteError
+        every { store.discard(staged) } throws RuntimeException("discard boom")
+
+        val thrown = assertThrows(RuntimeException::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
+
+        // The staged-temp discard failure must not mask the original promote error.
+        assertEquals(promoteError, thrown)
+    }
 }
