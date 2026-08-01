@@ -1,6 +1,6 @@
 # 0003. Periodic GC and uniform best-effort storage cleanup
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-27
 
 ## Context
