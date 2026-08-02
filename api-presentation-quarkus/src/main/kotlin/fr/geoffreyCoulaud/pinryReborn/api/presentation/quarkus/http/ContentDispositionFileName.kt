@@ -1,5 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.http
 
+import java.util.Locale
+
 /**
  * Builds a `Content-Disposition: attachment` header value carrying both an ASCII-sanitized
  * `filename` and an RFC 6266 / RFC 5987 `filename*=UTF-8''<percent-encoded>` form.
@@ -19,7 +21,7 @@ object ContentDispositionFileName {
         val ascii = UNSAFE.replace(rawName, "-").trim('-').take(MAX_LENGTH).ifEmpty { fallback }
         val encoded = rawName.take(MAX_LENGTH).toByteArray().joinToString("") { byte ->
             val ch = byte.toInt().toChar()
-            if (ATTR_CHAR.matches(ch.toString())) ch.toString() else "%%%02X".format(byte)
+            if (ATTR_CHAR.matches(ch.toString())) ch.toString() else "%%%02X".format(Locale.ROOT, byte)
         }
         return "attachment; filename=\"$ascii\"; filename*=UTF-8''$encoded"
     }

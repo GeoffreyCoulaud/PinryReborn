@@ -34,6 +34,7 @@ import java.net.URI
 import java.util.UUID
 
 @Path("/api/v1/boards")
+@Suppress("LongParameterList") // CDI-injected: every parameter is a collaborator provided by the container.
 class BoardController(
     private val boardCreator: BoardCreator,
     private val boardGetter: BoardGetter,

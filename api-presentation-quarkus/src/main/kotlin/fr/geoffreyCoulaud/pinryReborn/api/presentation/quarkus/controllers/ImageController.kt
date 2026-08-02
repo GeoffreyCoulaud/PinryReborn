@@ -49,6 +49,7 @@ import java.util.UUID
 
 @Path("/api/v1/pins")
 @Authenticated
+@Suppress("LongParameterList") // CDI-injected: every parameter is a collaborator provided by the container.
 class ImageController(
     private val setPinImage: SetPinImage,
     private val getPinImageRendition: GetPinImageRendition,
@@ -189,7 +190,7 @@ class ImageController(
     )
     fun requestImageDownload(pinId: UUID, @Valid body: PinImageDownloadInputDto): RestResponse<PinImageStateDto> {
         val requester = securityIdentity.getUser()
-        val download = requestPinImageDownload.request(pinId, requester, body.sourceUrl)
+        requestPinImageDownload.request(pinId, requester, body.sourceUrl)
         val dto = PinImageState(PinImageStatus.PENDING, null, null, null).toDto(baseUrl(), pinId)
         return ResponseBuilder.create<PinImageStateDto>(RestResponse.Status.ACCEPTED, dto)
             .header(HttpHeaders.LOCATION, "${baseUrl()}/api/v1/pins/$pinId/image/status")
