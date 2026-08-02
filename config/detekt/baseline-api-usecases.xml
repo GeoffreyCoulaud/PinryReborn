@@ -2,8 +2,8 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>MagicNumber:TrigramSimilarity.kt:TrigramSimilarity$0.9</ID>
-    <ID>MagicNumber:TrigramSimilarity.kt:TrigramSimilarity$3</ID>
+    <ID>MagicNumber:TextSimilarity.kt:TextSimilarity$0.9</ID>
+    <ID>MagicNumber:TextSimilarity.kt:TextSimilarity$3</ID>
     <ID>ThrowsCount:DeletePinImage.kt:DeletePinImage$fun delete</ID>
     <ID>ThrowsCount:GetPinImage.kt:GetPinImage$fun get: Image</ID>
     <ID>ThrowsCount:PinBoardSetter.kt:PinBoardSetter$fun setBoards: Pin</ID>

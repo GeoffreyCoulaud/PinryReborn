@@ -5,7 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.SearchResult
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SearchEmptyQueryError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.search.TrigramSimilarity
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.search.TextSimilarity
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
@@ -32,7 +32,7 @@ class PinSearcher(
 
         return pins
             .map { pin ->
-                val score = TrigramSimilarity.combinedSimilarity(query, pin.description)
+                val score = TextSimilarity.combinedSimilarity(query, pin.description)
                 SearchResult(item = pin, score = score)
             }
             .filter { it.score >= DEFAULT_MIN_SCORE }
