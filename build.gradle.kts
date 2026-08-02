@@ -109,6 +109,10 @@ subprojects {
         jvmTarget = "25"
     }
 
+    // Type resolution in the gate: the plain `detekt` task (added to `check` by the
+    // detekt plugin) is AST-only, so also run detektMain/detektTest for the type-res rules.
+    tasks.named("check").configure { dependsOn("detektMain", "detektTest") }
+
     // Branch-coverage gate (Kover). Applied to every module EXCEPT api-application,
     // which is the composition root + end-to-end tests and has no unit tests by design.
     // Two grains, easy to conflate: coverage is MEASURED per-module from that module's own
