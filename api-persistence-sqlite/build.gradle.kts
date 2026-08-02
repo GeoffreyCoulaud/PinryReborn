@@ -29,6 +29,7 @@ dependencies {
     // MicroProfile Config API (@ConfigProperty) - implementation provided by Quarkus at runtime
     compileOnly(libs.microprofile.config.api)
 
+    testImplementation(testFixtures(project(":api-utilities")))
     testImplementation(libs.ebean.test)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.konsist)

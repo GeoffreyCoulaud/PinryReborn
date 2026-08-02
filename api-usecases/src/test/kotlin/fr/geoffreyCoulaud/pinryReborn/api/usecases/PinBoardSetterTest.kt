@@ -10,6 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinBoardSettingInv
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinBoardSettingPermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinBoardSettingPinDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinBoardSettingSoftDeletedPinError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -30,9 +31,9 @@ class PinBoardSetterTest {
     @Test
     fun `Given an owned active pin and valid owned boards, Then setBoards replaces the pin's boards`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val oldBoard = Board(id = randomUUID(), author = user, name = "Old", description = "",
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -41,13 +42,13 @@ class PinBoardSetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = listOf(oldBoard),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val newBoard1 = Board(id = randomUUID(), author = user, name = "New 1", description = "",
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
         val newBoard2 = Board(id = randomUUID(), author = user, name = "New 2", description = "",
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
 
         every { pinRepository.findPinById(pin.id) } returns pin
         every { boardRepository.findActiveBoardById(newBoard1.id) } returns newBoard1
@@ -68,7 +69,7 @@ class PinBoardSetterTest {
     @Test
     fun `Given a missing pin, Then throws PinBoardSettingPinDoesNotExistError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val nonExistentPinId = randomUUID()
 
         every { pinRepository.findPinById(nonExistentPinId) } returns null
@@ -82,8 +83,8 @@ class PinBoardSetterTest {
     @Test
     fun `Given a pin owned by another user, Then throws PinBoardSettingPermissionError`() {
         // Given
-        val owner = User(id = randomUUID(), name = "Owner", createdAt = Instant.now())
-        val otherUser = User(id = randomUUID(), name = "Other", createdAt = Instant.now())
+        val owner = User(id = randomUUID(), name = "Owner", createdAt = TestTime.now)
+        val otherUser = User(id = randomUUID(), name = "Other", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = owner,
@@ -92,8 +93,8 @@ class PinBoardSetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -107,7 +108,7 @@ class PinBoardSetterTest {
     @Test
     fun `Given a soft-deleted pin, Then throws PinBoardSettingSoftDeletedPinError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -116,9 +117,9 @@ class PinBoardSetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            softDeletedAt = Instant.now(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            softDeletedAt = TestTime.now,
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -132,7 +133,7 @@ class PinBoardSetterTest {
     @Test
     fun `Given an unresolved boardId, Then throws PinBoardSettingInvalidBoardError and saves nothing`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -141,8 +142,8 @@ class PinBoardSetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val badBoardId = randomUUID()
 
@@ -159,8 +160,8 @@ class PinBoardSetterTest {
     @Test
     fun `Given a board owned by another user, Then throws PinBoardSettingInvalidBoardError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val otherUser = User(id = randomUUID(), name = "Other", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val otherUser = User(id = randomUUID(), name = "Other", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -169,11 +170,11 @@ class PinBoardSetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val othersBoard = Board(id = randomUUID(), author = otherUser, name = "Not yours", description = "",
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
 
         every { pinRepository.findPinById(pin.id) } returns pin
         every { boardRepository.findActiveBoardById(othersBoard.id) } returns othersBoard
@@ -188,9 +189,9 @@ class PinBoardSetterTest {
     @Test
     fun `Given an empty boardIds list, Then the pin's boards are cleared`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val existingBoard = Board(id = randomUUID(), author = user, name = "Old", description = "",
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -199,8 +200,8 @@ class PinBoardSetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = listOf(existingBoard),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin

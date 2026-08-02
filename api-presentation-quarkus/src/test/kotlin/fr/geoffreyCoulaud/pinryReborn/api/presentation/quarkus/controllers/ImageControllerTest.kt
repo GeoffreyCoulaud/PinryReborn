@@ -17,6 +17,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.SetPinImage
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SetPinImageResult
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageRenditionSizeInvalidError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
@@ -80,7 +81,7 @@ class ImageControllerTest {
         createdAt = Instant.EPOCH,
     )
 
-    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
 
     @Test
     fun `Given a pin with no existing image, Then setImage returns 201 with the created image`() {

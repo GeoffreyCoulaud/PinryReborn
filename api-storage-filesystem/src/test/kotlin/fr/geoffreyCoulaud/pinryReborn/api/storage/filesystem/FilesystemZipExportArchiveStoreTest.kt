@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveEntryDigest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -112,7 +113,7 @@ class FilesystemZipExportArchiveStoreTest {
         // Given: a fresh store whose data dir has never staged anything, so "tmp" does not exist.
 
         // When
-        val removed = store.discardOrphanedStagedFiles(Instant.now())
+        val removed = store.discardOrphanedStagedFiles(TestTime.now)
 
         // Then
         assertEquals(0, removed)

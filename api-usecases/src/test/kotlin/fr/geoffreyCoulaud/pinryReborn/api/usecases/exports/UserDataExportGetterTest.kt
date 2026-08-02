@@ -10,6 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportPermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import java.time.Instant
@@ -22,7 +23,7 @@ import org.junit.jupiter.api.Test
 class UserDataExportGetterTest : BaseTest() {
     private val repository = mockk<UserDataExportRepositoryInterface>()
     private val getter = UserDataExportGetter(repository)
-    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 
     private fun exportFor(userId: UUID, state: UserDataExportState = UserDataExportState.PENDING) =

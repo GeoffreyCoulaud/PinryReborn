@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
@@ -23,14 +24,14 @@ class BoardUpdaterTest {
     @Test
     fun `Given an owned active board, Then update saves a copy with the new name and description`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val board = Board(
             id = randomUUID(),
             author = user,
             name = createRandomString(),
             description = createRandomString(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val newName = createRandomString()
         val newDescription = createRandomString()

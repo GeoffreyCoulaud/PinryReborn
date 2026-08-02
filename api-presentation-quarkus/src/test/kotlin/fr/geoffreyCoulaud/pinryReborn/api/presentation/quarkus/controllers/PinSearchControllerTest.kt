@@ -2,11 +2,11 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.controllers
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinSearcher
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.quarkus.security.identity.SecurityIdentity
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -23,7 +23,7 @@ class PinSearchControllerTest {
     @Test
     fun `Given no limit and a query, Then searchPins uses the default limit`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val query = createRandomString()
         every { securityIdentity.getAttribute<User>("user") } returns user
         every {
@@ -40,7 +40,7 @@ class PinSearchControllerTest {
     @Test
     fun `Given a limit above the max and a null query, Then searchPins clamps the limit and requireNotNull throws`() {
         // Given
-        val user = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         every { securityIdentity.getAttribute<User>("user") } returns user
 
         // When, Then

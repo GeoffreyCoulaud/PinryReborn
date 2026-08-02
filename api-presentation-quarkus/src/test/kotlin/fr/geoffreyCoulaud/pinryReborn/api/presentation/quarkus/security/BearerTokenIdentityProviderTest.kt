@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SessionTokenAuthenticator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SessionTokenExpiredError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SessionTokenInvalidError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.quarkus.security.AuthenticationFailedException
 import io.quarkus.security.credential.TokenCredential
 import io.quarkus.security.identity.AuthenticationRequestContext
@@ -16,14 +17,13 @@ import io.smallrye.mutiny.Uni
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 import java.util.UUID.randomUUID
 import java.util.function.Supplier
 
 class BearerTokenIdentityProviderTest {
     private val authenticator = mockk<SessionTokenAuthenticator>()
     private val provider = BearerTokenIdentityProvider(authenticator)
-    private val user = User(randomUUID(), "alice", createdAt = Instant.now())
+    private val user = User(randomUUID(), "alice", createdAt = TestTime.now)
 
     // Execute the runBlocking supplier synchronously.
     private val context = mockk<AuthenticationRequestContext> {
@@ -39,9 +39,9 @@ class BearerTokenIdentityProviderTest {
         val session = SessionToken(
             randomUUID(),
             user,
-            Instant.now().plusSeconds(60),
+            TestTime.now.plusSeconds(60),
             persistent = true,
-            createdAt = Instant.now(),
+            createdAt = TestTime.now,
         )
         every { authenticator.authenticate("good") } returns session
 

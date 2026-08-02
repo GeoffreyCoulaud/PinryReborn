@@ -19,6 +19,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePermissionErr
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePinDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageTooLargeError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.just
@@ -46,9 +47,9 @@ class SetPinImageTest : BaseTest() {
     private val renditionCache = mockk<RenditionCache>()
     private val useCase = SetPinImage(pins, images, store, probe, clock, clearPinDownload, renditionCache)
 
-    private val owner = User(randomUUID(), createRandomString(), createdAt = Instant.now())
+    private val owner = User(randomUUID(), createRandomString(), createdAt = TestTime.now)
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList(),
-        createdAt = Instant.now(), updatedAt = Instant.now())
+        createdAt = TestTime.now, updatedAt = TestTime.now)
     private fun upload() = ByteArrayInputStream(byteArrayOf(1, 2, 3))
     private val staged = StagedFile("/tmp/s", 3, "hash")
 
@@ -130,7 +131,7 @@ class SetPinImageTest : BaseTest() {
     }
 
     @Test fun `Given a non-owner, Then it throws ImagePermissionError`() {
-        val p = pin(author = User(randomUUID(), createRandomString(), createdAt = Instant.now()))
+        val p = pin(author = User(randomUUID(), createRandomString(), createdAt = TestTime.now))
         every { pins.findPinById(p.id) } returns p
         assertThrows(ImagePermissionError::class.java) { useCase.set(p.id, owner, upload(), 30, 50) }
     }

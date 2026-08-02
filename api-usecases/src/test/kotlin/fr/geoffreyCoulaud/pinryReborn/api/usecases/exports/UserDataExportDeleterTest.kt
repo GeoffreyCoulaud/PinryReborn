@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.CancelTask
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -23,7 +24,7 @@ class UserDataExportDeleterTest : BaseTest() {
     private val archiveStore = mockk<ExportArchiveStore>()
     private val cancelTask = mockk<CancelTask>()
     private val deleter = UserDataExportDeleter(getter, repository, archiveStore, cancelTask)
-    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 

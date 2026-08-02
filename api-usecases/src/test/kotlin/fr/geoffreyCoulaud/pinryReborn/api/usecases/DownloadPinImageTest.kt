@@ -31,6 +31,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.TaskContext
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -55,7 +56,7 @@ class DownloadPinImageTest {
     private val renditionCache: RenditionCache = mockk()
     private val now = Instant.parse("2026-07-10T00:00:00Z")
     private val pinId = randomUUID()
-    private val user = User(randomUUID(), "u", createdAt = Instant.now())
+    private val user = User(randomUUID(), "u", createdAt = TestTime.now)
 
     private val subject =
         DownloadPinImage(pins, images, downloads, store, probe, fetcher, runner, clock, renditionCache)
@@ -72,7 +73,7 @@ class DownloadPinImageTest {
         pinId, "https://x/i.png", DownloadStatus.FAILED, DownloadReason.NOT_FOUND, null, randomUUID(), now, now,
     )
     private fun pin() = Pin(pinId, user, "https://ctx", "https://x/i.png", "d", emptyList(), emptyList(),
-        createdAt = Instant.now(), updatedAt = Instant.now())
+        createdAt = TestTime.now, updatedAt = TestTime.now)
     private fun ctx(attempt: Int = 1, max: Int = 3) = TaskContext(attempt, max)
     private fun staged() = StagedFile("tmp/x", 3, "hash")
 

@@ -7,12 +7,12 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.Recyc
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.RecycledBoardListOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardGetter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardRecycleBin
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.quarkus.security.identity.SecurityIdentity
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
@@ -27,11 +27,11 @@ class BoardRecycleBinControllerTest {
         securityIdentity = securityIdentity,
     )
 
-    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
 
     private fun aBoard(author: User) =
         Board(id = randomUUID(), author = author, name = createRandomString(), description = createRandomString(),
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
 
     @Test
     fun `Given recycled boards for the user, Then listRecycledBoards returns them without pin count`() {

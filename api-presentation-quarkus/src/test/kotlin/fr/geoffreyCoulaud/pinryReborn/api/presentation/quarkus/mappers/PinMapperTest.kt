@@ -6,8 +6,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinMapper.toDto
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
@@ -17,14 +17,14 @@ class PinMapperTest {
     private fun createPin(): Pin =
         Pin(
             id = randomUUID(),
-            author = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now()),
+            author = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now),
             sourceContextUrl = "https://example.com",
             sourceMediaUrl = "https://example.com/img.jpg",
             description = createRandomString(),
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
     @Test

@@ -15,6 +15,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePinDoesNotExi
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageSourceUrlInvalidError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.PinDownloadTask
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -32,7 +33,7 @@ class RequestPinImageDownloadTest {
     private val runner: TransactionRunner = mockk()
     private val clock: Clock = mockk()
     private val now = Instant.parse("2026-07-10T00:00:00Z")
-    private val owner = User(randomUUID(), "o", createdAt = Instant.now())
+    private val owner = User(randomUUID(), "o", createdAt = TestTime.now)
     private val pinId = randomUUID()
 
     private val subject = RequestPinImageDownload(pins, downloads, enqueue, runner, clock)
@@ -43,7 +44,7 @@ class RequestPinImageDownloadTest {
     }
 
     private fun pin(author: User = owner) = Pin(pinId, author, "https://ctx", null, "d", emptyList(), emptyList(),
-        createdAt = Instant.now(), updatedAt = Instant.now())
+        createdAt = TestTime.now, updatedAt = TestTime.now)
     private fun aTask(id: java.util.UUID) = Task(
         id, PinDownloadTask.KIND, pinId.toString(), TaskState.PENDING, 0, now, 0, 5, null, null, false,
         "${PinDownloadTask.KIND}:$pinId", null,
@@ -57,7 +58,7 @@ class RequestPinImageDownloadTest {
 
     @Test
     fun `Given a non-owner, Then it throws ImagePermissionError`() {
-        every { pins.findPinById(pinId) } returns pin(author = User(randomUUID(), "other", createdAt = Instant.now()))
+        every { pins.findPinById(pinId) } returns pin(author = User(randomUUID(), "other", createdAt = TestTime.now))
         assertThrows(ImagePermissionError::class.java) { subject.request(pinId, owner, "https://x/i.png") }
     }
 

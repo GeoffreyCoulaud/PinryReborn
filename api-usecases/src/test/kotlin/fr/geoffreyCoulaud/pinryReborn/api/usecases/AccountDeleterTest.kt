@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ReauthenticationEr
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.AccountDeletionTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -25,7 +26,7 @@ class AccountDeleterTest : BaseTest() {
     private val tx = mockk<TransactionRunner>()
     private val clock = mockk<Clock>()
     private val deleter = AccountDeleter(reauth, users, sessionRevoker, enqueue, tx, clock)
-    private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "u", createdAt = TestTime.now)
     private val deletionRequestedAt = Instant.parse("2026-07-29T09:15:00Z")
 
     @Test

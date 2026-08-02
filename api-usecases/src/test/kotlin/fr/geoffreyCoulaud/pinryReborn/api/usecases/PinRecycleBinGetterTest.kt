@@ -9,12 +9,12 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinRetrievalPermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinRetrievalPinDoesNotExistError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 import java.util.UUID.randomUUID
 
 class PinRecycleBinGetterTest {
@@ -25,7 +25,7 @@ class PinRecycleBinGetterTest {
     @Test
     fun `Given user with soft-deleted pins, Then list returns them paginated`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val expectedPage = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)
         every {
             pinRepository.findSoftDeletedPinsForUser(
@@ -51,7 +51,7 @@ class PinRecycleBinGetterTest {
     @Test
     fun `Given page size exceeds max, Then it is capped`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val expectedPage = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)
         every {
             pinRepository.findSoftDeletedPinsForUser(
@@ -77,7 +77,7 @@ class PinRecycleBinGetterTest {
     @Test
     fun `Given DELETED_AT_DESC sort, Then sort strategy is passed to repository`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val expectedPage = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)
         every {
             pinRepository.findSoftDeletedPinsForUser(
@@ -103,8 +103,8 @@ class PinRecycleBinGetterTest {
     @Test
     fun `Given cursor pointing to another user's pin, Then throws permission error`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val otherUser = User(id = randomUUID(), name = "Other", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val otherUser = User(id = randomUUID(), name = "Other", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = otherUser,
@@ -113,9 +113,9 @@ class PinRecycleBinGetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            softDeletedAt = Instant.now(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            softDeletedAt = TestTime.now,
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val cursor = Cursor(pivotId = pin.id, direction = CursorDirection.FORWARD)
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -134,7 +134,7 @@ class PinRecycleBinGetterTest {
     @Test
     fun `Given cursor pointing to non-existent pin, Then throws not found error`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val cursor = Cursor(pivotId = randomUUID(), direction = CursorDirection.FORWARD)
         every { pinRepository.findPinById(cursor.pivotId) } returns null
 

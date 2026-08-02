@@ -5,11 +5,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardRetrievalBoardDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardRetrievalPermissionError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -22,14 +22,14 @@ class BoardGetterTest {
     @Test
     fun `Given an owned active board, Then getActiveBoardForUser returns it`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val board = Board(
             id = randomUUID(),
             author = reader,
             name = createRandomString(),
             description = createRandomString(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         every { boardRepository.findActiveBoardById(board.id) } returns board
 
@@ -43,7 +43,7 @@ class BoardGetterTest {
     @Test
     fun `Given a missing or recycled board, Then getActiveBoardForUser throws BoardRetrievalBoardDoesNotExistError`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val boardId = randomUUID()
         every { boardRepository.findActiveBoardById(boardId) } returns null
 
@@ -56,15 +56,15 @@ class BoardGetterTest {
     @Test
     fun `Given a board owned by another user, Then getActiveBoardForUser throws BoardRetrievalPermissionError`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
-        val author = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
+        val author = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val board = Board(
             id = randomUUID(),
             author = author,
             name = createRandomString(),
             description = createRandomString(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         every { boardRepository.findActiveBoardById(board.id) } returns board
 
@@ -77,14 +77,14 @@ class BoardGetterTest {
     @Test
     fun `Given a reader with boards, Then listActiveBoardsForUser delegates to the repository`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val board = Board(
             id = randomUUID(),
             author = reader,
             name = createRandomString(),
             description = createRandomString(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val expected = listOf(board)
         every { boardRepository.findActiveBoardsForUser(reader) } returns expected
@@ -100,14 +100,14 @@ class BoardGetterTest {
     @Test
     fun `Given an owned active board, Then countActivePinsForUserBoard returns the repository count`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val board = Board(
             id = randomUUID(),
             author = reader,
             name = createRandomString(),
             description = createRandomString(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         every { boardRepository.findActiveBoardById(board.id) } returns board
         every { boardRepository.countActivePinsInBoard(board.id) } returns 42

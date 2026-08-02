@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPermiss
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinAlreadySoftDeletedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinDeletionPinNotSoftDeletedError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
@@ -59,8 +60,8 @@ class PinRecycleBinTest {
         tags = emptyList(),
         boards = emptyList(),
         softDeletedAt = softDeletedAt,
-        createdAt = Instant.now(),
-        updatedAt = Instant.now(),
+        createdAt = TestTime.now,
+        updatedAt = TestTime.now,
     )
 
     private fun createImage(pinId: UUID) = Image(
@@ -81,7 +82,7 @@ class PinRecycleBinTest {
     @Test
     fun `Given valid pin owned by user, Then soft delete succeeds and does not touch the image`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = createPin(author = user)
         every { pinRepository.findPinById(pin.id) } returns pin
         every { pinRepository.softDeletePin(pin = pin, at = any()) } returns
@@ -99,7 +100,7 @@ class PinRecycleBinTest {
     @Test
     fun `Given an owned active pin, Then soft delete hands the repository the clock's instant`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = createPin(author = user)
         val stampedInstant = slot<Instant>()
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -117,8 +118,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given already soft-deleted pin, Then soft delete throws PinDeletionPinAlreadySoftDeletedError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         every { pinRepository.findPinById(pin.id) } returns pin
 
         // When, Then
@@ -130,8 +131,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given pin not owned by user, Then soft delete throws PinDeletionPermissionError`() {
         // Given
-        val owner = User(id = randomUUID(), name = "Owner", createdAt = Instant.now())
-        val otherUser = User(id = randomUUID(), name = "Other", createdAt = Instant.now())
+        val owner = User(id = randomUUID(), name = "Owner", createdAt = TestTime.now)
+        val otherUser = User(id = randomUUID(), name = "Other", createdAt = TestTime.now)
         val pin = createPin(author = owner)
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -144,7 +145,7 @@ class PinRecycleBinTest {
     @Test
     fun `Given pin does not exist, Then soft delete throws PinDeletionPinDoesNotExistError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pinId = randomUUID()
         every { pinRepository.findPinById(pinId) } returns null
 
@@ -159,8 +160,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given soft-deleted pin owned by user, Then restore succeeds and does not touch the image`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         every { pinRepository.findPinById(pin.id) } returns pin
         every { pinRepository.restorePin(pin = pin, at = any()) } returns pin.copy(softDeletedAt = null)
 
@@ -177,8 +178,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given an owned recycled pin, Then restore hands the repository the clock's instant`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         val stampedInstant = slot<Instant>()
         every { pinRepository.findPinById(pin.id) } returns pin
         every { pinRepository.restorePin(pin = pin, at = any()) } returns pin.copy(softDeletedAt = null)
@@ -194,7 +195,7 @@ class PinRecycleBinTest {
     @Test
     fun `Given active pin, Then restore throws PinDeletionPinNotSoftDeletedError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = createPin(author = user)
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -209,8 +210,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given soft-deleted pin with an image, Then permanent delete removes the image row and file`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         val image = createImage(pin.id)
         every { pinRepository.findPinById(pin.id) } returns pin
         every { imageRepository.findByPinId(pin.id) } returns image
@@ -231,8 +232,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given soft-deleted pin without an image, Then permanent delete succeeds without touching the image store`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         every { pinRepository.findPinById(pin.id) } returns pin
         every { imageRepository.findByPinId(pin.id) } returns null
         justRun { pinRepository.permanentlyDeletePin(pin) }
@@ -250,7 +251,7 @@ class PinRecycleBinTest {
     @Test
     fun `Given active pin, Then permanent delete throws PinDeletionPinNotSoftDeletedError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = createPin(author = user)
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -263,8 +264,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given a permanently deleted pin, Then its download is cleared`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         val pinId = pin.id
         every { pinRepository.findPinById(pinId) } returns pin
         every { imageRepository.findByPinId(pinId) } returns null
@@ -282,7 +283,7 @@ class PinRecycleBinTest {
     @Test
     fun `Given user with no soft-deleted pins, Then empty recycle bin does not touch any image`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         every { pinRepository.findAllSoftDeletedPinsForUser(user) } returns emptyList()
         justRun { pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user) }
 
@@ -299,9 +300,9 @@ class PinRecycleBinTest {
     @Test
     fun `Given soft-deleted pins some with images, Then empty recycle bin deletes rows and files for those`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pinWithImage = createPin(author = user, softDeletedAt = Instant.now())
-        val pinWithoutImage = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pinWithImage = createPin(author = user, softDeletedAt = TestTime.now)
+        val pinWithoutImage = createPin(author = user, softDeletedAt = TestTime.now)
         val image = createImage(pinWithImage.id)
         every { pinRepository.findAllSoftDeletedPinsForUser(user) } returns listOf(pinWithImage, pinWithoutImage)
         every { imageRepository.findByPinId(pinWithImage.id) } returns image
@@ -330,9 +331,9 @@ class PinRecycleBinTest {
     @Test
     fun `Given soft-deleted pins, Then empty recycle bin clears each pin's download`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val firstPin = createPin(author = user, softDeletedAt = Instant.now())
-        val secondPin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val firstPin = createPin(author = user, softDeletedAt = TestTime.now)
+        val secondPin = createPin(author = user, softDeletedAt = TestTime.now)
         every { pinRepository.findAllSoftDeletedPinsForUser(user) } returns listOf(firstPin, secondPin)
         every { imageRepository.findByPinId(any()) } returns null
         justRun { pinRepository.permanentlyDeleteAllSoftDeletedPinsForUser(user) }
@@ -350,8 +351,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given the image store throws on permanent delete, Then the delete still succeeds`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         val image = createImage(pin.id)
         every { pinRepository.findPinById(pin.id) } returns pin
         every { imageRepository.findByPinId(pin.id) } returns image
@@ -368,8 +369,8 @@ class PinRecycleBinTest {
     @Test
     fun `Given the image store throws on empty recycle bin, Then the bin still empties`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val pin = createPin(author = user, softDeletedAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val pin = createPin(author = user, softDeletedAt = TestTime.now)
         val image = createImage(pin.id)
         every { pinRepository.findAllSoftDeletedPinsForUser(user) } returns listOf(pin)
         every { imageRepository.findByPinId(pin.id) } returns image

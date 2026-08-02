@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
@@ -21,7 +22,7 @@ class BoardCreatorTest {
     @Test
     fun `Given valid input, Then create saves a new active board with the given fields`() {
         // Given
-        val author = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val author = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val name = createRandomString()
         val description = createRandomString()
         every { boardRepository.saveBoard(any()) } answers { firstArg() }
