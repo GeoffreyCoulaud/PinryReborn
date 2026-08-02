@@ -133,14 +133,20 @@ Sub-process, with the violation triage already done in the discussion that produ
 
 ### 9. Test sources read the wall clock freely
 
-1. **Measure.** Activate the `WallClockRead` rule against test sources to get the real count (the 259
-   grep is an upper bound inflated by string literals inside the rule's own tests).
-2. **Inject a fixed clock** through the shared test bases (`BaseTest`, `IntegrationTest`,
-   `RepositoryTest`); replace `Instant.now()` and its siblings with that clock.
-3. **Remove the test-source exclusion** from `WallClockRead`.
+1. **Measure.** Activate the `WallClockRead` rule against test sources: 268 sites across 53 files
+   (the 259 grep was an upper bound).
+2. **Fixed instant, not a fixed clock.** The reads are fixture timestamps (entity `createdAt` and the
+   like), not `Clock` consumers, and the unit-test classes are standalone, so a fixed instant in
+   testFixtures fits better than a `Clock` threaded through the test bases. `object TestTime` in
+   testFixtures exposes one millisecond-coarse instant; tests replace `Instant.now()` with
+   `TestTime.now` (261 sites). testFixtures stays excluded, since it hosts the seam.
+3. **Four legitimate reads stay.** `SystemClockTest` tests the clock adapter against the real wall
+   clock; three api-application integration tests run the real `SystemClock` and read the wall clock
+   to keep fixture instants consistent with the app's now. Suppressed, not converted.
+4. **Remove the test-source exclusion** from `WallClockRead` (keep `**/testFixtures/**`).
 
-- Acceptance: no wall-clock reads in test sources (`WallClockRead` green on tests); tests take the
-  fixed clock from their base.
+- Acceptance: no wall-clock reads in test sources except the four suppressed classes; `WallClockRead`
+  green on tests; the gate enforces it.
 
 ## Out of scope (deferred, each its own spec)
 
