@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered; the P0 entry is removed, its record in the handoff and git history).
+Last reviewed: 2026-08-02 (the operational-debt wave delivered its nine in-scope items; the resolved entries are removed, the four the wave surfaced are added).
 
 ## How to use this file
 
@@ -37,34 +37,11 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
 
 ### P2: Operational debt (flagged in handoffs; not UI blockers)
 
-- **Broad `catch (PersistenceException)` translations can misreport unrelated failures.** Adapters
-  that translate a `jakarta.persistence.PersistenceException` into a domain error by catching it
-  wholesale let a NOT NULL, foreign-key or connection failure on the same write surface as the
-  translated outcome instead of a 500. Known instance: `UserDataExportRepository.save`
-  (`UserDataExportRepository.kt:51-59`) catches `PersistenceException` and throws
-  `ExportAlreadyInProgressException` (the export 409), justified only by write type ("only a PENDING
-  write can hit that index"). PR #46 narrowed the password-hash catch
-  (`UserPasswordHashRepository.saveUserPasswordHash`) to translate only a unique-constraint
-  violation, discriminated by the wrapped `SQLiteException`'s typed `resultCode`
-  (`SQLITE_CONSTRAINT_UNIQUE`, distinct from the other constraint codes that share vendor errorCode
-  19), which the export's own KDoc had called unusable. Apply the same narrowing to the export catch
-  (and audit the other `catch (PersistenceException)` sites), or record why its write-type scoping is
-  enough. New 2026-08-01, surfaced by the PR #46 review.
-- **detekt runs without type resolution, and the tasks that have it are red.** detekt's plain
-  `detekt` task is wired into each module's `check` (the plugin's default), which the `gate` runs per
-  module via `:<module>:check`; the type-resolution tasks `detektMain` and `detektTest` are never
-  referenced, so neither the gate nor CI runs them. Measured 2026-07-29:
-  `detektMain` fails in four of the twelve modules, `api-presentation-quarkus` 16 findings,
-  `api-persistence-sqlite` 11, `api-usecases` 5, `api-application` 1, the other eight clean. All of it
-  predates the work that found it. The decision needed is either type-resolution detekt in the gate
-  with those 33 findings cleared, or a recorded choice to run detekt without it. Being neither is the
-  defect: a task that is red and never run says nothing about the code and everything about the setup.
-  New 2026-07-29.
 - **Inverse associations on the persistence models.** The module maps twelve entities and not one
-  `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of a
-  board" can only be asked from the join table. Two consequences: the soft-delete work needs two
+  `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of
+  a board" can only be asked from the join table. Two consequences: the soft-delete work needs two
   extension functions on `QPinBoardModel` that would otherwise be plain `PinQueries` / `BoardQueries`
-  calls, and `savePinTags` / `savePinBoards` (`PinRepository.kt:82,113`) synchronise join rows by hand,
+  calls, and `savePinTags` / `saveBoards` (`PinRepository.kt:82,113`) synchronise join rows by hand,
   reading, diffing and deleting, which is what a mapped collection does for you. **The cycle is not the
   obstacle**, contrary to what `PinBoardModel`'s KDoc suggests: Kotlin compiles type cycles inside a
   module and the project already has one between `models` and `models.bases`
@@ -75,7 +52,6 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
   association flips `BeanDescriptor.isDeleteByStatement`, which decides how delete queries compile
   (see `docs/adr/0007-single-representation-soft-delete.md`, fact 3). Its own lot, with its own tests.
   New 2026-07-29.
-
 - **`ModelRepository` inherits Ebean finders that no soft-delete guard can see.** It extends
   `io.ebean.BeanRepository`, so each of the seven repositories holding one also holds the public
   `findAll()`, `findById(id)`, `findByIdOrEmpty(id)` and `db()` inherited from `BeanFinder`
@@ -93,66 +69,6 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
   `Database` can still root an unfiltered query and no rule sees that either. **P2**: the surface is
   unused, so it costs nothing today and the first call through it is what would make it urgent. New
   2026-07-29.
-- **A session token can outlive the tombstone that should have killed it, by one insert.** What
-  stops a tombstoned account from being used is **revocation, not filtering**: `AccountDeleter`
-  marks the user and revokes every session in one transaction, while the read path asks nothing
-  about the account's state. `SessionTokenAuthenticator` resolves a token through
-  `findByTokenHash`, which roots on `session_tokens` alone, and `SessionTokenModelMapper`
-  dereferences the `user` association, a load that names no query bean and writes no
-  `softDeletedAt` predicate, so neither the Konsist assertions nor the detekt rule can see it.
-  The window: a session insert whose own active-user check passed just before the tombstone
-  committed, and which lands just after `deleteAllForUser` has run, produces a token nothing
-  revoked. **Defence in depth, not an exploitable hole**: the window is one insert wide, it needs
-  the account's own credentials, and the account deletion task deletes that user's tokens seconds
-  later. Closing it means the read path filtering too, cheapest as an extension on
-  `QSessionTokenModel` declared beside the query constructors (the shape `withActivePin` and
-  `withActiveBoard` already use on `QPinBoardModel`) so `findByTokenHash` returns nothing for a
-  tombstoned owner; the alternative, resolving the owner and inserting the token in one
-  transaction, closes the race at the write end instead and costs every authenticated request
-  nothing. Surfaced reviewing the single-representation soft delete, 2026-07-29.
-
-- **Four `!!` in the soft-delete transitions of the pin and board repositories.**
-  `PinRepository.softDeletePin` and `restorePin` (`PinRepository.kt:197,205`) and
-  `BoardRepository.softDeleteBoard` and `restoreBoard` (`BoardRepository.kt:50,58`) each end on
-  `findOne()!!`. `agents/modules/kotlin.md` forbids `!!` outright: a value that cannot be null is
-  modelled non-nullable, one that can is handled, and this one can. The row is fetched by the id of
-  an entity the use case has just read, so the window is a concurrent hard delete, and the assertion
-  turns it into a `NullPointerException` out of the adapter instead of a domain error. The single
-  representation rewrote all four lines and kept the `!!` deliberately: what to do with an absent row
-  is a behaviour decision nobody has taken (return quietly, as `markPendingDeletion` and
-  `permanentlyDeleteUser` do, or throw a domain error the presentation layer maps), and taking it
-  there would have been fixing what was not asked. Inventoried here instead, as that branch's plan
-  said it would be. New 2026-07-29.
-
-- **One tombstoned owner stops the export retention sweep for every other user.**
-  `ReapExpiredUserDataExports.reap` re-saves each expired `READY` export with no per-item guard, and
-  `UserDataExportRepository.save` throws `UserModelDoesNotExistError` for a tombstoned owner, so one
-  such export aborts the batch: it loses its archive bytes and keeps its `READY` state, and every
-  export behind it is left unswept. Pre-existing, not a regression: `@SoftDelete` hid the same row
-  from the same lookup. Settle first whether a tombstoned owner's exports should be swept at all or
-  left to the account deletion task, since that decides whether the fix is a per-item guard or a
-  narrower query. Surfaced reviewing the single-representation soft delete, 2026-07-29.
-
-- **Test sources read the wall clock freely.** Production code takes every instant from the `Clock`
-  port and the `WallClockRead` rule holds it there, but `detekt.yml` excludes `**/test/**` and
-  `**/testFixtures/**` from that rule, so tests call `Instant.now()` and its three siblings at will:
-  a grep over the test sources counts 266 reads across 54 files. That figure is a rough upper bound
-  rather than the rule's own count, since some of those lines are code snippets inside string
-  literals in the rule's own tests, which no syntax tree ever sees; measuring it by activating the
-  rule against test sources is the first step of the work. Closing it means the test sources taking
-  a fixed clock, most plausibly carried by the shared test bases. Its own lot rather than part of
-  the soft-delete work: the files it touches have nothing to do with recycling. New 2026-07-29.
-
-- **`imageStore.discard` can mask the original error in failure handlers.** `SetPinImage` and
-  `DownloadPinImage` call `imageStore.discard(staged)` inside their `catch (e)` rollback blocks; a
-  throwing `discard` would mask `e`, the same error-masking that `deleteQuietly` now prevents for
-  `imageStore.delete`. No `discardQuietly` extension exists yet. Extend `StorageCleanup` when a
-  non-delete cleanup needs best-effort. New 2026-07-27.
-- **Task worker observability: surface DEAD/failed tasks.** `TaskProcessor` swallows a throwing `TaskHandler`
-  into a retryable outcome with no logging, so a task that exhausts its attempts and is marked DEAD is
-  invisible to operators. A user who deleted their account gets a 202 but would silently stay tombstoned
-  forever if the cleaner failed. Add logging/metrics on handler failure and on DEAD transitions. Exposed by
-  profile management's end-to-end test. New 2026-07-22.
 - **Authentication attempt limiting (brute force).** `PasswordChanger` verifies the current password
   before changing it, and `POST /api/v1/sessions` verifies it to issue a token: both are password
   oracles, and neither limits attempts. The minimum interval added by P0 block 3 counts **successful**
@@ -183,12 +99,31 @@ Last reviewed: 2026-07-31 (block 3 of the domain-owned timestamps work delivered
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27.
-- **`Retry-After` is not exposed to cross-origin clients.** `application.properties:21` sets
-  `quarkus.http.cors.exposed-headers=Location` only, so a browser SPA or extension calling the API
-  cross-origin cannot read the `Retry-After` header set by the export 429 (`EXPORT_TOO_SOON`) and, after
-  block 3, the password-change 429 (`PASSWORD_CHANGED_TOO_SOON`). Pre-existing for exports; surfaced
-  while planning block 3 (2026-07-31). Additive fix: add `Retry-After` to `exposed-headers`. New
-  2026-07-31.
+
+Surfaced by the operational-debt wave (2026-08-02):
+
+- **Shared `SqliteConstraintViolations` helper.** T3 narrowed `UserDataExportRepository.save`'s catch
+  by extracting `isUniqueConstraint` / `translateIfCollision` into its companion, mirroring the same
+  pair already on `UserPasswordHashRepository`. The two pairs are now duplicated across two
+  repositories. Extract one shared helper (the cause structure `PersistenceException(SQLiteException)`
+  and the `resultCode == SQLITE_CONSTRAINT_UNIQUE` discriminator are identical) and have both sites
+  call it. Small, mechanical; deferred to avoid widening T3's diff. New 2026-08-02.
+- **`PinRepositoryTest` split decision.** T4 tipped `PinRepositoryTest` over `LargeClass`; it is held
+  by a reasoned `@Suppress("LargeClass")` (it is the comprehensive main suite; feature slices are
+  sibling classes). Keep the suppress, or split the suite along its feature slices so the suppress can
+  go. A judgement call, not a defect. New 2026-08-02.
+- **No structural guard that the gate keeps running type-resolution detekt.** T8 wired
+  `detektMain` / `detektTest` into each module's `check` with one manual line
+  (`tasks.named("check").configure { dependsOn("detektMain", "detektTest") }`). Remove that line and
+  the gate stays green while the type-resolution rule set silently stops running, which is exactly the
+  defect T8 fixed. Konsist cannot see the Gradle task graph and a TestKit integration test is
+  unprecedented here, so a cheap perfect guard does not exist; a small test asserting the line is
+  present in the root `build.gradle.kts` is the realistic belt-and-braces. New 2026-08-02.
+- **Cross-origin `Retry-After` coverage is split across two tests.** T1 added `Retry-After` to the CORS
+  expose list. `CorsIntegrationTest` asserts the header name is in `exposed-headers`; the password
+  rate-limit test asserts `Retry-After` is set on a real 429 but sends no `Origin`. No single test ties
+  the 429, the `Retry-After` value and the cross-origin expose together. The config change is correct
+  and the header is readable; the gap is coverage elegance, not a defect. New 2026-08-02.
 
 ### Features
 
