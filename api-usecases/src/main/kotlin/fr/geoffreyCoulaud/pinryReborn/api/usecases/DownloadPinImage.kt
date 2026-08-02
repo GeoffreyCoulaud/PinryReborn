@@ -35,6 +35,7 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 @ApplicationScoped
+@Suppress("LongParameterList") // CDI-injected: every parameter is a collaborator provided by the container.
 class DownloadPinImage(
     private val pinRepository: PinRepositoryInterface,
     private val imageRepository: ImageRepositoryInterface,

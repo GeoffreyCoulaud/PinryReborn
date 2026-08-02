@@ -26,6 +26,7 @@ import java.util.UUID.randomUUID
 data class SetPinImageResult(val image: Image, val replaced: Boolean)
 
 @ApplicationScoped
+@Suppress("LongParameterList") // CDI-injected: every parameter is a collaborator provided by the container.
 class SetPinImage(
     private val pinRepository: PinRepositoryInterface,
     private val imageRepository: ImageRepositoryInterface,

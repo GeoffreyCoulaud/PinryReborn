@@ -27,6 +27,7 @@ class UserDataExportDownloaderTest : BaseTest() {
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 
+    @Suppress("LongParameterList") // Test fixture builder: every parameter shapes a distinct scenario.
     private fun exportWith(
         state: UserDataExportState,
         storageKey: String? = "exports/e1.zip",

@@ -21,7 +21,7 @@ class PinCreator(
         tags: List<String>,
     ): Pin {
 
-        val tags = tags.map { tagCreator.findOrCreate(name = it, user = author) }
+        val resolvedTags = tags.map { tagCreator.findOrCreate(name = it, user = author) }
         val now = clock.now()
         val pin = Pin(
             id = randomUUID(),
@@ -29,7 +29,7 @@ class PinCreator(
             sourceContextUrl = sourceContextUrl,
             sourceMediaUrl = sourceMediaUrl,
             description = description,
-            tags = tags,
+            tags = resolvedTags,
             boards = emptyList(),
             createdAt = now,
             updatedAt = now,
