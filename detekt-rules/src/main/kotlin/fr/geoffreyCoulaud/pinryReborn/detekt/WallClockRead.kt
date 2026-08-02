@@ -39,9 +39,9 @@ import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
  * `System.nanoTime()`, `java.util.Date()` and `Calendar.getInstance()` reach the same clock by other
  * routes and go unreported until `wallClockReads` names them.
  *
- * The scope is production sources in every module but the one declaring this rule, which cannot
- * carry itself as a detekt plugin. Test sources are excluded in `detekt.yml`, an exclusion accepted
- * for now rather than for good.
+ * The scope is production and test sources in every module but the one declaring this rule, which
+ * cannot carry itself as a detekt plugin. Test sources take the fixed TestTime instant rather than
+ * reading the clock; only the testFixtures source set is excluded, because it hosts that seam.
  */
 class WallClockRead(
     config: Config,
