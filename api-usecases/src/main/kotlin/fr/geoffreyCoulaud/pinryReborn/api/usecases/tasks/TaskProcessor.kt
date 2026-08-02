@@ -35,6 +35,7 @@ class TaskProcessor(
         }
         val handler = registry.handlerFor(claimed.kind)
         if (handler == null) {
+            logger.warn { "task ${claimed.id} has no handler for kind ${claimed.kind}, marking dead" }
             taskQueue.markDead(claimed.id, claimed.leaseId, clock.now(), "no handler for kind ${claimed.kind}")
         } else {
             val context =
@@ -55,7 +56,10 @@ class TaskProcessor(
     private fun settle(claimed: ClaimedTask, outcome: Outcome, now: Instant) {
         when (outcome) {
             is Success -> taskQueue.markSucceeded(claimed.id, claimed.leaseId, now)
-            is Permanent -> taskQueue.markDead(claimed.id, claimed.leaseId, now, outcome.message)
+            is Permanent -> {
+                logger.warn { "task ${claimed.id} failed permanently, marking dead: ${outcome.message}" }
+                taskQueue.markDead(claimed.id, claimed.leaseId, now, outcome.message)
+            }
             is Retryable ->
                 if (claimed.attempts >= claimed.maxAttempts) {
                     logger.warn { "task ${claimed.id} exhausted retries, marking dead: ${outcome.message}" }
