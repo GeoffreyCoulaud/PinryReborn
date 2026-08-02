@@ -9,10 +9,10 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinRetrievalPermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinRetrievalPinDoesNotExistError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -25,7 +25,7 @@ class PinGetterTest {
     @Test
     fun `Given non-existent pin, Then getPinForUser throws`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val pinId = randomUUID()
         every { pinRepository.findPinById(pinId) } returns null
 
@@ -38,8 +38,8 @@ class PinGetterTest {
     @Test
     fun `Given reader reading another user's pin, Then getPinForUser throws`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
-        val author = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
+        val author = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = author,
@@ -48,8 +48,8 @@ class PinGetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -62,7 +62,7 @@ class PinGetterTest {
     @Test
     fun `Given reader reading their own pin, Then getPinForUser succeeds`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = reader,
@@ -71,8 +71,8 @@ class PinGetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         every { pinRepository.findPinById(pin.id) } returns pin
 
@@ -86,7 +86,7 @@ class PinGetterTest {
     @Test
     fun `Given no cursor, Then listPinsPaginatedForUser lists the first page`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val expectedPage = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)
         every {
             pinRepository.findPinsForUser(
@@ -112,7 +112,7 @@ class PinGetterTest {
     @Test
     fun `Given cursor pointing to reader's own pin, Then listPinsPaginatedForUser lists the next page`() {
         // Given
-        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+        val reader = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = reader,
@@ -121,8 +121,8 @@ class PinGetterTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val cursor = Cursor(pivotId = pin.id, direction = CursorDirection.FORWARD)
         val expectedPage = Page<Pin>(items = emptyList(), previousCursor = null, nextCursor = null)

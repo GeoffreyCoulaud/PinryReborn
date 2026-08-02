@@ -1,10 +1,10 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.ebean.DB
 import io.ebean.Database
 import org.junit.jupiter.api.BeforeEach
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a shared test base for concrete subclasses.
 abstract class RepositoryTest {
@@ -13,12 +13,11 @@ abstract class RepositoryTest {
     /**
      * An instant an entity can carry across a save-then-read unchanged.
      *
-     * The store round-trips instants at millisecond resolution, so a nanosecond-precision
-     * `Instant.now()` comes back as a *different* value and every equality assertion on a re-read
-     * entity fails. [fr.geoffreyCoulaud.pinryReborn.api.system.SystemClock] truncates for the same
-     * reason; tests that build entities by hand must match it.
+     * TestTime.now is millisecond-coarse, so it round-trips through the store (SystemClock truncates
+     * for the same reason; a nanosecond-precision instant would come back different and break equality
+     * on a re-read entity).
      */
-    protected fun storableNow(): Instant = Instant.now().truncatedTo(ChronoUnit.MILLIS)
+    protected fun storableNow(): Instant = TestTime.now
 
     /**
      * Truncate all non-internal tables in the database.

@@ -17,6 +17,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -47,13 +48,13 @@ class AccountDeletionCleanerTest : BaseTest() {
     )
 
     private val userId = randomUUID()
-    private val user = User(id = userId, name = "u", softDeletedAt = Instant.now(), createdAt = Instant.now())
+    private val user = User(id = userId, name = "u", softDeletedAt = TestTime.now, createdAt = TestTime.now)
 
     private fun buildPin() = Pin(
         id = randomUUID(), author = user, sourceContextUrl = "https://ctx",
         sourceMediaUrl = null, description = "desc", tags = emptyList(), boards = emptyList(),
-        createdAt = Instant.now(),
-        updatedAt = Instant.now(),
+        createdAt = TestTime.now,
+        updatedAt = TestTime.now,
     )
 
     private fun buildImage(pinId: UUID) = Image(

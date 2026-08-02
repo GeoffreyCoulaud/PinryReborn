@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenReposi
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SessionTokenExpiredError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SessionTokenInvalidError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -20,7 +21,7 @@ class SessionTokenAuthenticatorTest {
     private val authenticator = SessionTokenAuthenticator(repository, clock)
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
-    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val plaintext = "the-token"
     private val hash = TokenHasher.sha256(plaintext)
 

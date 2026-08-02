@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.SessionCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SessionRenewer
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SessionRevoker
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UserAuthenticationInvalidPasswordError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.quarkus.security.AuthenticationFailedException
 import io.quarkus.security.identity.SecurityIdentity
 import io.mockk.every
@@ -29,7 +30,7 @@ class SessionControllerTest {
     private val identity = mockk<SecurityIdentity>()
     private val controller = SessionController(creator, renewer, revoker, policy, identity)
 
-    private val user = User(randomUUID(), "alice", createdAt = Instant.now())
+    private val user = User(randomUUID(), "alice", createdAt = TestTime.now)
     private val issued = IssuedSession(
         "tok",
         Instant.parse("2026-08-01T00:00:00Z"),
@@ -67,7 +68,7 @@ class SessionControllerTest {
             user,
             Instant.parse("2026-08-01T00:00:00Z"),
             persistent = true,
-            createdAt = Instant.now(),
+            createdAt = TestTime.now,
         )
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         val dto = controller.getCurrentSession()
@@ -78,7 +79,7 @@ class SessionControllerTest {
 
     @Test
     fun `Given a current session, Then renewSession delegates to the renewer and returns the new token`() {
-        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false, createdAt = Instant.now())
+        val current = SessionToken(randomUUID(), user, TestTime.now, persistent = false, createdAt = TestTime.now)
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         every { renewer.renew(current) } returns issued
         val response = controller.renewSession()
@@ -88,7 +89,7 @@ class SessionControllerTest {
 
     @Test
     fun `Given a current session, Then revokeCurrentSession deletes the current token`() {
-        val current = SessionToken(randomUUID(), user, Instant.now(), persistent = false, createdAt = Instant.now())
+        val current = SessionToken(randomUUID(), user, TestTime.now, persistent = false, createdAt = TestTime.now)
         every { identity.getAttribute<SessionToken>("sessionToken") } returns current
         controller.revokeCurrentSession()
         verify { revoker.revokeCurrent(current) }

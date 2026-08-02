@@ -11,6 +11,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImageDoesNotExistE
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImagePinDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
@@ -33,9 +34,9 @@ class DeletePinImageTest : BaseTest() {
 
     init { every { renditionCache.evictImage(any()) } returns Unit }
 
-    private val owner = User(randomUUID(), createRandomString(), createdAt = Instant.now())
+    private val owner = User(randomUUID(), createRandomString(), createdAt = TestTime.now)
     private fun pin(author: User = owner) = Pin(randomUUID(), author, "https://c", null, "d", emptyList(), emptyList(),
-        createdAt = Instant.now(), updatedAt = Instant.now())
+        createdAt = TestTime.now, updatedAt = TestTime.now)
     private fun imageFor(pinId: UUID, hash: String = "h") = Image(
         id = randomUUID(), pinId = pinId, mimeType = "image/png", width = 1, height = 1, animated = false,
         byteSize = 1, contentHash = hash, storageKey = "originals/x/$pinId/i.png",
@@ -63,7 +64,7 @@ class DeletePinImageTest : BaseTest() {
     }
 
     @Test fun `Given a non-owner, Then delete throws ImagePermissionError`() {
-        val p = pin(author = User(randomUUID(), createRandomString(), createdAt = Instant.now()))
+        val p = pin(author = User(randomUUID(), createRandomString(), createdAt = TestTime.now))
         every { pins.findPinById(p.id) } returns p
         assertThrows(ImagePermissionError::class.java) { useCase.delete(p.id, owner) }
     }

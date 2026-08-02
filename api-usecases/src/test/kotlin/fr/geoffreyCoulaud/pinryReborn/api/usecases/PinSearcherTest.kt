@@ -4,9 +4,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SearchEmptyQueryError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -17,7 +17,7 @@ class PinSearcherTest {
     private val pinRepository = mockk<PinRepositoryInterface>()
     private val useCase = PinSearcher(pinRepository = pinRepository)
 
-    private fun createUser() = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+    private fun createUser() = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
 
     private fun createPin(user: User, description: String) = Pin(
         id = randomUUID(),
@@ -27,8 +27,8 @@ class PinSearcherTest {
         description = description,
         tags = emptyList(),
         boards = emptyList(),
-        createdAt = Instant.now(),
-        updatedAt = Instant.now(),
+        createdAt = TestTime.now,
+        updatedAt = TestTime.now,
     )
 
     @Test

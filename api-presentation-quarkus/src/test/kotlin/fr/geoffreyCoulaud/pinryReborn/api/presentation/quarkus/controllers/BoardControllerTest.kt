@@ -18,12 +18,12 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardGetter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardPinLister
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardRecycleBin
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardUpdater
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.quarkus.security.identity.SecurityIdentity
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
@@ -46,11 +46,11 @@ class BoardControllerTest {
         apiConfig = apiConfig,
     )
 
-    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = Instant.now())
+    private fun aUser() = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
 
     private fun aBoard(author: User) =
         Board(id = randomUUID(), author = author, name = createRandomString(), description = createRandomString(),
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
 
     @Test
     fun `Given valid input, Then createBoard returns 201 with Location and a zero pin count`() {
@@ -58,7 +58,7 @@ class BoardControllerTest {
         val user = aUser()
         val dto = BoardInputDto(name = createRandomString(), description = createRandomString())
         val board = Board(id = randomUUID(), author = user, name = dto.name, description = dto.description,
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { apiConfig.baseUrl() } returns "https://example.test"
         every { boardCreator.create(author = user, name = dto.name, description = dto.description) } returns board
@@ -128,7 +128,7 @@ class BoardControllerTest {
         val boardId = randomUUID()
         val dto = BoardInputDto(name = createRandomString(), description = createRandomString())
         val updated = Board(id = boardId, author = user, name = dto.name, description = dto.description,
-            createdAt = Instant.now(), updatedAt = Instant.now())
+            createdAt = TestTime.now, updatedAt = TestTime.now)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every {
             boardUpdater.update(boardId = boardId, name = dto.name, description = dto.description, user = user)

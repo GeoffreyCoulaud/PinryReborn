@@ -10,6 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.security.SessionExpiryPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.TokenGenerator
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UserAuthenticationInvalidPasswordError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -33,7 +34,7 @@ class SessionCreatorTest {
         SessionCreator(userAuthenticator, repository, tokenGenerator, clock, policy, transactionRunner)
 
     private val now = Instant.parse("2026-07-21T00:00:00Z")
-    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
 
     // Passthrough so the transactional block runs in the behavioral tests; overridden where a test
     // needs to prove the writes live inside the block.

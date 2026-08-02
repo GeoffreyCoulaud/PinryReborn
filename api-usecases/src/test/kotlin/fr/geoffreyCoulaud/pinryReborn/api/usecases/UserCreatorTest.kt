@@ -10,6 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
 import io.mockk.mockk
@@ -76,7 +77,7 @@ class UserCreatorTest : BaseTest() {
         // Given
         val name = createRandomString()
         every { userRepository.findUserByNameIncludingDeleted(name) } returns
-            User(id = randomUUID(), name = name, softDeletedAt = Instant.now(), createdAt = Instant.now())
+            User(id = randomUUID(), name = name, softDeletedAt = TestTime.now, createdAt = TestTime.now)
         // When / Then
         assertThrows<UsernameAlreadyTakenError> { useCase.createUser(name) }
     }

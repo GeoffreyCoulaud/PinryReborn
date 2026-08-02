@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import java.time.Instant
@@ -26,7 +27,7 @@ class PinCreatorTest {
     @Test
     fun `When creating a pin, then should succeed`() {
         // Given
-        val user = User(randomUUID(), "John Doe", createdAt = Instant.now())
+        val user = User(randomUUID(), "John Doe", createdAt = TestTime.now)
         val sourceUrl = "https://example.com/article"
         val mediaUrl = "https://example.com/image.jpeg"
         val description = "some description"
@@ -36,7 +37,7 @@ class PinCreatorTest {
                 id = randomUUID(),
                 name = firstArg(),
                 author = secondArg(),
-                createdAt = Instant.now(),
+                createdAt = TestTime.now,
             )
         }
         every { pinRepository.savePin(any()) } answers { firstArg() }

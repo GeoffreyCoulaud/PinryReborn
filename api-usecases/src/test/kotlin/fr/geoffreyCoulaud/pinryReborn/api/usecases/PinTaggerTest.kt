@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinTaggingPermissionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinTaggingPinDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PinTaggingSoftDeletedPinError
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -26,8 +27,8 @@ class PinTaggerTest {
     @Test
     fun `Setting tags replaces existing tags`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val existingTag = Tag(id = randomUUID(), name = "oldtag", author = user, createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val existingTag = Tag(id = randomUUID(), name = "oldtag", author = user, createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -36,12 +37,12 @@ class PinTaggerTest {
             description = "A pin",
             tags = listOf(existingTag),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
         val newTagNames = listOf("newtag1", "newtag2")
-        val newTag1 = Tag(id = randomUUID(), name = "newtag1", author = user, createdAt = Instant.now())
-        val newTag2 = Tag(id = randomUUID(), name = "newtag2", author = user, createdAt = Instant.now())
+        val newTag1 = Tag(id = randomUUID(), name = "newtag1", author = user, createdAt = TestTime.now)
+        val newTag2 = Tag(id = randomUUID(), name = "newtag2", author = user, createdAt = TestTime.now)
 
         every { pinRepository.findPinById(pin.id) } returns pin
         every { tagCreator.findOrCreate(name = "newtag1", user = user) } returns newTag1
@@ -58,8 +59,8 @@ class PinTaggerTest {
     @Test
     fun `Setting empty list clears all tags`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val existingTag = Tag(id = randomUUID(), name = "oldtag", author = user, createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val existingTag = Tag(id = randomUUID(), name = "oldtag", author = user, createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -68,8 +69,8 @@ class PinTaggerTest {
             description = "A pin",
             tags = listOf(existingTag),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -85,8 +86,8 @@ class PinTaggerTest {
     @Test
     fun `Setting same tags is idempotent`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
-        val existingTag = Tag(id = randomUUID(), name = "sametag", author = user, createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
+        val existingTag = Tag(id = randomUUID(), name = "sametag", author = user, createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -95,8 +96,8 @@ class PinTaggerTest {
             description = "A pin",
             tags = listOf(existingTag),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -113,7 +114,7 @@ class PinTaggerTest {
     @Test
     fun `Setting tags on non-existent pin throws error`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val nonExistentPinId = randomUUID()
 
         every { pinRepository.findPinById(nonExistentPinId) } returns null
@@ -127,8 +128,8 @@ class PinTaggerTest {
     @Test
     fun `Setting tags on another user's pin throws permission error`() {
         // Given
-        val owner = User(id = randomUUID(), name = "Owner", createdAt = Instant.now())
-        val otherUser = User(id = randomUUID(), name = "Other", createdAt = Instant.now())
+        val owner = User(id = randomUUID(), name = "Owner", createdAt = TestTime.now)
+        val otherUser = User(id = randomUUID(), name = "Other", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = owner,
@@ -137,8 +138,8 @@ class PinTaggerTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin
@@ -152,7 +153,7 @@ class PinTaggerTest {
     @Test
     fun `Given soft-deleted pin, Then throws PinTaggingSoftDeletedPinError`() {
         // Given
-        val user = User(id = randomUUID(), name = "John Doe", createdAt = Instant.now())
+        val user = User(id = randomUUID(), name = "John Doe", createdAt = TestTime.now)
         val pin = Pin(
             id = randomUUID(),
             author = user,
@@ -161,9 +162,9 @@ class PinTaggerTest {
             description = "A pin",
             tags = emptyList(),
             boards = emptyList(),
-            softDeletedAt = Instant.now(),
-            createdAt = Instant.now(),
-            updatedAt = Instant.now(),
+            softDeletedAt = TestTime.now,
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
         )
 
         every { pinRepository.findPinById(pin.id) } returns pin

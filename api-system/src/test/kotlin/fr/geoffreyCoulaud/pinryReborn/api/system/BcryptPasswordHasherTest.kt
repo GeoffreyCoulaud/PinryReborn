@@ -1,11 +1,11 @@
 package fr.geoffreyCoulaud.pinryReborn.api.system
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PasswordHashAlgorithm
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 class BcryptPasswordHasherTest {
     private val hasher = BcryptPasswordHasher()
@@ -15,7 +15,7 @@ class BcryptPasswordHasherTest {
         // Given
         val raw = "correct horse battery staple"
         // When
-        val hashed = hasher.hash(raw, Instant.now())
+        val hashed = hasher.hash(raw, TestTime.now)
         // Then
         assertEquals(PasswordHashAlgorithm.BCRYPT, hashed.algorithm)
         assertTrue(hasher.matches(raw, hashed))
@@ -24,7 +24,7 @@ class BcryptPasswordHasherTest {
     @Test
     fun `Given a wrong password, Then matches is false`() {
         // Given
-        val hashed = hasher.hash("right", Instant.now())
+        val hashed = hasher.hash("right", TestTime.now)
         // When / Then
         assertFalse(hasher.matches("wrong", hashed))
     }

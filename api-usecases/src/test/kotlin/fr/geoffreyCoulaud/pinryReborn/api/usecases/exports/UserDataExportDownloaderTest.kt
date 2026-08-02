@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportGoneError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportNotReadyError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -23,7 +24,7 @@ class UserDataExportDownloaderTest : BaseTest() {
     private val getter = mockk<UserDataExportGetter>()
     private val archiveStore = mockk<ExportArchiveStore>()
     private val downloader = UserDataExportDownloader(getter, archiveStore)
-    private val user = User(id = randomUUID(), name = "alice", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
 

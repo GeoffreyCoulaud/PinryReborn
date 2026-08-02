@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.SessionToken
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.SessionDtoMapper.toCreatedDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.SessionDtoMapper.toExistingDto
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -25,7 +26,7 @@ class SessionDtoMapperTest {
     @Test
     fun `Given a SessionToken, Then toExistingDto exposes expiry, renewAfter and persistent but no token`() {
         val token = SessionToken(randomUUID(), User(randomUUID(), "alice",
-            createdAt = Instant.now()), expiresAt, persistent = true, createdAt = Instant.now())
+            createdAt = TestTime.now), expiresAt, persistent = true, createdAt = TestTime.now)
         val dto = token.toExistingDto(renewAfter)
         assertEquals(expiresAt, dto.expiresAt)
         assertEquals(renewAfter, dto.renewAfter)

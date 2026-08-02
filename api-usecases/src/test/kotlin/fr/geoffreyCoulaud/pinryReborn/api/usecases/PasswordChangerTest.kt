@@ -13,6 +13,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordChangedToo
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordPreviouslyUsedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ReauthenticationError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -34,7 +35,7 @@ class PasswordChangerTest : BaseTest() {
     private val changer = PasswordChanger(passwords, hasher, sessionRevoker, tx, clock, minimumInterval)
 
     private val now = Instant.parse("2026-07-29T00:00:00Z")
-    private val user = User(id = randomUUID(), name = "u", createdAt = Instant.now())
+    private val user = User(id = randomUUID(), name = "u", createdAt = TestTime.now)
     // One minute before `now`, so the pre-existing tests sit outside the 30 s interval.
     private val current =
         HashedPassword("current-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now.minus(Duration.ofMinutes(1)))
@@ -78,7 +79,7 @@ class PasswordChangerTest : BaseTest() {
         every { passwords.findCurrentPasswordHash(user) } returns current
         every { hasher.matches("old", current) } returns true
         every { clock.now() } returns now
-        val older = HashedPassword("older", PasswordHashAlgorithm.BCRYPT, createdAt = Instant.now())
+        val older = HashedPassword("older", PasswordHashAlgorithm.BCRYPT, createdAt = TestTime.now)
         every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current, older)
         every { hasher.matches("reused", current) } returns false
         every { hasher.matches("reused", older) } returns true
