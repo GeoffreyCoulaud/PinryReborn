@@ -95,24 +95,30 @@ Sequenced after Task 3 (the known throw is fixed first; this guards the rest).
 
 ### Task 8. detekt type resolution in the gate (spec #8)
 
-Sequenced after Task 0 (BaseModel) and Task 4 (clears four findings). Remaining findings: 36 (Task
-0 surfaced `BaseModel`'s own `AbstractClassCanBeConcreteClass`, so the accurate total is 40, not 39).
+Sequenced after Task 0 (BaseModel) and Task 4 (clears four findings). Remaining findings measured at
+implementation: 37 (32 main, 5 test). Task 0 surfaced `BaseModel`'s own `AbstractClassCanBeConcreteClass`
+and Task 4 cleared the four `!!`; the pre-implementation estimate was 40.
 
 - (a) Wire `detektMain` / `detektTest` into the gate via each module's `check` (`build.gradle.kts`).
-- (b) Suppress with reason: `LongParameterList` on each of its 11 sites (9 DI/framework constructors +
-  2 functions: a CDI producer and a test helper) with a "dependency injection by design" reason
-  (detekt 2.0.0-alpha.5 has no class-level `ignoreAnnotated` for this rule); and
-  `AbstractClassCanBeConcreteClass` on `PersistenceException`, `AuthoredBaseModel`,
-  `SoftDeletableQueries`, `BaseModel`, `IntegrationTest`, `RepositoryTest` (6; `BaseModel` was added
-  by Task 0, which made it abstract).
-- (c) Fix mechanically (18): `ForbiddenVoid` (10), `ImplicitDefaultLocale` (2), `NoNameShadowing` (2),
-  `UseCheckOrError` (2, tests), `UnusedVariable` (1, verify `ImageController.download` is not a bug),
-  `MemberNameEqualsClassName` (1).
-- (d) Examine `SpreadOperator` in `Application.kt` (1): keep with a reason or fix.
-- (e) Baselines: regenerate or consciously re-confirm `config/detekt/baseline-*.xml` after wiring,
-  because type resolution can shift finding signatures (the nine baselined IDs were generated for the
-  non-type-resolution `detekt` task). The 39-finding figure is post-baseline.
-- Acceptance: `./gradlew detektMain detektTest` green; the gate runs both.
+- (b) Configure `ForbiddenVoid.ignoreUsageInGenerics = true`: the ten `RestResponse<Void>` controller
+  returns are the JAX-RS no-body idiom and `Void`-to-`Unit` does not compile
+  (`RestResponse.noContent()` is typed `<Void>`). The spec's first proposal was `Void` to `Unit`,
+  refuted at implementation.
+- (c) Suppress with reason: `LongParameterList` on its 11 sites (5 CDI-injected constructors,
+  4 Ebean entity models, 1 CDI producer, 1 test fixture builder); `AbstractClassCanBeConcreteClass`
+  on `PersistenceException`, `AuthoredBaseModel`, `SoftDeletableQueries`, `BaseModel`,
+  `IntegrationTest`, `RepositoryTest` (6; `BaseModel` was added by Task 0, which made it abstract);
+  and `SpreadOperator` on `Application.main` (the Quarkus `@QuarkusMain` bootstrap).
+- (d) Fix in the code (9): `ImplicitDefaultLocale` (2, `Locale.ROOT`), `NoNameShadowing` (2),
+  `UseCheckOrError` (2, tests), `UnusedVariable` (1, `ImageController.download`, a side-effect call
+  whose result is unused, not a bug), `MemberNameEqualsClassName` (1, rename `trigramSimilarity` to
+  `jaccard`), and `UnreachableCode` (1, a redundant `throw` before the `Nothing`-returning
+  `translateIfCollision`, surfaced by T3 and invisible to plain `detekt`).
+- (e) Baselines: re-confirmed, not regenerated. The per-module baselines (generated for the plain
+  `detekt` task) apply to the type-res tasks through the extension's `baseline` property, and the
+  baselined findings (UtilityClassWithPublicConstructor, CyclomaticComplexMethod, MagicNumber,
+  ThrowsCount) did not reappear.
+- Acceptance: `./gradlew detektMain detektTest` green; the gate runs both. (Met.)
 
 ### Task 9. Deterministic tests via a fixed clock (spec #9)
 

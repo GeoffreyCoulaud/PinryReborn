@@ -105,20 +105,28 @@ Sub-process, with the violation triage already done in the discussion that produ
    persistence module.
 2. **Wire `detektMain` and `detektTest` into the gate** through each module's `check`, so the gate
    runs what it claims.
-3. **Resolve the 40 findings** (35 main, 5 test) per the triage:
-   - **Fix mechanically (18).** `ForbiddenVoid` (10, `Void` to `Unit` in controller return types),
-     `ImplicitDefaultLocale` (2, `String.format` to `Locale.ROOT`), `NoNameShadowing` (2),
-     `UseCheckOrError` (2, tests), `UnusedVariable` (1, `ImageController` `download`, verify it is not
-     a bug where the result should be used), `MemberNameEqualsClassName` (1, `TrigramSimilarity`).
-   - **Resolved by item 5 (4).** The `UnsafeCallOnNullableType` findings are the four `!!`.
-   - **Suppress with reason (17).** `LongParameterList` on each of its 11 sites (9 DI/framework
-     constructors + 2 functions: a CDI producer and a test helper) with a "dependency injection by
-     design" reason (detekt 2.0.0-alpha.5 has no class-level `ignoreAnnotated` for this rule, so
-     per-site `@Suppress` is the only annotation-based option); and `AbstractClassCanBeConcreteClass`
-     on `PersistenceException`, `AuthoredBaseModel`, `SoftDeletableQueries`, `BaseModel`,
-     `IntegrationTest`, `RepositoryTest` (abstract by intent: base or marker classes, not for direct
-     instantiation). `BaseModel` joins the list once Task 0 makes it abstract.
-   - **Examine (1).** `SpreadOperator` in `Application.kt`: a necessary vararg forward, or fixable.
+3. **Resolve the findings measured at implementation: 37 total (32 main, 5 test)**, after Task 0
+   cleared the six BaseModel compiler errors and Task 4 cleared the four `!!`. The pre-implementation
+   estimate (40) shifted on measurement; the buckets hold:
+   - **Resolved by config (10).** `ForbiddenVoid` on the ten `RestResponse<Void>` controller return
+     types: `ForbiddenVoid.ignoreUsageInGenerics = true`. The first proposal (`Void` to `Unit`) does
+     not compile, because `RestResponse.noContent()` is typed `RestResponse<Void>` and `Unit` is not
+     assignable to it. `Void` as a generic type argument is the JAX-RS no-body idiom; a direct
+     `fun f(): Void` return stays flagged.
+   - **Fix in the code (8).** `ImplicitDefaultLocale` (2, `Locale.ROOT`; hex output, no behaviour
+     change), `NoNameShadowing` (2, rename the shadowed local), `UseCheckOrError` (2, tests, to
+     `error()`), `UnusedVariable` (1, `ImageController` `download`: the 202 returns a synthetic PENDING
+     state and the call is a side effect, not a bug), `MemberNameEqualsClassName` (1, rename
+     `TrigramSimilarity.trigramSimilarity` to `jaccard`).
+   - **Fix in the code (1), surfaced at implementation.** `UnreachableCode` in
+     `UserDataExportRepository.save`: a redundant `throw` before the `Nothing`-returning
+     `translateIfCollision`, a regression from item 4's catch-narrowing (invisible to plain `detekt`;
+     `UnreachableCode` is a type-resolution rule).
+   - **Suppress with reason (18).** `LongParameterList` on its 11 sites (5 CDI-injected constructors,
+     4 Ebean entity models, 1 CDI producer, 1 test fixture builder); `AbstractClassCanBeConcreteClass`
+     on `PersistenceException`, `AuthoredBaseModel`, `BaseModel`, `SoftDeletableQueries`,
+     `IntegrationTest`, `RepositoryTest` (abstract bases by intent); and `SpreadOperator` in
+     `Application.kt` (`Quarkus.run(*args)`: the `@QuarkusMain` bootstrap, forwarding JVM args once).
 
 - Acceptance: `./gradlew detektMain detektTest` is green; the gate runs both; the persistence module
   reports no analysis compiler errors.
