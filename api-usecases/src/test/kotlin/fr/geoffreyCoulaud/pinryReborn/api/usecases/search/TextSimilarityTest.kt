@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class TrigramSimilarityTest {
+class TextSimilarityTest {
 
     @Test
     fun `Given empty string, Then generates empty trigram set`() {
@@ -12,7 +12,7 @@ class TrigramSimilarityTest {
         val text = ""
 
         // When
-        val trigrams = TrigramSimilarity.generateTrigrams(text)
+        val trigrams = TextSimilarity.generateTrigrams(text)
 
         // Then
         assertTrue(trigrams.isEmpty())
@@ -24,7 +24,7 @@ class TrigramSimilarityTest {
         val text = "ab"
 
         // When
-        val trigrams = TrigramSimilarity.generateTrigrams(text)
+        val trigrams = TextSimilarity.generateTrigrams(text)
 
         // Then
         // With padding: "  ab  " -> "  a", " ab", "ab ", "b  "
@@ -37,7 +37,7 @@ class TrigramSimilarityTest {
         val text = "cat"
 
         // When
-        val trigrams = TrigramSimilarity.generateTrigrams(text)
+        val trigrams = TextSimilarity.generateTrigrams(text)
 
         // Then
         // With padding: "  cat  " -> "  c", " ca", "cat", "at ", "t  "
@@ -51,7 +51,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.jaccard(query, target)
+        val score = TextSimilarity.trigramSimilarity(query, target)
 
         // Then
         assertEquals(1.0, score, 0.001)
@@ -64,7 +64,7 @@ class TrigramSimilarityTest {
         val target = "xyz"
 
         // When
-        val score = TrigramSimilarity.jaccard(query, target)
+        val score = TextSimilarity.trigramSimilarity(query, target)
 
         // Then
         assertTrue(score < 0.3)
@@ -77,7 +77,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.jaccard(query, target)
+        val score = TextSimilarity.trigramSimilarity(query, target)
 
         // Then
         assertTrue(score > 0.5)
@@ -90,7 +90,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+        val score = TextSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
         assertEquals(1.0, score, 0.001)
@@ -103,7 +103,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+        val score = TextSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
         assertTrue(score > 0.8)
@@ -116,7 +116,7 @@ class TrigramSimilarityTest {
         val target = "xyz"
 
         // When
-        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+        val score = TextSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
         assertTrue(score < 0.5)
@@ -129,8 +129,8 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val trigramScore = TrigramSimilarity.jaccard(query, target)
-        val jaroWinklerScore = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+        val trigramScore = TextSimilarity.trigramSimilarity(query, target)
+        val jaroWinklerScore = TextSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
         assertEquals(1.0, trigramScore, 0.001)
@@ -144,7 +144,7 @@ class TrigramSimilarityTest {
         val target = "Beautiful mountain landscape"
 
         // When
-        val score = TrigramSimilarity.combinedSimilarity(query, target)
+        val score = TextSimilarity.combinedSimilarity(query, target)
 
         // Then
         assertTrue(score > 0.3)
@@ -157,7 +157,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val trigramScore = TrigramSimilarity.jaccard(query, target)
+        val trigramScore = TextSimilarity.trigramSimilarity(query, target)
 
         // Then
         assertEquals(0.0, trigramScore, 0.001)
@@ -170,7 +170,7 @@ class TrigramSimilarityTest {
         val target = ""
 
         // When
-        val trigramScore = TrigramSimilarity.jaccard(query, target)
+        val trigramScore = TextSimilarity.trigramSimilarity(query, target)
 
         // Then
         assertEquals(0.0, trigramScore, 0.001)
@@ -183,7 +183,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+        val score = TextSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
         assertEquals(0.0, score, 0.001)
@@ -196,7 +196,7 @@ class TrigramSimilarityTest {
         val target = ""
 
         // When
-        val score = TrigramSimilarity.jaroWinklerSimilarity(query, target)
+        val score = TextSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
         assertEquals(0.0, score, 0.001)
@@ -209,7 +209,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.combinedSimilarity(query, target)
+        val score = TextSimilarity.combinedSimilarity(query, target)
 
         // Then
         assertEquals(0.0, score, 0.001)
@@ -222,7 +222,7 @@ class TrigramSimilarityTest {
         val target = ""
 
         // When
-        val score = TrigramSimilarity.combinedSimilarity(query, target)
+        val score = TextSimilarity.combinedSimilarity(query, target)
 
         // Then
         assertEquals(0.0, score, 0.001)
@@ -235,7 +235,7 @@ class TrigramSimilarityTest {
         val target = "   "
 
         // When
-        val score = TrigramSimilarity.combinedSimilarity(query, target)
+        val score = TextSimilarity.combinedSimilarity(query, target)
 
         // Then
         // targetWords is empty (blank-only after split), so bestWordScore is 0.0 and the
@@ -250,7 +250,7 @@ class TrigramSimilarityTest {
         val target = "mountain landscape"
 
         // When
-        val score = TrigramSimilarity.combinedSimilarity(query, target)
+        val score = TextSimilarity.combinedSimilarity(query, target)
 
         // Then
         // "landscape" is the second target word and matches the query exactly, so it must
