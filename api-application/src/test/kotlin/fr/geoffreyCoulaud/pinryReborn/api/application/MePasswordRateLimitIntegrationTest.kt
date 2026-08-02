@@ -4,6 +4,7 @@ import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.QuarkusTestProfile
 import io.quarkus.test.junit.TestProfile
 import io.restassured.RestAssured.given
+import org.hamcrest.Matchers.containsStringIgnoringCase
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.notNullValue
 import org.junit.jupiter.api.Test
@@ -31,5 +32,25 @@ class MePasswordRateLimitIntegrationTest : IntegrationTest() {
             .statusCode(429)
             .header("Retry-After", notNullValue())
             .body("code", equalTo("PASSWORD_CHANGED_TOO_SOON"))
+    }
+
+    @Test
+    fun `Given a cross-origin change inside the interval, Then the 429 exposes Retry-After to the browser`() {
+        // Given: the seed hash from signup is fresh, and the profile pins a 1 h interval
+        val auth = createAuthenticatedUser(password = "password123")
+        // When / Then: a cross-origin browser client can read Retry-After on the 429
+        given().authenticatedAs(auth).contentType("application/json")
+            .header("Origin", ALLOWED_ORIGIN)
+            .body(changeBody("password123", "newpassword1"))
+            .put("/api/v1/me/password")
+            .then()
+            .statusCode(429)
+            .header("Retry-After", notNullValue())
+            .header("Access-Control-Expose-Headers", containsStringIgnoringCase("Retry-After"))
+    }
+
+    private companion object {
+        /** The single origin allowed by the test CORS config (see CorsIntegrationTest). */
+        private const val ALLOWED_ORIGIN = "https://app.test"
     }
 }

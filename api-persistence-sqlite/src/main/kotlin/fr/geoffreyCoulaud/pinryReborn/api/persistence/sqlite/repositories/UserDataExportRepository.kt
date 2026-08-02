@@ -129,23 +129,14 @@ class UserDataExportRepository(
     }
 
     companion object {
-        // Package-visible for the focused unit tests of the collision decision; not part of the
-        // repository port. The cause structure (PersistenceException wrapping SQLiteException) is
-        // observed empirically against Ebean-on-SQLite and is pinned by the duplicate-insert test.
+        // Internal for the focused collision-decision test (not part of the repository port).
         internal fun isUniqueConstraint(error: PersistenceException): Boolean {
             val sqliteException = error.cause as? SQLiteException ?: return false
             return sqliteException.resultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE
         }
 
-        // Always throws (returns Nothing); the catch site has no branch of its own. Only a
-        // unique-constraint violation on the partial pending index becomes the 409
-        // ExportAlreadyInProgress; any other persistence failure (NOT NULL, FK, connection, ...)
-        // must surface as a genuine 500. SQLite wraps both as PersistenceException(SQLiteException)
-        // and both share vendor errorCode 19, so the typed resultCode is the one reliable
-        // discriminator (verified empirically: SQLITE_CONSTRAINT_UNIQUE vs SQLITE_CONSTRAINT_NOTNULL).
-        // Mirrors UserPasswordHashRepository.translateIfCollision. Extracted so the rethrow branch
-        // is unit-testable: a non-unique PersistenceException cannot be produced through the public
-        // save against a real store.
+        // Only a unique-constraint violation becomes ExportAlreadyInProgress (409); anything else
+        // rethrows as a genuine 500. Mirrors UserPasswordHashRepository.translateIfCollision.
         internal fun translateIfCollision(error: PersistenceException): Nothing {
             if (isUniqueConstraint(error)) throw ExportAlreadyInProgressException(cause = error)
             throw error

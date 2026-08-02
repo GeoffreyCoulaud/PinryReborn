@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases.exports
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
@@ -19,8 +20,7 @@ import java.time.Duration
  *
  * Each export is isolated in its own try/catch and a failure (the repository save, in practice) is
  * logged at WARN rather than aborting the batch: one bad export must not leave the rest unswept
- * that run. Same shape as `ReapTombstonedAccounts` (see
- * docs/adr/0003-periodic-gc-and-best-effort-cleanup.md).
+ * that run. Same shape as `ReapTombstonedAccounts`.
  */
 class ReapExpiredUserDataExports(
     private val repository: UserDataExportRepositoryInterface,
@@ -33,21 +33,23 @@ class ReapExpiredUserDataExports(
      * use: a per-item re-save is best-effort, so a throw is logged and the next export is still
      * processed.
      */
-    // The save can throw anything; item-level isolation is the point (class KDoc).
-    @Suppress("TooGenericExceptionCaught")
     fun reap(): Int {
         val now = clock.now()
         val expired = repository.findExpiredReadyExports(now)
-        for (export in expired) {
-            try {
-                export.storageKey?.let { archiveStore.deleteQuietly(it) }
-                repository.save(export.copy(state = UserDataExportState.EXPIRED))
-            } catch (e: Exception) {
-                logger.warn(e) { "export reap failed for export ${export.id}" }
-            }
-        }
+        expired.forEach(::reapOne)
         archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge))
         return expired.size
+    }
+
+    // The save can throw anything; item-level isolation is the point (class KDoc).
+    @Suppress("TooGenericExceptionCaught")
+    private fun reapOne(export: UserDataExport) {
+        try {
+            export.storageKey?.let { archiveStore.deleteQuietly(it) }
+            repository.save(export.copy(state = UserDataExportState.EXPIRED))
+        } catch (e: Exception) {
+            logger.warn(e) { "export reap failed for export ${export.id}" }
+        }
     }
 
     private companion object {
