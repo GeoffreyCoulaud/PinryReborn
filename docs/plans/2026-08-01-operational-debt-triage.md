@@ -125,13 +125,14 @@ and Task 4 cleared the four `!!`; the pre-implementation estimate was 40.
 Sequenced last (high-churn, no business logic). Depends on Task 8's gate wiring so `WallClockRead`
 can enforce on test sources.
 
-- (a) Measure: activate `WallClockRead` against test sources for the real count.
-- (b) Carry a fixed `Clock` via the shared test bases. `BaseTest` and the seam live in the
-  `testFixtures` source set, which stays excluded from `WallClockRead` (it hosts the `FixedClock` seam
-  that reads `Instant.now()` once); `test/` sources take the injected clock and must not read the wall
-  clock.
-- (c) Remove only the `**/test/**` exclusion from `WallClockRead` (keep `**/testFixtures/**`).
-- Acceptance: `WallClockRead` green on `test/` sources; tests take the fixed clock from their base.
+- (a) Measure: 268 `Instant.now()` sites across 53 test files.
+- (b) Fixed instant via `object TestTime` in testFixtures, not a `Clock` via the bases (the reads are
+  fixture timestamps and the unit-test classes are standalone). `Instant.now()` -> `TestTime.now`
+  (261 sites); testFixtures stays excluded.
+- (c) Suppress `WallClockRead` on the four legitimate readers: `SystemClockTest` and the three
+  api-application integration tests whose app runs the real `SystemClock`.
+- (d) Remove only the `**/test/**` exclusion from `WallClockRead` (keep `**/testFixtures/**`).
+- Acceptance: `WallClockRead` green on `test/` sources, the four suppressed classes excepted. (Met.)
 
 ## Sequencing and dependencies
 
