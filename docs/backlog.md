@@ -99,9 +99,6 @@ Last reviewed: 2026-08-02 (the operational-debt wave delivered its nine in-scope
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27.
-
-Surfaced by the operational-debt wave (2026-08-02):
-
 - **Shared `SqliteConstraintViolations` helper.** T3 narrowed `UserDataExportRepository.save`'s catch
   by extracting `isUniqueConstraint` / `translateIfCollision` into its companion, mirroring the same
   pair already on `UserPasswordHashRepository`. The two pairs are now duplicated across two
@@ -112,18 +109,6 @@ Surfaced by the operational-debt wave (2026-08-02):
   by a reasoned `@Suppress("LargeClass")` (it is the comprehensive main suite; feature slices are
   sibling classes). Keep the suppress, or split the suite along its feature slices so the suppress can
   go. A judgement call, not a defect. New 2026-08-02.
-- **No structural guard that the gate keeps running type-resolution detekt.** T8 wired
-  `detektMain` / `detektTest` into each module's `check` with one manual line
-  (`tasks.named("check").configure { dependsOn("detektMain", "detektTest") }`). Remove that line and
-  the gate stays green while the type-resolution rule set silently stops running, which is exactly the
-  defect T8 fixed. Konsist cannot see the Gradle task graph and a TestKit integration test is
-  unprecedented here, so a cheap perfect guard does not exist; a small test asserting the line is
-  present in the root `build.gradle.kts` is the realistic belt-and-braces. New 2026-08-02.
-- **Cross-origin `Retry-After` coverage is split across two tests.** T1 added `Retry-After` to the CORS
-  expose list. `CorsIntegrationTest` asserts the header name is in `exposed-headers`; the password
-  rate-limit test asserts `Retry-After` is set on a real 429 but sends no `Origin`. No single test ties
-  the 429, the `Retry-After` value and the cross-origin expose together. The config change is correct
-  and the header is readable; the gap is coverage elegance, not a defect. New 2026-08-02.
 
 ### Features
 
