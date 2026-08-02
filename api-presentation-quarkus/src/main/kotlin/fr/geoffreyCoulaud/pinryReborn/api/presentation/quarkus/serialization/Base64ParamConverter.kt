@@ -26,7 +26,7 @@ constructor(
     ): ParamConverter<T>? {
         // Only apply to classes annotated with a custom annotation
         return Base64JsonParamConverter(objectMapper, rawType)
-            .takeIf { annotations?.any { it is Base64Json } == true }
+            .takeIf { annotations?.any { annotation -> annotation is Base64Json } == true }
     }
 }
 
