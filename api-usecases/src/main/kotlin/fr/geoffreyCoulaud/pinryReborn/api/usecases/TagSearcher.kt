@@ -5,7 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.SearchEmptyQueryError
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.search.TrigramSimilarity
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.search.TextSimilarity
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
@@ -32,7 +32,7 @@ class TagSearcher(
 
         return tags
             .map { tag ->
-                val score = TrigramSimilarity.jaroWinklerSimilarity(query, tag.name)
+                val score = TextSimilarity.jaroWinklerSimilarity(query, tag.name)
                 SearchResult(item = tag, score = score)
             }
             .filter { it.score >= DEFAULT_MIN_SCORE }
