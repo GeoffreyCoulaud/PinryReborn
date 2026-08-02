@@ -18,6 +18,7 @@ import io.ebean.typequery.QueryBean
  * The [M] bound is what ties the two halves together: a model that has not declared itself
  * recyclable cannot be given these constructors, and one that has gets all three in a single line.
  */
+@Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a query base shared by the recyclable models.
 abstract class SoftDeletableQueries<M : SoftDeletableModel, Q : QueryBean<M, Q>>(
     private val newQuery: () -> Q,
     private val softDeletedAt: (Q) -> PInstant<Q>,

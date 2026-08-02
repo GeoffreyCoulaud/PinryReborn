@@ -55,7 +55,7 @@ class UserDataExportRepository(
         return try {
             persist(model)
         } catch (error: PersistenceException) {
-            throw translateIfCollision(error)
+            translateIfCollision(error)
         }
     }
 

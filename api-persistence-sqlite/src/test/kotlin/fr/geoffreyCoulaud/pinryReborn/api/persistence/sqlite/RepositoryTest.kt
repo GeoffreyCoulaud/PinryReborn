@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+@Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a shared test base for concrete subclasses.
 abstract class RepositoryTest {
     protected val database: Database get() = DB.getDefault()
 

@@ -68,7 +68,7 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
             runner.inTransaction {
                 val task = queue.enqueue(newDownloadTask(pinId))
                 downloads.upsertPending(pinId, "https://x/i.png", task.id, now)
-                throw IllegalStateException("boom")
+                error("boom")
             }
         }
         assertNull(downloads.findByPinId(pinId))

@@ -9,6 +9,7 @@ import java.util.UUID
 
 @Entity
 @Table(name = "boards")
+@Suppress("LongParameterList") // Ebean entity: every parameter is a persisted column.
 class BoardModel(
     id: UUID,
     author: UserModel,
