@@ -11,6 +11,7 @@ import io.restassured.specification.RequestSpecification
 import jakarta.inject.Inject
 import org.junit.jupiter.api.BeforeEach
 
+@Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a shared test base for concrete subclasses.
 abstract class IntegrationTest {
     @Inject
     lateinit var userCreator: UserCreator

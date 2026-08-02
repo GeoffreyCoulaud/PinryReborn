@@ -19,6 +19,7 @@ import jakarta.enterprise.inject.Produces
 class PasswordChangerProducer {
     @Produces
     @ApplicationScoped
+    @Suppress("LongParameterList") // CDI producer: every parameter is a collaborator provided by the container.
     fun passwordChanger(
         userPasswordRepository: UserPasswordHashRepositoryInterface,
         passwordHasher: PasswordHasher,
