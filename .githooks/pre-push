@@ -3,4 +3,14 @@
 # coverage bound. The `gate` task (root build.gradle.kts) aggregates `check` and
 # `koverVerify` across all modules; add more `dependsOn` there to grow the gate.
 set -e
+
+# The gate reads the working tree; it validates HEAD only when the two match. Refuse the
+# push on uncommitted changes, or CI builds commits the local gate never validated (a `git
+# mv` of an edited file once staged the old content and the gate passed on the fixed tree).
+if ! git diff HEAD --quiet; then
+    echo "pre-push: working tree differs from HEAD (uncommitted changes)." >&2
+    echo "Commit or stash first; the gate validates HEAD only on a clean tree." >&2
+    exit 1
+fi
+
 exec ./gradlew gate
