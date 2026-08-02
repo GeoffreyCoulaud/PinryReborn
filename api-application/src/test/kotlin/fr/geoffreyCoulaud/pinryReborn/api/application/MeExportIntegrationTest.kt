@@ -33,6 +33,8 @@ import java.util.UUID
  */
 @QuarkusTest
 @TestProfile(MeExportTestProfile::class)
+// The app under test runs the real SystemClock; these read the wall clock to keep fixture instants consistent with it.
+@Suppress("WallClockRead")
 class MeExportIntegrationTest : IntegrationTest() {
 
     @Inject

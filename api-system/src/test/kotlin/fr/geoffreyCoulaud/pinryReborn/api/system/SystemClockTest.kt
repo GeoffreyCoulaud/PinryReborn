@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
 
+// SystemClock is the clock adapter under test; its test compares against the real wall clock.
+@Suppress("WallClockRead")
 class SystemClockTest {
     @Test
     fun `Given the system clock, Then now is truncated to millisecond precision`() {

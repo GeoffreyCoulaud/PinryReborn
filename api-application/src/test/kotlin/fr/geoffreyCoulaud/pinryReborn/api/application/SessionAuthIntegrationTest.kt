@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 
 @QuarkusTest
+// The app under test runs the real SystemClock; these read the wall clock to keep fixture instants consistent with it.
+@Suppress("WallClockRead")
 class SessionAuthIntegrationTest : IntegrationTest() {
     private val iso8601Utc = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z"
 
