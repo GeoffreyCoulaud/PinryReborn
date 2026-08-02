@@ -879,5 +879,5 @@ pinry-reborn:
     excludes: ['**/test/**', '**/testFixtures/**', '**/queries/**']
   WallClockRead:
     active: true
-    # Test sources read the wall clock freely. Accepted for now, not for good.
-    excludes: ['**/test/**', '**/testFixtures/**']
+    # testFixtures hosts the TestTime seam; test sources take that fixed instant instead.
+    excludes: ['**/testFixtures/**']
