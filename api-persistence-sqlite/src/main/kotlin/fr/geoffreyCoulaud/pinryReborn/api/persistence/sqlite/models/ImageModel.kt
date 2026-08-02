@@ -10,6 +10,7 @@ import java.util.UUID
 
 @Entity
 @Table(name = "images")
+@Suppress("LongParameterList") // Ebean entity: every parameter is a persisted column.
 class ImageModel(
     @Id var id: UUID,
     @Column(unique = true) var pinId: UUID,

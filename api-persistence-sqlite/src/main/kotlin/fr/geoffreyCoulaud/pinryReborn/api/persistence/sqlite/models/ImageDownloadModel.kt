@@ -8,6 +8,7 @@ import java.util.UUID
 
 @Entity
 @Table(name = "image_download")
+@Suppress("LongParameterList") // Ebean entity: every parameter is a persisted column.
 class ImageDownloadModel(
     @Id var pinId: UUID,
     var sourceUrl: String,

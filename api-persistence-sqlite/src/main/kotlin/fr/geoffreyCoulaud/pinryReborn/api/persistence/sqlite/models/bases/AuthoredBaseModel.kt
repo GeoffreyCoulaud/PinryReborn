@@ -8,6 +8,7 @@ import java.time.Instant
 import java.util.UUID
 
 @MappedSuperclass
+@Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a mapped-superclass, never instantiated directly.
 abstract class AuthoredBaseModel(
     id: UUID,
     @ManyToOne var author: UserModel,
