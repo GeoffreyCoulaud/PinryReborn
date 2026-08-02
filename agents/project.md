@@ -46,8 +46,8 @@ graph and by `ArchitectureKonsistTest`, not by this table.
   tests cannot load the library, and `python3`
   must be on the PATH because `.claude/settings.json` runs `.claude/hooks/evidence-guard.py` on
   every Bash, Edit and Write. Without it the guard cannot run and enforces nothing, silently.
-- **THE GATE**: `./gradlew gate` (detekt, all tests, the 100% branch coverage bound, and
-  `checkNoLongDashes` over every tracked file). The `gate` task in the root `build.gradle.kts`
+- **THE GATE**: `./gradlew gate` (detekt with type resolution, all tests, the 100% branch coverage
+  bound, and `checkNoLongDashes` over every tracked file). The `gate` task in the root `build.gradle.kts`
   aggregates `check` and `koverVerify` across every module, so it is the single knob: grow the gate by
   adding `dependsOn` there, not by changing what each caller runs. Measured green on 2026-07-23. **It
   is not everything CI runs**: `validate.yml` also builds the multi-arch container image and checks
@@ -176,7 +176,7 @@ The three values `modules/backend.md` expects this file to declare.
   on it says which state it means through `active()`, `recycled()` or `any()` rather than
   constructing the query bean itself. A query rooted elsewhere that filters on a recyclable
   association uses an extension declared beside those constructors (`withActiveBoard()`,
-  `withActivePin()`), which is the extension-function exception to the no-top-level-functions
+  `withActivePin()`, `withActiveUser()`), which is the extension-function exception to the no-top-level-functions
   convention below. Two Konsist assertions and the `SoftDeleteStateFilteredOutsideQueries` detekt
   rule hold it: the assertions derive their reach from the marker, and the rule keys on the
   `softDeletedAt` property name, which is the marker's single member, with its reach set by the path
