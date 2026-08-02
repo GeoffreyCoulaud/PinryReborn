@@ -26,7 +26,7 @@ object TrigramSimilarity {
      * @param target The target string to compare against
      * @return Similarity score between 0.0 and 1.0
      */
-    fun trigramSimilarity(query: String, target: String): Double {
+    fun jaccard(query: String, target: String): Double {
         if (query.isEmpty() || target.isEmpty()) return 0.0
 
         val queryTrigrams = generateTrigrams(query)
@@ -64,7 +64,7 @@ object TrigramSimilarity {
         val normalizedTarget = target.lowercase()
 
         // Direct trigram similarity on the whole strings
-        val trigramScore = trigramSimilarity(normalizedQuery, normalizedTarget)
+        val trigramScore = jaccard(normalizedQuery, normalizedTarget)
 
         // Word-level matching: find the best Jaro-Winkler match against any word in target
         val targetWords = normalizedTarget.split(Regex("\\s+")).filter { it.isNotBlank() }

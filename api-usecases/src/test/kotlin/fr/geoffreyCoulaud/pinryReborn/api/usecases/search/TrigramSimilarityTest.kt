@@ -51,7 +51,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.trigramSimilarity(query, target)
+        val score = TrigramSimilarity.jaccard(query, target)
 
         // Then
         assertEquals(1.0, score, 0.001)
@@ -64,7 +64,7 @@ class TrigramSimilarityTest {
         val target = "xyz"
 
         // When
-        val score = TrigramSimilarity.trigramSimilarity(query, target)
+        val score = TrigramSimilarity.jaccard(query, target)
 
         // Then
         assertTrue(score < 0.3)
@@ -77,7 +77,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val score = TrigramSimilarity.trigramSimilarity(query, target)
+        val score = TrigramSimilarity.jaccard(query, target)
 
         // Then
         assertTrue(score > 0.5)
@@ -129,7 +129,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val trigramScore = TrigramSimilarity.trigramSimilarity(query, target)
+        val trigramScore = TrigramSimilarity.jaccard(query, target)
         val jaroWinklerScore = TrigramSimilarity.jaroWinklerSimilarity(query, target)
 
         // Then
@@ -157,7 +157,7 @@ class TrigramSimilarityTest {
         val target = "landscape"
 
         // When
-        val trigramScore = TrigramSimilarity.trigramSimilarity(query, target)
+        val trigramScore = TrigramSimilarity.jaccard(query, target)
 
         // Then
         assertEquals(0.0, trigramScore, 0.001)
@@ -170,7 +170,7 @@ class TrigramSimilarityTest {
         val target = ""
 
         // When
-        val trigramScore = TrigramSimilarity.trigramSimilarity(query, target)
+        val trigramScore = TrigramSimilarity.jaccard(query, target)
 
         // Then
         assertEquals(0.0, trigramScore, 0.001)

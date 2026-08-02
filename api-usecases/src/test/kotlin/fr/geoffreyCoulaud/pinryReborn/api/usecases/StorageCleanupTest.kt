@@ -29,7 +29,7 @@ class StorageCleanupTest : BaseTest() {
         // Given
         val block: () -> Unit = {
             attempted = true
-            throw IllegalStateException("disk on fire")
+            error("disk on fire")
         }
 
         // When
