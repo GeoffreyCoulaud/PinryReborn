@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class EbeanPersistorTest : RepositoryTest() {
-    private val persistor = EbeanPersistor(database)
+    // Exercising EbeanPersistor through the Persistor port exposed by RepositoryTest: the base
+    // wires EbeanPersistor(database), so the concrete adapter under test is the one each method
+    // dispatches to, observed through the narrower surface a holder of Persistor can reach.
 
     @Test
     fun `Given a model, Then save persists it`() {

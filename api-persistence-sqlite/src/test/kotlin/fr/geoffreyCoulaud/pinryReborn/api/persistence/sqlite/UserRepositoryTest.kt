@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class UserRepositoryTest : RepositoryTest() {
-    private val repository = UserRepository(database)
+    private val repository = UserRepository(persistor)
 
     private fun saveUser(name: String = createRandomString()) =
         repository.saveUser(User(id = randomUUID(), name = name, createdAt = storableNow()))

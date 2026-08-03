@@ -16,8 +16,8 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID.randomUUID
 
 class SessionTokenRepositoryTest : RepositoryTest() {
-    private val repository = SessionTokenRepository(database = database)
-    private val userRepository = UserRepository(database = database)
+    private val repository = SessionTokenRepository(persistor = persistor)
+    private val userRepository = UserRepository(persistor = persistor)
 
     private fun createUser(): User =
         userRepository.saveUser(User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()))

@@ -5,11 +5,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.BoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinBoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.BoardQueries
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.withActivePin
-import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Instant
 import java.util.UUID
@@ -21,9 +21,9 @@ import java.util.UUID
 // PinRepository's precedent for the same rule).
 @Suppress("TooManyFunctions")
 class BoardRepository(
-    private val database: Database,
+    private val persistor: Persistor,
 ) : BoardRepositoryInterface {
-    private val sqlRepository = ModelRepository(entityClass = BoardModel::class, database = database)
+    private val sqlRepository = ModelRepository<BoardModel>(persistor = persistor)
 
     // Case-insensitive name sort with id tie-breaker, applied in-memory after the DB fetch
     // (SQLite collation for `lower()` ordering is simplest handled here; sets are small).
@@ -52,7 +52,7 @@ class BoardRepository(
         }
         model.softDeletedAt = at
         model.updatedAt = at
-        database.save(model)
+        persistor.save(model)
         return model.toDomain()
     }
 
@@ -62,7 +62,7 @@ class BoardRepository(
         }
         model.softDeletedAt = null
         model.updatedAt = at
-        database.save(model)
+        persistor.save(model)
         return model.toDomain()
     }
 

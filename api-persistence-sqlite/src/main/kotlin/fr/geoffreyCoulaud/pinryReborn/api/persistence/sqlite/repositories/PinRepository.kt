@@ -14,6 +14,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.PinModelMap
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.PinModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TagModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TagModelMapper.toModel
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinBoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinTagModel
@@ -24,7 +25,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPag
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.PinModelSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.PinQueries
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.withActiveBoard
-import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Instant
 import java.util.UUID
@@ -37,12 +37,11 @@ import java.util.UUID
 // same rule).
 @Suppress("TooManyFunctions")
 class PinRepository(
-    private val database: Database,
+    private val persistor: Persistor,
 ) : PinRepositoryInterface {
     private val sqlRepository =
-        ModelRepository(
-            entityClass = PinModel::class,
-            database = database,
+        ModelRepository<PinModel>(
+            persistor = persistor,
         )
 
     private fun getTagsForPin(pinId: UUID): List<Tag> =
@@ -107,7 +106,7 @@ class PinRepository(
         tags
             .filter { newTagIds.contains(it.id) }
             .map { tag -> PinTagModel(pin = pinModel, tag = tag.toModel()) }
-            .forEach { database.save(it) }
+            .forEach { persistor.save(it) }
     }
 
     private fun savePinBoards(
@@ -141,7 +140,7 @@ class PinRepository(
         boards
             .filter { newBoardIds.contains(it.id) }
             .map { board -> PinBoardModel(pin = pinModel, board = board.toModel()) }
-            .forEach { database.save(it) }
+            .forEach { persistor.save(it) }
     }
 
     // A page of recycled pins is walked from a recycled pivot and a page of active ones from an
@@ -199,7 +198,7 @@ class PinRepository(
         }
         model.softDeletedAt = at
         model.updatedAt = at
-        database.save(model)
+        persistor.save(model)
         return model.toDomain(getTagsForPin(model.id), getBoardsForPin(model.id))
     }
 
@@ -209,7 +208,7 @@ class PinRepository(
         }
         model.softDeletedAt = null
         model.updatedAt = at
-        database.save(model)
+        persistor.save(model)
         return model.toDomain(getTagsForPin(model.id), getBoardsForPin(model.id))
     }
 

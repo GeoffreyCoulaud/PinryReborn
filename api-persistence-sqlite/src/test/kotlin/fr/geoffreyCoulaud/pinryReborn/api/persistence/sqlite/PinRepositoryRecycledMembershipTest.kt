@@ -20,9 +20,9 @@ import java.util.UUID.randomUUID
  * threshold (mirrors `PinRepositoryPaginationTest`'s precedent for the same split).
  */
 class PinRepositoryRecycledMembershipTest : RepositoryTest() {
-    private val pinRepository = PinRepository(database)
-    private val boardRepository = BoardRepository(database)
-    private val userRepository = UserRepository(database)
+    private val pinRepository = PinRepository(persistor)
+    private val boardRepository = BoardRepository(persistor)
+    private val userRepository = UserRepository(persistor)
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(

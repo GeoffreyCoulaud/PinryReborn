@@ -24,7 +24,7 @@ import java.util.UUID.randomUUID
  * direction / has-more / cursor-presence combination can be driven precisely.
  */
 class ModelPaginationHelperTest : RepositoryTest() {
-    private val userRepository = UserRepository(database)
+    private val userRepository = UserRepository(persistor)
     private val strategy = PinModelSortStrategy.CreatedAtAsc()
 
     private fun createUser(): User =

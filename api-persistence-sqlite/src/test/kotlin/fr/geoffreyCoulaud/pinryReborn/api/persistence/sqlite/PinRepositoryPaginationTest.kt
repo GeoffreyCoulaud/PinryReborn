@@ -22,8 +22,8 @@ import java.util.UUID.randomUUID
  * of hanging the suite.
  */
 class PinRepositoryPaginationTest : RepositoryTest() {
-    private val repository = PinRepository(database)
-    private val userRepository = UserRepository(database)
+    private val repository = PinRepository(persistor)
+    private val userRepository = UserRepository(persistor)
 
     private val tiedPinCount = 5
     private val pageSize = 2

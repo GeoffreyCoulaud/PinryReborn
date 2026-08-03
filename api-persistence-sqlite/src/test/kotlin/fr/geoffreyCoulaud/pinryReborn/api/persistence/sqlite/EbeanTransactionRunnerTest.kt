@@ -27,8 +27,8 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
     private val queue = EbeanTaskQueue(database)
     private val downloads = EbeanImageDownloadRepository(database)
     private val images = EbeanImageRepository(database)
-    private val userRepository = UserRepository(database)
-    private val pinRepository = PinRepository(database)
+    private val userRepository = UserRepository(persistor)
+    private val pinRepository = PinRepository(persistor)
     private val now = Instant.parse("2026-07-10T00:00:00Z")
 
     private fun newDownloadTask(pinId: UUID) =

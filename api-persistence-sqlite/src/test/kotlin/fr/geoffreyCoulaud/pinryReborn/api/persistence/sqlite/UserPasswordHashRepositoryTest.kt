@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
 
 class UserPasswordHashRepositoryTest : RepositoryTest() {
-    private val users = UserRepository(database = database)
-    private val repository = UserPasswordHashRepository(database = database)
+    private val users = UserRepository(persistor = persistor)
+    private val repository = UserPasswordHashRepository(persistor = persistor)
 
     private val anInstant = Instant.parse("2026-07-01T00:00:00Z")
 

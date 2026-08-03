@@ -26,9 +26,9 @@ import java.util.UUID.randomUUID
 @Suppress("LargeClass") // Core pin repository suite; feature slices live in sibling classes
 // (PinRepositoryPaginationTest, PinRepositoryRecycledMembershipTest, PinModelSortStrategyTest).
 class PinRepositoryTest : RepositoryTest() {
-    private val repository = PinRepository(database)
-    private val userRepository = UserRepository(database)
-    private val tagRepository = TagRepository(database)
+    private val repository = PinRepository(persistor)
+    private val userRepository = UserRepository(persistor)
+    private val tagRepository = TagRepository(persistor)
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(

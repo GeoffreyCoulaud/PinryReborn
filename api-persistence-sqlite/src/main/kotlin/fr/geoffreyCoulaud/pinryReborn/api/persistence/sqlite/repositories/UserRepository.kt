@@ -2,18 +2,18 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.UserQueries
-import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
 class UserRepository(
-    private val database: Database,
+    private val persistor: Persistor,
 ) : UserRepositoryInterface {
     /**
      * When possible, avoid using the SQL repository directly.
@@ -21,7 +21,7 @@ class UserRepository(
      * Favor usage of ebean's Query Beans.
      * https://ebean.io/docs/query/query-beans
      */
-    private val sqlRepository = ModelRepository(entityClass = UserModel::class, database = database)
+    private val sqlRepository = ModelRepository<UserModel>(persistor = persistor)
 
     override fun findUserById(id: UUID): User? =
         UserQueries.active()
@@ -62,7 +62,7 @@ class UserRepository(
                 .equalTo(user.id)
                 .findOne() ?: return
         model.softDeletedAt = at
-        database.save(model)
+        persistor.save(model)
     }
 
     override fun permanentlyDeleteUser(user: User) {
@@ -71,7 +71,7 @@ class UserRepository(
                 .id
                 .equalTo(user.id)
                 .findOne() ?: return
-        database.delete(model)
+        persistor.delete(model)
     }
 
     override fun findTombstonedUsersSoftDeletedBefore(cutoff: Instant): List<User> =
