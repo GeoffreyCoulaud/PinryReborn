@@ -23,7 +23,7 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 class EbeanTransactionRunnerTest : RepositoryTest() {
-    private val runner: TransactionRunner = EbeanTransactionRunner(database)
+    private val runner: TransactionRunner = EbeanTransactionRunner(transactionControl)
     private val queue = EbeanTaskQueue(database)
     private val downloads = EbeanImageDownloadRepository(database)
     private val images = EbeanImageRepository(database)
