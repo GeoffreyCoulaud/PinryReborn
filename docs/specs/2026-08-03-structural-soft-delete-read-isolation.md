@@ -176,27 +176,36 @@ ambient-transaction checks that move to the ports.
 
 ### 4.5 Structural enforcement
 
-Two Konsist assertions in `ArchitectureKonsistTest`, alongside the soft-delete assertions from 0007:
+Three Konsist assertions and one detekt rule, alongside the soft-delete assertions from 0007:
 
 1. **`Database` confined.** No production file outside the producer and the two port implementations
    imports `io.ebean.Database`.
 2. **No Ebean finder supertype.** No production class has `BeanRepository` or `BeanFinder` as a
-   supertype.
+   supertype (asserted via `withParent` on the bare parent name; `withParentClassOf` is a silent no-op for
+   external types in Konsist 0.17.3, found by the mutation-red).
+3. **No Ebean static facade imported.** No production file imports `io.ebean.DB` or `io.ebean.Ebean`, the
+   static read facades over the default `Database` that need no instance.
+4. **No Ebean static facade call (FQN-proof).** A detekt rule `DatabaseStaticFacadeCall` reports any
+   production call on `io.ebean.DB` / `io.ebean.Ebean`, imported (`DB.find(...)`) or fully-qualified with
+   no import (`io.ebean.DB.find(...)`) - the form the import ban (3) cannot see, the same blind spot
+   `QueryBeanConstructedByQualifiedName` closes for query beans.
 
-Each arrives with the mutation that makes it fail, pasted in its commit body (the project convention for
-a structural assertion): assertion 1 fails while any repository still imports `Database`; assertion 2
-fails while `ModelRepository` still extends `BeanRepository`. The existing assertion from 0007 (no
-recyclable query bean imported outside `queries` / `pagination`) stays and is what keeps the query-bean
-route closed.
+3 and 4 were added after the whole-branch review found the static facades unguarded: they root an
+unfiltered read without holding the confined `Database` instance, so the instance ban (1) does not reach
+them. Each Konsist assertion arrives with the mutation that makes it fail, pasted in its commit body (the
+project convention), and the detekt rule's red is a real production call. The existing assertion from 0007
+(no recyclable query bean imported outside `queries` / `pagination`) stays and keeps the query-bean route
+closed.
 
 ### 4.6 Why the set is closed
 
 A read of a recyclable model needs one of: a `Database` reference, a `BeanRepository` / `BeanFinder`
-supertype, or the recyclable query bean. D3 removes the first everywhere it is not sanctioned; D4 removes
-the second; 0007's assertion removes the third outside `queries`. No fourth handle exists in Ebean's read
-surface, so the closure is by capability, not by listing `find` / `findOne` / `findList` / `sqlQuery` /
-`createQuery` one by one. A read method added to `Database` in a future Ebean version adds no route,
-because it still needs the confined handle to be called.
+supertype, the static facade `io.ebean.DB` / `io.ebean.Ebean`, or the recyclable query bean. D3 removes
+the first everywhere it is not sanctioned; D4 removes the second; the facade ban (assertion 3 + the detekt
+rule) removes the third; 0007's assertion removes the fourth outside `queries`. The closure is by
+capability, not by listing `find` / `findOne` / `findList` / `sqlQuery` / `createQuery` one by one. A read
+method added to `Database` in a future Ebean version adds no route, because it still needs the confined
+instance; a new static facade would need banning, the one ongoing maintenance the closure carries.
 
 ## 5. Testing strategy
 

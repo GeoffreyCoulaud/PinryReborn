@@ -714,6 +714,76 @@ Expected: no output (every query bean now uses its no-arg constructor).
 
 ---
 
+## Task 11: Detekt rule banning the Ebean static read facades (D5, FQN-proof)
+
+The holistic review found that `io.ebean.DB` (and the deprecated `io.ebean.Ebean`) are static read facades
+over the default `Database`: a production class can write `io.ebean.DB.find(BoardModel::class.java, id)` and
+read a recyclable row unfiltered, passing D3/D4 (D3 confines the `Database` instance; the facade needs none).
+D5 closes it: a detekt rule (FQN-proof, the `QueryBeanConstructedByQualifiedName` analog) plus a Konsist
+import ban (Task 12).
+
+**Files:**
+- Create: `detekt-rules/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/detekt/DatabaseStaticFacadeCall.kt`
+- Test: `detekt-rules/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/detekt/DatabaseStaticFacadeCallTest.kt`
+- Modify: `detekt-rules/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/detekt/PinryRuleSetProvider.kt` (register), `config/detekt/detekt.yml` (activate, production scope).
+
+**Goal:** report any production call on `io.ebean.DB` or `io.ebean.Ebean`, whether written `DB.find(...)`
+(imported) or `io.ebean.DB.find(...)` (fully-qualified, no import). Tests are exempt: `RepositoryTest` uses
+`DB.getDefault()`.
+
+**Acceptance:** fires on a violating snippet and on a real production mutation; silent on compliant code and on test sources; registered and activated; 100% branch coverage via `detekt-test`'s `lint()`.
+
+- [ ] **Step 1: Write the failing tests** (`detekt-test` `lint()`). Snippets that each report one finding:
+  `io.ebean.DB.find(Any::class.java)` (FQN) and (with `import io.ebean.DB`) `DB.find(Any::class.java)`;
+  plus the same for `Ebean`. A snippet using the injected `Database` (`database.find(...)`) reports none.
+  Run `./gradlew :detekt-rules:test --tests "DatabaseStaticFacadeCallTest"` -> `compileTestKotlin` fails
+  (rule absent). Paste the red. Commit `test(detekt): DatabaseStaticFacadeCall cases` (test alone).
+- [ ] **Step 2: Implement the rule.** A `Rule` visiting qualified expressions, reporting when the receiver
+  resolves to `io.ebean.DB`/`io.ebean.Ebean` (FQN text) or to a simple name `DB`/`Ebean` the file imports
+  as `io.ebean.DB`/`io.ebean.Ebean`. Follow `SoftDeleteStateFilteredOutsideQueries` and
+  `QueryBeanConstructedByQualifiedName` for structure (companion config key, `report(Finding(...))`). Run the
+  tests -> green. Commit `feat(detekt): ban Ebean static read facades`.
+- [ ] **Step 3: Register and configure.** Add the rule in `PinryRuleSetProvider`; activate it in
+  `config/detekt/detekt.yml` under the `pinry-reborn` set, scoped to production (excludes `**/test/**`,
+  `**/testFixtures/**`, like the existing rules; it applies to every module's main sources).
+- [ ] **Step 4: Mutation-red.** Temporarily add `val x = io.ebean.DB.find(fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel::class.java)` to a production file; run `./gradlew detekt` -> FAIL naming the rule and site; paste verbatim into the commit body; revert; confirm green.
+
+## Task 12: Konsist D5 import ban + D4 style fixes
+
+**Files:** Modify `api-application/src/test/kotlin/.../ArchitectureKonsistTest.kt`.
+
+- [ ] **Step 1: Add D5** (catches the imported form; Task 11's rule catches FQN):
+
+```kotlin
+@Test
+fun `Given production sources, Then nothing imports an Ebean static facade`() {
+    Konsist
+        .scopeFromProduction()
+        .files
+        .withImport { it.name in setOf("io.ebean.DB", "io.ebean.Ebean") }
+        .assertEmpty()
+}
+```
+
+Mutation-red: add `import io.ebean.DB` to a production file; run `./gradlew :api-application:test --tests "ArchitectureKonsistTest"` -> FAIL; paste verbatim; revert; green.
+
+- [ ] **Step 2: D4 style.** Trim the D4 comment to at most two lines with a pointer to ADR 0008 / commit
+  `0ea264d` for the `withParentClassOf` Konsist gotcha (the detail moves to the ADR, Task 14 docs). Add
+  `.trim()` to the parent-name extraction: `parent.name.substringBefore("<").substringAfterLast(".").trim()`.
+- [ ] **Step 3: Commit** `test(architecture): ban Ebean static facade imports, tighten D4` (body carries the mutation-red).
+
+## Task 13: Full gate green + confinement inspections
+
+- [ ] **Step 1:** `./gradlew gate` -> BUILD SUCCESSFUL.
+- [ ] **Step 2:** Inspections, each expected as stated:
+  - `rg -l "import io.ebean\.Database" --glob '**/src/main/**' --glob '!**/build/**'` -> exactly `EbeanDatabaseProducer.kt`, `EbeanPersistor.kt`, `EbeanTransactionControl.kt`.
+  - `rg "BeanRepository|BeanFinder" --glob '**/src/main/**' --glob '!**/build/**'` -> none.
+  - `rg "Q\w+Model\(database\)" --glob '**/src/main/**' --glob '!**/build/**'` -> none.
+  - `rg "io\.ebean\.(DB|Ebean)" --glob '**/src/main/**' --glob '!**/build/**'` -> none.
+- [ ] **Step 3:** `git status --porcelain` empty. No commit (verification).
+
+---
+
 ## Notes for the implementer
 
 - The 7 CRUD repos and the 4 Ebean adapters are `@ApplicationScoped` CDI beans; Quarkus ArC does implicit
