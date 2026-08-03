@@ -645,20 +645,27 @@ with a mutation red.
 Append to `ArchitectureKonsistTest`, with the banned names as a named set:
 
 ```kotlin
+private val ebeanBeanFinderSupertypes = setOf("BeanRepository", "BeanFinder")
+
 @Test
 fun `Given production sources, Then no class extends an Ebean bean finder`() {
     Konsist
         .scopeFromProduction()
         .classes()
-        .withParentClassOf(io.ebean.BeanRepository::class, io.ebean.BeanFinder::class)
+        .withParent { parent ->
+            parent.name.substringBefore("<").substringAfterLast(".") in ebeanBeanFinderSupertypes
+        }
         .assertEmpty()
 }
 ```
 
-The parent-class check (`withParentClassOf`, verified in Konsist 0.17.3's `KoParentClassProviderListExtKt`)
-inspects the declared supertype directly, so it catches `class Foo : io.ebean.BeanRepository<...>()` written
-with a fully-qualified name and no import, which an import ban would miss. The two classes resolve because
-`api-application` has `testImplementation(libs.ebean)`.
+`withParent` matches the parent's bare simple name (stripping generics and package prefix), so it catches
+both an imported `BeanRepository<...>` and a fully-qualified `io.ebean.BeanRepository<...>` written with no
+import (the case an import ban would miss). NOTE: the obvious `withParentClassOf(...)` is a silent no-op in
+Konsist 0.17.3 for external-library types: `parentClasses()` filters through `sourceDeclaration?.isClass`,
+and external types resolve to `KoExternalDeclarationCore`, not `KoClassDeclaration`, so they are dropped and
+the assertion passes whether or not a violation exists. The mutation-red caught this; `withParent` is the
+working form. (Accepted over-breadth: a project class literally named `BeanRepository` would trip it.)
 
 - [ ] **Step 2: Prove it holds something, by mutation**
 
