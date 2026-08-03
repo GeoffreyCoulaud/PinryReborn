@@ -25,7 +25,7 @@ import java.util.UUID.randomUUID
 class EbeanTransactionRunnerTest : RepositoryTest() {
     private val runner: TransactionRunner = EbeanTransactionRunner(transactionControl)
     private val queue = EbeanTaskQueue(persistor, transactionControl)
-    private val downloads = EbeanImageDownloadRepository(database)
+    private val downloads = EbeanImageDownloadRepository(persistor)
     private val images = EbeanImageRepository(database)
     private val userRepository = UserRepository(persistor)
     private val pinRepository = PinRepository(persistor)

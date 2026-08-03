@@ -12,7 +12,7 @@ import java.time.Instant
 import java.util.UUID.randomUUID
 
 class EbeanImageDownloadRepositoryTest : RepositoryTest() {
-    private val repository = EbeanImageDownloadRepository(database)
+    private val repository = EbeanImageDownloadRepository(persistor)
     private val now = Instant.parse("2026-07-10T00:00:00Z")
 
     @Test
