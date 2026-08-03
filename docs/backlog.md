@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-08-02 (the operational-debt wave delivered its nine in-scope items; the resolved entries are removed, the four the wave surfaced are added).
+Last reviewed: 2026-08-03 (the soft-delete read-isolation wave delivered ADR 0008: `io.ebean.Database` confined behind `Persistor`/`TransactionControl`, the `BeanRepository`/`BeanFinder` supertype ban, and the `io.ebean.DB`/`Ebean` static-facade ban. The "`ModelRepository` inherits Ebean finders" item is removed; the ambient-transaction unification and the documented closure residuals are added).
 
 ## How to use this file
 
@@ -52,23 +52,20 @@ Last reviewed: 2026-08-02 (the operational-debt wave delivered its nine in-scope
   association flips `BeanDescriptor.isDeleteByStatement`, which decides how delete queries compile
   (see `docs/adr/0007-single-representation-soft-delete.md`, fact 3). Its own lot, with its own tests.
   New 2026-07-29.
-- **`ModelRepository` inherits Ebean finders that no soft-delete guard can see.** It extends
-  `io.ebean.BeanRepository`, so each of the seven repositories holding one also holds the public
-  `findAll()`, `findById(id)`, `findByIdOrEmpty(id)` and `db()` inherited from `BeanFinder`
-  (`ebean-api/src/main/java/io/ebean/BeanFinder.java:87-116` at tag `v19.0.0`, the nearest tag to the
-  pinned 19.2.0). Each roots a read on the entity class, or hands out the `Database` that can, while
-  naming no query bean and writing no `softDeletedAt` predicate: the two Konsist assertions and the
-  `SoftDeleteStateFilteredOutsideQueries` rule both key on those two shapes, so a recycled row read
-  through one comes back with nothing raised. Nothing calls them today, the field being used for
-  `saveAndReturn` only at all seven sites, so this is an open door rather than a defect. Closing it
-  means `ModelRepository` holding a `Database` instead of extending `BeanRepository` and exposing
-  `saveAndReturn` alone, plus a Konsist assertion barring `BeanRepository` and `BeanFinder` as
-  production supertypes. The cost is small and bounded: one class rewritten around `Database.merge`,
-  which is what `BeanRepository.merge` already delegates to (`BeanRepository.java:200-202`, same tag),
-  and its seven callers untouched. It does not close the wider hole, since anything holding a
-  `Database` can still root an unfiltered query and no rule sees that either. **P2**: the surface is
-  unused, so it costs nothing today and the first call through it is what would make it urgent. New
-  2026-07-29.
+- **Unify the ambient-transaction logic.** `EbeanTaskQueue` and `EbeanImageRepository` hand-roll the
+  "join the ambient transaction or open my own" check (`transactionControl.currentTransaction() != null`)
+  instead of routing through the domain `TransactionRunner.inTransaction { }`. After ADR 0008 they do it
+  over `TransactionControl`; consolidating both behind `TransactionRunner` would remove the duplication,
+  but it changes Ebean's transaction-nesting behaviour and is its own specification with its own tests.
+  Surfaced 2026-08-03 while wiring the ports. **P2**.
+- **Soft-delete read-isolation residuals.** ADR 0008 confines the read capability (the `Database`
+  instance, the `BeanRepository`/`BeanFinder` supertypes, and the `io.ebean.DB`/`Ebean` static facades)
+  so an unfiltered read of a recyclable model is not expressible outside `queries` in any ordinary form.
+  Three narrow residuals remain, documented in `docs/specs/2026-07-29-single-representation-soft-delete.md`
+  section 4.6 and ADR 0008: a `raw("...")` SQL predicate on `any()`, an in-memory read of `softDeletedAt`
+  after a sanctioned query, and a fully-qualified typed reference written without an import (rare). None
+  is exercised today; tracked here so the closure's known limits are visible from the backlog. New
+  2026-08-03.
 - **Authentication attempt limiting (brute force).** `PasswordChanger` verifies the current password
   before changing it, and `POST /api/v1/sessions` verifies it to issue a token: both are password
   oracles, and neither limits attempts. The minimum interval added by P0 block 3 counts **successful**
