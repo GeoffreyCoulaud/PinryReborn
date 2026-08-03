@@ -7,6 +7,7 @@ import com.lemonappdev.konsist.api.ext.list.withImport
 import com.lemonappdev.konsist.api.ext.list.withName
 import com.lemonappdev.konsist.api.ext.list.withNameStartingWith
 import com.lemonappdev.konsist.api.ext.list.withPackage
+import com.lemonappdev.konsist.api.ext.list.withParent
 import com.lemonappdev.konsist.api.ext.list.withParentInterfaceOf
 import com.lemonappdev.konsist.api.ext.list.withPropertyNamed
 import com.lemonappdev.konsist.api.ext.list.withoutName
@@ -186,6 +187,24 @@ class ArchitectureKonsistTest {
             .files
             .withImport { it.name == "io.ebean.Database" }
             .withoutPath("..EbeanDatabaseProducer.kt", "..EbeanPersistor.kt", "..EbeanTransactionControl.kt")
+            .assertEmpty()
+    }
+
+    @Test
+    fun `Given production sources, Then no class extends an Ebean bean finder`() {
+        // `BeanRepository` / `BeanFinder` is the Ebean active-record shape this project moved off
+        // when `ModelRepository` was rewritten onto the `Persistor` port. We match the bare parent
+        // name because `withParentClassOf` silently skips external-library supertypes in Konsist
+        // 0.17.3 (their `sourceDeclaration` is `KoExternalDeclarationCore`, not a class, so
+        // `parentClasses()` filters them out); the bare name catches the type whether it is
+        // written with an import or fully-qualified. `assertEmpty` names every regressor.
+        val ebeanBeanFinderSupertypes = setOf("BeanRepository", "BeanFinder")
+        Konsist
+            .scopeFromProduction()
+            .classes()
+            .withParent { parent ->
+                parent.name.substringBefore("<").substringAfterLast(".") in ebeanBeanFinderSupertypes
+            }
             .assertEmpty()
     }
 }
