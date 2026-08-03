@@ -105,7 +105,7 @@ internal interface Persistor {
     fun save(bean: Any)
     fun delete(bean: Any)
     fun merge(bean: Any)
-    fun <T> reference(type: Class<T>, id: Any): T
+    fun <T : Any> reference(type: Class<T>, id: Any): T
 }
 
 internal interface TransactionControl {
