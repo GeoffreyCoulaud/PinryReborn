@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
 
 class EbeanTransactionControlTest : RepositoryTest() {
-    private val transactionControl = EbeanTransactionControl(database)
 
     @Test
     fun `Given no ambient transaction, Then currentTransaction is null`() {

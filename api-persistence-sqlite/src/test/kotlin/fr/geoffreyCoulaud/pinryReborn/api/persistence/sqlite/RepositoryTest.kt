@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanPersistor
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanTransactionControl
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.ebean.DB
 import io.ebean.Database
@@ -15,6 +16,10 @@ abstract class RepositoryTest {
     // repo under test sees the write capability through the port, not the Database type it is being
     // weaned off. Each access wraps the shared database; EbeanPersistor is stateless.
     protected val persistor: Persistor get() = EbeanPersistor(database)
+
+    // The transaction runner injects TransactionControl in production; tests wire the same adapter here.
+    // Each access wraps the shared database; EbeanTransactionControl is stateless.
+    protected val transactionControl: TransactionControl get() = EbeanTransactionControl(database)
 
     /**
      * An instant an entity can carry across a save-then-read unchanged.
