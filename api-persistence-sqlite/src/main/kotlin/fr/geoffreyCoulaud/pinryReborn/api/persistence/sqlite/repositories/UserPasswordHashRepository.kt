@@ -4,11 +4,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.HashedPassword
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordChangeCollisionException
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserPasswordHashModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserPasswordHashModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserPasswordHashModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserPasswordHashModel
-import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
 import org.sqlite.SQLiteErrorCode
@@ -16,9 +16,9 @@ import org.sqlite.SQLiteException
 
 @ApplicationScoped
 class UserPasswordHashRepository(
-    database: Database,
+    persistor: Persistor,
 ) : UserPasswordHashRepositoryInterface {
-    private val sqlRepository = ModelRepository(entityClass = UserPasswordHashModel::class, database = database)
+    private val sqlRepository = ModelRepository<UserPasswordHashModel>(persistor = persistor)
 
     override fun saveUserPasswordHash(
         user: User,

@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanPersistor
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.ebean.DB
 import io.ebean.Database
@@ -9,6 +10,11 @@ import java.time.Instant
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a shared test base for concrete subclasses.
 abstract class RepositoryTest {
     protected val database: Database get() = DB.getDefault()
+
+    // The CRUD repositories inject Persistor in production; tests wire the same adapter here so a
+    // repo under test sees the write capability through the port, not the Database type it is being
+    // weaned off. Each access wraps the shared database; EbeanPersistor is stateless.
+    protected val persistor: Persistor get() = EbeanPersistor(database)
 
     /**
      * An instant an entity can carry across a save-then-read unchanged.

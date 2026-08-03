@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportAlreadyInProgressException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserDataExportModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserDataExportModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserDataExportModel
@@ -14,7 +15,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserD
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPaginationHelper
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.UserDataExportModelSortStrategy
-import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
 import org.sqlite.SQLiteErrorCode
@@ -29,9 +29,9 @@ import java.util.UUID
 @Suppress("TooManyFunctions")
 @ApplicationScoped
 class UserDataExportRepository(
-    private val database: Database,
+    private val persistor: Persistor,
 ) : UserDataExportRepositoryInterface {
-    private val sqlRepository = ModelRepository(entityClass = UserDataExportModel::class, database = database)
+    private val sqlRepository = ModelRepository<UserDataExportModel>(persistor = persistor)
 
     private fun persist(model: UserDataExportModel): UserDataExport = sqlRepository.saveAndReturn(model).toDomain()
 
@@ -48,7 +48,7 @@ class UserDataExportRepository(
      */
     override fun save(export: UserDataExport): UserDataExport {
         if (export.state != UserDataExportState.PENDING) {
-            val userReference = database.reference(UserModel::class.java, export.userId)
+            val userReference = persistor.reference(UserModel::class.java, export.userId)
             return persist(export.toModel(userReference))
         }
         val model = export.toModel(ActiveUserModels.resolve(export.userId))

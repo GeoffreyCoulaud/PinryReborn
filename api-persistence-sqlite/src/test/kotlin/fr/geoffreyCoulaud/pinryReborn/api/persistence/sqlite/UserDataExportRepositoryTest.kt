@@ -20,8 +20,8 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 class UserDataExportRepositoryTest : RepositoryTest() {
-    private val repository = UserDataExportRepository(database)
-    private val userRepository = UserRepository(database)
+    private val repository = UserDataExportRepository(persistor)
+    private val userRepository = UserRepository(persistor)
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(User(id = randomUUID(), name = createRandomString(), createdAt = storableNow()))

@@ -17,9 +17,9 @@ import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
 class BoardRepositoryTest : RepositoryTest() {
-    private val boardRepository = BoardRepository(database)
-    private val pinRepository = PinRepository(database)
-    private val userRepository = UserRepository(database)
+    private val boardRepository = BoardRepository(persistor)
+    private val pinRepository = PinRepository(persistor)
+    private val userRepository = UserRepository(persistor)
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(

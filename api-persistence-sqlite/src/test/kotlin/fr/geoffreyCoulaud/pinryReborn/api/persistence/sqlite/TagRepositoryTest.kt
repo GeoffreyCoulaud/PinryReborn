@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Test
 import java.util.UUID.randomUUID
 
 class TagRepositoryTest : RepositoryTest() {
-    private val repository = TagRepository(database)
-    private val userRepository = UserRepository(database)
-    private val pinRepository = PinRepository(database)
+    private val repository = TagRepository(persistor)
+    private val userRepository = UserRepository(persistor)
+    private val pinRepository = PinRepository(persistor)
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(

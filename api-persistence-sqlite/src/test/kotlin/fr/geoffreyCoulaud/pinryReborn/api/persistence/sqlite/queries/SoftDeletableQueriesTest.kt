@@ -20,9 +20,9 @@ import java.util.UUID.randomUUID
  * wrong column accessor is the one thing a per-type declaration can get wrong.
  */
 class SoftDeletableQueriesTest : RepositoryTest() {
-    private val userRepository = UserRepository(database)
-    private val boardRepository = BoardRepository(database)
-    private val pinRepository = PinRepository(database)
+    private val userRepository = UserRepository(persistor)
+    private val boardRepository = BoardRepository(persistor)
+    private val pinRepository = PinRepository(persistor)
 
     private fun createAndSaveUser(): User =
         userRepository.saveUser(

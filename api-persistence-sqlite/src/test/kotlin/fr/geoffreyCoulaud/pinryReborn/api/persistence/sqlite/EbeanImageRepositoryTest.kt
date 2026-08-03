@@ -17,8 +17,8 @@ import java.util.UUID.randomUUID
 
 class EbeanImageRepositoryTest : RepositoryTest() {
     private val repository = EbeanImageRepository(database)
-    private val userRepository = UserRepository(database)
-    private val pinRepository = PinRepository(database)
+    private val userRepository = UserRepository(persistor)
+    private val pinRepository = PinRepository(persistor)
 
     private fun savedPin(): Pin {
         val user = userRepository.saveUser(User(randomUUID(), createRandomString(), createdAt = storableNow()))
