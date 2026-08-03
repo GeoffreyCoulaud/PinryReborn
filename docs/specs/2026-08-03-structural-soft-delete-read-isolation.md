@@ -1,7 +1,7 @@
 # Structural isolation of soft-delete reads (closing the open routes after 0007)
 
 Date: 2026-08-03
-Status: Draft (pending approval)
+Status: Approved 2026-08-03
 Branch: `refactor/soft-delete-read-isolation`
 ADR: `docs/adr/0008-structural-soft-delete-read-isolation.md`
 Extends: `docs/adr/0007-single-representation-soft-delete.md`, whose decision 5 this leaves in force.
