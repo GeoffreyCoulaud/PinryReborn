@@ -881,3 +881,9 @@ pinry-reborn:
     active: true
     # testFixtures hosts the TestTime seam; test sources take that fixed instant instead.
     excludes: ['**/testFixtures/**']
+  DatabaseStaticFacadeCall:
+    active: true
+    # io.ebean.DB / io.ebean.Ebean are static read facades over the default Database; a call on either
+    # roots an unfiltered read without the confined instance. Applies to every module's production
+    # sources; tests are exempt because RepositoryTest legitimately calls DB.getDefault().
+    excludes: ['**/test/**', '**/testFixtures/**']
