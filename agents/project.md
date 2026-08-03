@@ -320,6 +320,11 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   siblings, one file per module name) because each module's
   `detektBaseline` task rewrites rather than merges the target file. The path degrades gracefully
   when the file is absent.
+- **A changed detekt rule is not picked up by a live Gradle daemon.** The daemon caches the
+  `detektPlugins` classpath, so after editing a rule in `detekt-rules` the gate run by that same
+  daemon loads the old rules and passes whether or not the new one fires: a false green. Run
+  `./gradlew --stop` (or pass `--no-daemon`) after a detekt-rule change before trusting a local
+  gate. CI is unaffected: each job starts a fresh daemon.
 
 ## Modules
 
