@@ -52,6 +52,13 @@ force the caller to name `active` / `recycled` / `any`.
 5. **0007 decision 5 stands.** The guarantee remains build-time, not compile-time proof of the result.
    Routes 2 (raw SQL) and 3 (in-memory) stay open as 0007 recorded; this closes route 1 and its wider
    shape.
+6. **The static read facades `io.ebean.DB` and `io.ebean.Ebean` are banned from production.** They are a
+   read entry point that needs no `Database` instance (they operate on the default server), so confining
+   the instance (decision 1) does not reach them: `io.ebean.DB.find(BoardModel::class.java, id)` reads a
+   recyclable row unfiltered while passing the instance ban. A Konsist import ban plus a detekt rule
+   (`DatabaseStaticFacadeCall`, FQN-proof - the `QueryBeanConstructedByQualifiedName` analog) close both the
+   imported and the fully-qualified forms. Surfaced by the whole-branch review after the instance
+   confinement landed; the closure spans instance, supertypes, facades and query beans.
 
 ## Consequences
 
