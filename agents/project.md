@@ -181,8 +181,13 @@ The three values `modules/backend.md` expects this file to declare.
   rule hold it: the assertions derive their reach from the marker, and the rule keys on the
   `softDeletedAt` property name, which is the marker's single member, with its reach set by the path
   filters in `config/detekt/detekt.yml`. Either way a newly recyclable model is covered by declaring
-  itself. The `pagination` package is exempt from the import assertion: it names the query bean in a
-  supertype and in every signature without ever constructing one.
+  itself. That filtering is backed by the capability confinement of
+  `docs/adr/0008-structural-soft-delete-read-isolation.md`: the `io.ebean.Database` instance is
+  confined behind `Persistor` and `TransactionControl`, and the `BeanRepository` / `BeanFinder`
+  supertypes and the `io.ebean.DB` / `io.ebean.Ebean` static facades are barred, so no read can be
+  rooted without the query bean the assertions above guard. The `pagination` package is exempt from
+  the import assertion: it names the query bean in a supertype and in every signature without ever
+  constructing one.
 - **Dependencies are injected by type, not by a string qualifier** (decided 2026-07-27): a new
   dependency is a dedicated type that carries its role (e.g. `PeriodicScheduler`, `WorkerExecutor`),
   and the container provides the instance. `@Identifier("...")` string qualifiers are not used for new

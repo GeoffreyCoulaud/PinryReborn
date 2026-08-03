@@ -178,10 +178,8 @@ class ArchitectureKonsistTest {
 
     @Test
     fun `Given production sources, Then io_ebean Database is confined to its sanctioned homes`() {
-        // The `io.ebean.Database` entry point is the one coupling that pulled a controller-shaped
-        // concern into the persistence adapter; once it escapes its three sanctioned homes it tends
-        // to spread. The path patterns carry the `..` wildcard prefix on purpose: Konsist anchors a
-        // bare name with an end match and would miss the `.kt` suffix on the sanctioned files.
+        // `io.ebean.Database` is confined to three sanctioned homes (ADR 0008); the `..` wildcard
+        // prefix on the paths is deliberate, since Konsist end-matches a bare name and misses `.kt`.
         Konsist
             .scopeFromProduction()
             .files
@@ -206,9 +204,8 @@ class ArchitectureKonsistTest {
 
     @Test
     fun `Given production sources, Then nothing imports an Ebean static facade`() {
-        // The static read facades `io.ebean.DB` and `io.ebean.Ebean` operate on the default server
-        // and need no `Database` instance, so confining the instance does not reach them; the
-        // detekt rule `DatabaseStaticFacadeCall` closes the fully-qualified form (ADR 0008 decision 6).
+        // The static facades `io.ebean.DB` / `io.ebean.Ebean` run on the default server, so the `Database`
+        // confinement does not reach them; `DatabaseStaticFacadeCall` closes the call form (ADR 0008).
         Konsist
             .scopeFromProduction()
             .files
