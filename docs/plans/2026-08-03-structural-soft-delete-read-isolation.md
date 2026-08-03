@@ -251,14 +251,14 @@ class EbeanTransactionControlTest : RepositoryTest() {
     @Test
     fun `Given beginTransaction, Then it returns a transaction that currentTransaction sees`() {
         // Given
-        val transaction = transactionControl.beginTransaction()
+        transactionControl.beginTransaction().use { transaction ->
+            // When
+            val current = transactionControl.currentTransaction()
 
-        // When
-        val current = transactionControl.currentTransaction()
-
-        // Then
-        assertNotNull(current)
-        transaction.commit()
+            // Then
+            assertNotNull(current)
+            transaction.commit()
+        }
     }
 }
 ```
@@ -362,7 +362,8 @@ internal class ModelRepository<T : BaseModel>(
 ```
 
 The `entityClass: KClass<T>` parameter and the `BeanRepository` supertype are gone; `merge` resolves the
-descriptor from the bean's class, so `entityClass` was never needed.
+descriptor from the bean's class, so `entityClass` was never needed. Without it to anchor `T`, each
+construction states the type argument explicitly (`ModelRepository<BoardModel>(persistor = persistor)`).
 
 - [ ] **Step 2: Switch BoardRepository (template for the others)**
 
@@ -376,7 +377,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 class BoardRepository(
     private val persistor: Persistor,
 ) : BoardRepositoryInterface {
-    private val sqlRepository = ModelRepository(persistor = persistor)
+    private val sqlRepository = ModelRepository<BoardModel>(persistor = persistor)
 ```
 
 Direct writes: `database.save(model)` becomes `persistor.save(model)` at `BoardRepository.kt:55` (softDelete)
@@ -394,8 +395,9 @@ and `:65` (restore). Everything else (the `BoardQueries` and `QPinBoardModel` re
 | `UserPasswordHashRepository.kt:21` | `database` to `persistor` | `ModelRepository(persistor = persistor)` | none |
 
 For each: delete the `import io.ebean.Database` line, add `import ...persistence.sqlite.Persistor`, change
-the constructor parameter, change the `ModelRepository(...)` construction, and move the listed direct calls.
-Leave every `Q*Model()` read and write construction untouched (they are no-arg and unaffected).
+the constructor parameter, change the `ModelRepository(...)` construction to anchor `T` with the repo's model
+type (for example `ModelRepository<PinModel>(persistor = persistor)`), and move the listed direct calls.
+Leave every `Q*Model()` read and write construction untouched: the CRUD repos use only no-arg query beans.
 
 - [ ] **Step 4: Run the repository tests (safety net)**
 
@@ -470,8 +472,8 @@ git commit -m "refactor(persistence): EbeanTransactionRunner uses TransactionCon
 
 **Interfaces:** Consumes `Persistor` and `TransactionControl`.
 
-**Acceptance:** writes go through `Persistor`, transaction boundaries through `TransactionControl`; the
-`QTaskModel()` CAS updates (no-arg) are untouched; task-queue tests green.
+**Acceptance:** writes go through `Persistor`, transaction boundaries through `TransactionControl`; every
+`QTaskModel(database)` construction becomes `QTaskModel()`; task-queue tests green.
 
 - [ ] **Step 1: Switch the dependency and call sites**
 
@@ -482,7 +484,9 @@ git commit -m "refactor(persistence): EbeanTransactionRunner uses TransactionCon
 - `database.beginTransaction()` at `:48` and `:88` to `transactionControl.beginTransaction()`.
 - `database.currentTransaction()` at `:45` to `transactionControl.currentTransaction()`.
 - `database.save(model)` at `:76, :110, :119` to `persistor.save(model)`.
-- Leave every `QTaskModel()...update()` / `.delete()` site as-is (no-arg constructions, default database).
+- Every `QTaskModel(database)` construction (9 sites: `:58, :80, :82, :90, :204, :214, :223, :235, :244`)
+  to `QTaskModel()`. Like the image query beans, the explicit `database` is redundant under
+  `defaultDatabase(true)`.
 
 - [ ] **Step 2: Run the task-queue tests**
 
@@ -512,7 +516,7 @@ writes via `Persistor`; image-download tests green.
 
 - Constructor: `private val database: Database` to `private val persistor: Persistor`.
 - Imports: drop `import io.ebean.Database`; add `import ...persistence.sqlite.Persistor`.
-- `QImageDownloadModel(database)` at `:22` and `:52` to `QImageDownloadModel()` (default database, same
+- `QImageDownloadModel(database)` at `:22, :32, :52, :56` to `QImageDownloadModel()` (default database, same
   instance under `defaultDatabase(true)`).
 - `database.save(model)` at `:27` to `persistor.save(model)`.
 
@@ -571,8 +575,9 @@ git commit -m "refactor(persistence): EbeanImageRepository uses Persistor and Tr
 - Modify: `api-application/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/application/ArchitectureKonsistTest.kt`
 
 **Acceptance:** the assertion holds that `io.ebean.Database` is imported only in `EbeanDatabaseProducer`,
-`EbeanPersistor` and `EbeanTransactionControl`. It is introduced with a mutation that makes it fail, pasted
-in the commit (the project convention).
+`EbeanPersistor` and `EbeanTransactionControl`. The path patterns need the `..` wildcard prefix: Konsist
+anchors a bare name with an end match and misses the `.kt` suffix (verified against Konsist 0.17.3). Step 3
+confirms the three sanctioned files are excluded. Introduced with a mutation red.
 
 - [ ] **Step 1: Add the assertion**
 
@@ -585,7 +590,7 @@ fun `Given production sources, Then io_ebean Database is confined to its sanctio
         .scopeFromProduction()
         .files
         .withImport { it.name == "io.ebean.Database" }
-        .withoutPath("EbeanDatabaseProducer", "EbeanPersistor", "EbeanTransactionControl")
+        .withoutPath("..EbeanDatabaseProducer.kt", "..EbeanPersistor.kt", "..EbeanTransactionControl.kt")
         .assertEmpty()
 }
 ```
@@ -616,9 +621,8 @@ git commit -m "test(architecture): confine io.ebean.Database to its sanctioned h
 **Files:**
 - Modify: `api-application/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/application/ArchitectureKonsistTest.kt`
 
-**Acceptance:** `io.ebean.BeanRepository` and `io.ebean.BeanFinder` are imported nowhere in production
-(an import ban, which trivially implies no class extends either; chosen for Konsist-API consistency with D3
-and the existing import assertions). Introduced with a mutation red.
+**Acceptance:** no production class has `BeanRepository` or `BeanFinder` as its parent class. Introduced
+with a mutation red.
 
 - [ ] **Step 1: Add the assertion**
 
@@ -626,24 +630,26 @@ Append to `ArchitectureKonsistTest`, with the banned names as a named set:
 
 ```kotlin
 @Test
-fun `Given production sources, Then nothing imports an Ebean bean finder`() {
+fun `Given production sources, Then no class extends an Ebean bean finder`() {
     Konsist
         .scopeFromProduction()
-        .files
-        .withImport { it.name in EBEAN_BEAN_FINDER_IMPORTS }
+        .classes()
+        .withParentClassOf(io.ebean.BeanRepository::class, io.ebean.BeanFinder::class)
         .assertEmpty()
-}
-
-private companion object {
-    private val EBEAN_BEAN_FINDER_IMPORTS = setOf("io.ebean.BeanRepository", "io.ebean.BeanFinder")
 }
 ```
 
+The parent-class check (`withParentClassOf`, verified in Konsist 0.17.3's `KoParentClassProviderListExtKt`)
+inspects the declared supertype directly, so it catches `class Foo : io.ebean.BeanRepository<...>()` written
+with a fully-qualified name and no import, which an import ban would miss. The two classes resolve because
+`api-application` has `testImplementation(libs.ebean)`.
+
 - [ ] **Step 2: Prove it holds something, by mutation**
 
-Temporarily add `import io.ebean.BeanRepository` to `ModelRepository.kt`. Run:
-`./gradlew :api-application:test --tests "ArchitectureKonsistTest"`
-Expected: FAIL, reporting `ModelRepository.kt`. Paste into the commit body, then revert the mutation.
+Temporarily make a production class extend `BeanRepository` (for instance add
+` : io.ebean.BeanRepository<java.util.UUID, fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TagModel>`
+to a throwaway class). Run: `./gradlew :api-application:test --tests "ArchitectureKonsistTest"`
+Expected: FAIL, reporting that class. Paste into the commit body, then revert the mutation.
 
 - [ ] **Step 3: Confirm it passes on the real tree**
 
@@ -654,7 +660,7 @@ Expected: PASS.
 
 ```bash
 git add api-application/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/application/ArchitectureKonsistTest.kt
-git commit -m "test(architecture): bar Ebean bean finders from production imports"
+git commit -m "test(architecture): bar Ebean bean finders as production supertypes"
 ```
 
 ---
@@ -677,6 +683,9 @@ Expected: exactly three files: `EbeanDatabaseProducer.kt`, `EbeanPersistor.kt`, 
 
 Run: `rg "BeanRepository|BeanFinder" --glob '**/src/main/**' --glob '!**/build/**'`
 Expected: no output.
+
+Run: `rg "Q\w+Model\(database\)" --glob '**/src/main/**' --glob '!**/build/**'`
+Expected: no output (every query bean now uses its no-arg constructor).
 
 - [ ] **Step 3: No commit (verification only); the tree is already clean from Task 9**
 

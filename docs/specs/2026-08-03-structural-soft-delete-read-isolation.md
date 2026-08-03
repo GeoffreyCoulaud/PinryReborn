@@ -46,9 +46,10 @@ variant needs listing.
 - Every site that today holds `Database` switches to the port its role needs: write-only repositories
   take `Persistor`; `EbeanTransactionRunner`, `EbeanTaskQueue` and `EbeanImageRepository` take
   `TransactionControl` (the last two take both).
-- `QImageModel(database)` and `QImageDownloadModel(database)` become `QImageModel()` /
-  `QImageDownloadModel()`. The generated no-arg constructor resolves to the default `Database`
-  (`QImageModel.kt:45-46` in the kapt output), which `EbeanDatabaseProducer` sets with
+- Every query bean constructed with an explicit `database` becomes its no-arg form: `QImageModel`,
+  `QImageDownloadModel` and `QTaskModel` (17 sites across `EbeanImageRepository`,
+  `EbeanImageDownloadRepository` and `EbeanTaskQueue`). The generated no-arg constructor resolves to the
+  default `Database` (`QImageModel.kt:45-46` in the kapt output), which `EbeanDatabaseProducer` sets with
   `defaultDatabase(true)` (`EbeanDatabaseProducer.kt:21`), so the two forms resolve to the same instance.
 - Two Konsist assertions: the `io.ebean.Database` type is imported only in the producer and the two port
   implementations; and no production class extends `BeanRepository` or `BeanFinder`.
@@ -137,7 +138,7 @@ today; after the switch, `Database` lives in three files.
 | `BoardRepository`, `PinRepository`, `UserRepository`, `TagRepository`, `SessionTokenRepository`, `UserDataExportRepository`, `UserPasswordHashRepository` | `Database` | `Persistor` |
 | `EbeanImageRepository` | `Database` (write, tx, image query beans) | `Persistor` + `TransactionControl` |
 | `EbeanImageDownloadRepository` | `Database` (write, image query beans) | `Persistor` |
-| `EbeanTaskQueue` | `Database` (write, tx) | `Persistor` + `TransactionControl` |
+| `EbeanTaskQueue` | `Database` (write, tx, `QTaskModel`) | `Persistor` + `TransactionControl` |
 | `EbeanTransactionRunner` | `Database` (tx) | `TransactionControl` |
 
 ### 4.3 `ModelRepository`
@@ -154,10 +155,12 @@ internal class ModelRepository<T : BaseModel>(
 from the bean's class). `saveAndReturn` keeps its body, delegating `merge` to the port. The seven callers
 stop passing `XModel::class`.
 
-### 4.4 Dropping the redundant `database` from image query beans
+### 4.4 Dropping the redundant `database` from query beans
 
-`EbeanImageRepository` and `EbeanImageDownloadRepository` construct `QImageModel(database)` /
-`QImageDownloadModel(database)`. The generated source settles that this is redundant:
+Three repositories construct query beans with an explicit `database`: `EbeanImageRepository`
+(`QImageModel(database)`, 4 sites), `EbeanImageDownloadRepository` (`QImageDownloadModel(database)`, 4
+sites) and `EbeanTaskQueue` (`QTaskModel(database)`, 9 sites). The generated source settles that the
+explicit argument is redundant:
 
 - `QImageModel.kt:45-46` (kapt output): `/** Construct using the default Database. */ constructor() :
   super(ImageModel::class.java)`.
@@ -166,10 +169,10 @@ stop passing `XModel::class`.
 - `EbeanDatabaseProducer.kt:21`: `.defaultDatabase(true)`, so the default `Database` is the produced one.
 
 The no-arg and the explicit forms resolve to the same instance; behaviour is identical for query
-execution and transaction binding (single server). The eight sites become `QImageModel()` /
-`QImageDownloadModel()`, after which the two image repositories no longer need `Database` for query
-construction, only for the writes and (for `EbeanImageRepository`) the ambient-transaction check that
-move to the ports.
+execution and transaction binding (single server). The 17 sites become `QImageModel()` /
+`QImageDownloadModel()` / `QTaskModel()`, after which the three repositories no longer need `Database`
+for query construction, only for the writes and (for `EbeanImageRepository` and `EbeanTaskQueue`) the
+ambient-transaction checks that move to the ports.
 
 ### 4.5 Structural enforcement
 
@@ -227,9 +230,9 @@ order: integration, use-case, repository.
   its value is keeping `Database` confined. Without it, `EbeanTransactionRunner`, `EbeanTaskQueue` and
   `EbeanImageRepository` would hold `Database` for transactions and the allowlist would widen from three
   files to six, weakening D3.
-- **The image query-bean simplification rests on a generated-source reading.** Verified against the kapt
-  output at the pinned version (section 4.4), not against recall. If a future Ebean version changed the
-  default-server resolution, the Konsist confinement would still hold; only the simplification's
+- **The query-bean-with-database simplification rests on a generated-source reading.** Verified against the
+  kapt output at the pinned version (section 4.4), not against recall. If a future Ebean version changed
+  the default-server resolution, the Konsist confinement would still hold; only the simplification's
   equivalence would need re-checking.
 - **The ambient-transaction logic is not unified.** `EbeanTaskQueue` and `EbeanImageRepository` keep
   their "join ambient or open my own" check, now over `TransactionControl`. Unifying it through
