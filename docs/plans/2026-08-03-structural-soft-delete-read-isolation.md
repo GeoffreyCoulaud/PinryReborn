@@ -174,7 +174,7 @@ interface Persistor {
     fun save(bean: Any)
     fun delete(bean: Any)
     fun merge(bean: Any)
-    fun <T> reference(type: Class<T>, id: Any): T
+    fun <T : Any> reference(type: Class<T>, id: Any): T
 }
 ```
 
@@ -190,12 +190,28 @@ import jakarta.enterprise.context.ApplicationScoped
 class EbeanPersistor(
     private val database: Database,
 ) : Persistor {
-    override fun save(bean: Any) = database.save(bean)
-    override fun delete(bean: Any) = database.delete(bean)
-    override fun merge(bean: Any) = database.merge(bean)
-    override fun <T> reference(type: Class<T>, id: Any): T = database.reference(type, id)
+    override fun save(bean: Any) {
+        database.save(bean)
+    }
+
+    override fun delete(bean: Any) {
+        database.delete(bean)
+    }
+
+    override fun merge(bean: Any) {
+        database.merge(bean)
+    }
+
+    override fun <T : Any> reference(type: Class<T>, id: Any): T {
+        return database.reference(type, id)
+    }
 }
 ```
+
+Two Kotlin/Ebean interop points, both verified by compilation: block bodies (not expression)
+because `Database.delete` returns a Java `boolean` an expression body would infer as the override's
+return type; and the `: Any` bound on `reference`, because Ebean's `Database.reference` is
+non-null-bounded in Kotlin, so the unbounded `<T>` does not compile (`Class<T>` vs `Class<T & Any>`).
 
 - [ ] **Step 5: Run the test to verify it passes (green)**
 
