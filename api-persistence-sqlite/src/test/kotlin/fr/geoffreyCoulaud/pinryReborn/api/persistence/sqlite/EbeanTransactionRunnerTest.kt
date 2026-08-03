@@ -26,7 +26,7 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
     private val runner: TransactionRunner = EbeanTransactionRunner(transactionControl)
     private val queue = EbeanTaskQueue(persistor, transactionControl)
     private val downloads = EbeanImageDownloadRepository(persistor)
-    private val images = EbeanImageRepository(database)
+    private val images = EbeanImageRepository(persistor, transactionControl)
     private val userRepository = UserRepository(persistor)
     private val pinRepository = PinRepository(persistor)
     private val now = Instant.parse("2026-07-10T00:00:00Z")
