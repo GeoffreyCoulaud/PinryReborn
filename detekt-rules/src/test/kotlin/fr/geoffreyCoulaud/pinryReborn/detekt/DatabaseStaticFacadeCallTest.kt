@@ -10,7 +10,7 @@ class DatabaseStaticFacadeCallTest {
 
     @Test
     fun `Given a fully-qualified call on io ebean DB, Then it is reported`() {
-        // Given: the shape that hides the import, which the Konsist import ban cannot see
+        // Given: the shape that hides the import, which the D5 Konsist import ban cannot see
         val code =
             """
             class Repository {
@@ -21,8 +21,7 @@ class DatabaseStaticFacadeCallTest {
         // When
         val findings = rule.lint(code)
 
-        // Then: the whole facade call is reported, and the message names the facade, so a rule
-        // reporting the selector or the wrong receiver fails here
+        // Then: the whole facade call is reported, and the message names the facade
         val finding = findings.single()
         assertEquals(2, finding.entity.location.source.line)
         assertEquals(
@@ -56,8 +55,10 @@ class DatabaseStaticFacadeCallTest {
     }
 
     @Test
-    fun `Given an imported call on DB, Then it is reported`() {
-        // Given: the ordinary imported shape, which the Konsist import ban also catches
+    fun `Given an imported call on DB, Then this rule leaves it to the D5 import ban`() {
+        // Given: the ordinary imported shape. D5 (Konsist) bars `import io.ebean.DB`, so this form
+        // never reaches production; this rule deliberately does not double-handle it, which keeps the
+        // rule free of the import-list branch that branch coverage could not reach from lint fixtures.
         val code =
             """
             import io.ebean.DB
@@ -71,27 +72,7 @@ class DatabaseStaticFacadeCallTest {
         val findings = rule.lint(code)
 
         // Then
-        val finding = findings.single()
-        assertEquals(4, finding.entity.location.source.line)
-    }
-
-    @Test
-    fun `Given an imported call on Ebean, Then it is reported`() {
-        // Given
-        val code =
-            """
-            import io.ebean.Ebean
-
-            class Repository {
-                fun find() = Ebean.find(Any::class.java)
-            }
-            """.trimIndent()
-
-        // When
-        val findings = rule.lint(code)
-
-        // Then
-        assertEquals(1, findings.size)
+        assertEquals(0, findings.size)
     }
 
     @Test
@@ -112,9 +93,8 @@ class DatabaseStaticFacadeCallTest {
     }
 
     @Test
-    fun `Given a call on a receiver merely named DB the file does not import, Then nothing is reported`() {
-        // Given: the rule keys on a name, so a project-local DB with no io.ebean import is not the
-        // facade and must not fire
+    fun `Given a call on a receiver merely named DB, Then nothing is reported`() {
+        // Given: a project-local DB is not the facade; the rule matches the fully-qualified text only
         val code =
             """
             object DB {
