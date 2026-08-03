@@ -174,4 +174,18 @@ class ArchitectureKonsistTest {
             .withImport { it.name.substringAfterLast(".") in queryBeanNames }
             .assertEmpty()
     }
+
+    @Test
+    fun `Given production sources, Then io_ebean Database is confined to its sanctioned homes`() {
+        // The `io.ebean.Database` entry point is the one coupling that pulled a controller-shaped
+        // concern into the persistence adapter; once it escapes its three sanctioned homes it tends
+        // to spread. The path patterns carry the `..` wildcard prefix on purpose: Konsist anchors a
+        // bare name with an end match and would miss the `.kt` suffix on the sanctioned files.
+        Konsist
+            .scopeFromProduction()
+            .files
+            .withImport { it.name == "io.ebean.Database" }
+            .withoutPath("..EbeanDatabaseProducer.kt", "..EbeanPersistor.kt", "..EbeanTransactionControl.kt")
+            .assertEmpty()
+    }
 }
