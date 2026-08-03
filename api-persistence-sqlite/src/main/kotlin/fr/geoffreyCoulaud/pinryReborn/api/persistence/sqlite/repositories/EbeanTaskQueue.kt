@@ -5,10 +5,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.Task
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.TransactionControl
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TaskModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TaskModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QTaskModel
-import io.ebean.Database
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.Duration
 import java.time.Instant
@@ -24,9 +25,9 @@ import java.util.UUID.randomUUID
  * on the same row.
  *
  * [enqueue]'s dedup check-then-insert and [claimNext]'s select-then-update are each wrapped in a
- * single explicit [io.ebean.Transaction] (`database.beginTransaction()`), so on the single-connection
- * SQLite datasource the whole read+write pair serializes atomically instead of racing across two
- * separate auto-commit statements.
+ * single explicit [io.ebean.Transaction] (`transactionControl.beginTransaction()`), so on the
+ * single-connection SQLite datasource the whole read+write pair serializes atomically instead of
+ * racing across two separate auto-commit statements.
  */
 @ApplicationScoped
 // TaskQueueInterface itself has exactly 11 methods (the port's minimal surface); a full,
@@ -35,17 +36,18 @@ import java.util.UUID.randomUUID
 // adapter across artificial classes for no readability gain.
 @Suppress("TooManyFunctions")
 class EbeanTaskQueue(
-    private val database: Database,
+    private val persistor: Persistor,
+    private val transactionControl: TransactionControl,
 ) : TaskQueueInterface {
     // Ambient-transaction-aware: when a TransactionRunner already opened a transaction on this thread,
     // join it (so the enqueue commits atomically with the caller's other writes) instead of opening
     // (and committing) our own. Only when there is no ambient transaction do we open our own, so the
     // dedup check-then-insert still serializes atomically on the single-connection SQLite datasource.
     override fun enqueue(task: NewTask): Task =
-        if (database.currentTransaction() != null) {
+        if (transactionControl.currentTransaction() != null) {
             enqueueWithin(task)
         } else {
-            database.beginTransaction().use { transaction ->
+            transactionControl.beginTransaction().use { transaction ->
                 val result = enqueueWithin(task)
                 transaction.commit()
                 result
@@ -55,7 +57,7 @@ class EbeanTaskQueue(
     private fun enqueueWithin(task: NewTask): Task {
         if (task.dedupKey != null) {
             val existing =
-                QTaskModel(database)
+                QTaskModel()
                     .dedupKey.equalTo(task.dedupKey)
                     .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
                     .findOne()
@@ -73,21 +75,21 @@ class EbeanTaskQueue(
                 maxAttempts = task.maxAttempts,
                 dedupKey = task.dedupKey,
             )
-        database.save(model)
+        persistor.save(model)
         return model.toDomain()
     }
 
-    override fun findById(id: UUID): Task? = QTaskModel(database).id.equalTo(id).findOne()?.toDomain()
+    override fun findById(id: UUID): Task? = QTaskModel().id.equalTo(id).findOne()?.toDomain()
 
-    override fun countByState(state: TaskState): Int = QTaskModel(database).state.equalTo(state.name).findCount()
+    override fun countByState(state: TaskState): Int = QTaskModel().state.equalTo(state.name).findCount()
 
     override fun claimNext(
         now: Instant,
         leaseDuration: Duration,
     ): ClaimedTask? =
-        database.beginTransaction().use { transaction ->
+        transactionControl.beginTransaction().use { transaction ->
             val model =
-                QTaskModel(database)
+                QTaskModel()
                     .state.equalTo(TaskState.PENDING.name)
                     .availableAt.le(now)
                     .orderBy("priority desc, availableAt asc, id asc")
@@ -107,7 +109,7 @@ class EbeanTaskQueue(
                 model.leaseId = null
                 model.leaseExpiresAt = null
                 model.terminalStateAt = now
-                database.save(model)
+                persistor.save(model)
                 transaction.commit()
                 return@use null
             }
@@ -116,7 +118,7 @@ class EbeanTaskQueue(
             model.leaseId = leaseId
             model.leaseExpiresAt = now.plus(leaseDuration)
             model.attempts += 1
-            database.save(model)
+            persistor.save(model)
             transaction.commit()
             ClaimedTask(
                 id = model.id,
@@ -201,7 +203,7 @@ class EbeanTaskQueue(
         id: UUID,
         now: Instant,
     ): Boolean =
-        QTaskModel(database)
+        QTaskModel()
             .id.equalTo(id)
             .state.equalTo(TaskState.PENDING.name)
             .asUpdate()
@@ -211,7 +213,7 @@ class EbeanTaskQueue(
             .update() > 0
 
     override fun requestCancel(id: UUID): Boolean =
-        QTaskModel(database)
+        QTaskModel()
             .id.equalTo(id)
             .state.equalTo(TaskState.RUNNING.name)
             .asUpdate()
@@ -220,7 +222,7 @@ class EbeanTaskQueue(
             .update() > 0
 
     override fun reapExpired(now: Instant): Int =
-        QTaskModel(database)
+        QTaskModel()
             .state.equalTo(TaskState.RUNNING.name)
             .leaseExpiresAt.le(now)
             .asUpdate()
@@ -232,7 +234,7 @@ class EbeanTaskQueue(
             .update()
 
     override fun deleteTerminalBefore(cutoff: Instant): Int =
-        QTaskModel(database)
+        QTaskModel()
             .state.isIn(TaskState.SUCCEEDED.name, TaskState.DEAD.name, TaskState.CANCELLED.name)
             .terminalStateAt.lessThan(cutoff)
             .delete()
@@ -241,5 +243,5 @@ class EbeanTaskQueue(
     private fun leaseGuard(
         id: UUID,
         leaseId: String,
-    ) = QTaskModel(database).id.equalTo(id).leaseId.equalTo(leaseId)
+    ) = QTaskModel().id.equalTo(id).leaseId.equalTo(leaseId)
 }
