@@ -44,10 +44,11 @@ force the caller to name `active` / `recycled` / `any`.
 3. **`ModelRepository` no longer extends `BeanRepository`.** It holds `Persistor` and exposes
    `saveAndReturn` alone; the inherited finder surface leaves with the superclass. A Konsist assertion
    bars `BeanRepository` and `BeanFinder` as production supertypes, so the route does not reopen.
-4. **The image query beans drop their redundant `database` argument.** `QImageModel(database)` becomes
-   `QImageModel()`. The generated no-arg constructor is documented "Construct using the default Database"
-   and resolves, under `defaultDatabase(true)`, to the same instance (kapt output `QImageModel.kt:45-49`,
-   producer `EbeanDatabaseProducer.kt:21`). Verified against generated source at the pinned version.
+4. **Query beans drop their redundant `database` argument.** `QImageModel(database)`,
+   `QImageDownloadModel(database)` and `QTaskModel(database)` become their no-arg forms (17 sites). The
+   generated no-arg constructor is documented "Construct using the default Database" and resolves, under
+   `defaultDatabase(true)`, to the same instance (kapt output `QImageModel.kt:45-49`, producer
+   `EbeanDatabaseProducer.kt:21`). Verified against generated source at the pinned version.
 5. **0007 decision 5 stands.** The guarantee remains build-time, not compile-time proof of the result.
    Routes 2 (raw SQL) and 3 (in-memory) stay open as 0007 recorded; this closes route 1 and its wider
    shape.
