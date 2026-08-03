@@ -22,6 +22,7 @@ class PinryRuleSetProvider : RuleSetProvider {
                 ::QueryBeanConstructedByQualifiedName,
                 ::SoftDeleteStateFilteredOutsideQueries,
                 ::WallClockRead,
+                ::DatabaseStaticFacadeCall,
             ),
         )
 
