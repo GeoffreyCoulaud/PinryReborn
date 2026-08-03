@@ -192,19 +192,27 @@ class ArchitectureKonsistTest {
 
     @Test
     fun `Given production sources, Then no class extends an Ebean bean finder`() {
-        // `BeanRepository` / `BeanFinder` is the Ebean active-record shape this project moved off
-        // when `ModelRepository` was rewritten onto the `Persistor` port. We match the bare parent
-        // name because `withParentClassOf` silently skips external-library supertypes in Konsist
-        // 0.17.3 (their `sourceDeclaration` is `KoExternalDeclarationCore`, not a class, so
-        // `parentClasses()` filters them out); the bare name catches the type whether it is
-        // written with an import or fully-qualified. `assertEmpty` names every regressor.
+        // Bars the active-record shape (`BeanRepository` / `BeanFinder`) this project moved off
+        // (ADR 0008); `withParentClassOf` skips external supertypes, so match the bare name (`0ea264d`).
         val ebeanBeanFinderSupertypes = setOf("BeanRepository", "BeanFinder")
         Konsist
             .scopeFromProduction()
             .classes()
             .withParent { parent ->
-                parent.name.substringBefore("<").substringAfterLast(".") in ebeanBeanFinderSupertypes
+                parent.name.substringBefore("<").substringAfterLast(".").trim() in ebeanBeanFinderSupertypes
             }
+            .assertEmpty()
+    }
+
+    @Test
+    fun `Given production sources, Then nothing imports an Ebean static facade`() {
+        // The static read facades `io.ebean.DB` and `io.ebean.Ebean` operate on the default server
+        // and need no `Database` instance, so confining the instance does not reach them; the
+        // detekt rule `DatabaseStaticFacadeCall` closes the fully-qualified form (ADR 0008 decision 6).
+        Konsist
+            .scopeFromProduction()
+            .files
+            .withImport { it.name in setOf("io.ebean.DB", "io.ebean.Ebean") }
             .assertEmpty()
     }
 }
