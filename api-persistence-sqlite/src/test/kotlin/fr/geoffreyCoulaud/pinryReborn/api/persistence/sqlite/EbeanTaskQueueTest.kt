@@ -16,7 +16,7 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class EbeanTaskQueueTest : RepositoryTest() {
-    private val queue = EbeanTaskQueue(database)
+    private val queue = EbeanTaskQueue(persistor, transactionControl)
     private val now = Instant.parse("2026-07-08T00:00:00Z")
 
     private fun newTask(

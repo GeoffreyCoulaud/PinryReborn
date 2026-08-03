@@ -23,7 +23,7 @@ import java.util.concurrent.CountDownLatch
  * of relying on optimistic-lock retries to paper over a lost race.
  */
 class EbeanTaskQueueConcurrencyTest : RepositoryTest() {
-    private val queue = EbeanTaskQueue(database)
+    private val queue = EbeanTaskQueue(persistor, transactionControl)
     private val now = Instant.parse("2026-07-08T00:00:00Z")
 
     @Test
