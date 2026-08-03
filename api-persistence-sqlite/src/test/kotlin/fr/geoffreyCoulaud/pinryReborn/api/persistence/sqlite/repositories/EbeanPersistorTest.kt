@@ -4,7 +4,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.RepositoryTest
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserModel
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
-import java.time.Instant
 import java.util.UUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
