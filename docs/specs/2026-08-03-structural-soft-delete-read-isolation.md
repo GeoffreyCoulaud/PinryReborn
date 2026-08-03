@@ -100,19 +100,21 @@ variant needs listing.
 ### 4.1 The ports
 
 ```kotlin
-// persistence.sqlite, internal
-internal interface Persistor {
+// persistence.sqlite
+interface Persistor {
     fun save(bean: Any)
     fun delete(bean: Any)
     fun merge(bean: Any)
     fun <T : Any> reference(type: Class<T>, id: Any): T
 }
 
-internal interface TransactionControl {
+interface TransactionControl {
     fun beginTransaction(): io.ebean.Transaction
     fun currentTransaction(): io.ebean.Transaction?
 }
 ```
+
+The interfaces are `public`, not Kotlin `internal`: CDI cannot inject an `internal`-typed constructor parameter into a public `@ApplicationScoped` bean, so the persistence-only reach is enforced structurally by D3, not by visibility.
 
 Two implementations, each taking the `Database` the producer supplies:
 
@@ -212,9 +214,10 @@ instance; a new static facade would need banning, the one ongoing maintenance th
 Strict TDD, red before green, the failing test committed alone with the command and its output. Project
 order: integration, use-case, repository.
 
-1. **`Persistor` and `TransactionControl` are unit-tested at their boundary.** Each method delegates to
-   the wrapped `Database`, asserted through a fake. The type itself is the guarantee that no read is
-   reachable; the test documents it rather than substituting for it.
+1. **`Persistor` and `TransactionControl` are exercised at their boundary.** Each runs against the
+   shared `RepositoryTest` database and is observed through the `Persistor`/`TransactionControl` surface
+   (a fake on a pure-delegation port would assert its own stubbing). The type itself is the guarantee
+   that no read is reachable; the test documents it rather than substituting for it.
 2. **Repository tests are the safety net for the switch.** They are green before and after; no assertion
    is edited. `saveAndReturn`, `save`, `delete`, `reference`, the ambient-transaction paths in
    `EbeanImageRepository` and `EbeanTaskQueue`, and the image query-bean reads and writes all keep working
