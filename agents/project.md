@@ -192,20 +192,26 @@ The three values `modules/backend.md` expects this file to declare.
   dependency is a dedicated type that carries its role (e.g. `PeriodicScheduler`, `WorkerExecutor`),
   and the container provides the instance. `@Identifier("...")` string qualifiers are not used for new
   code, because they couple the consumer to a producer's name rather than its type.
-- **The database is one connection, and that is what serialises writes.**
+- **The database is one connection, and a transaction is what serialises a pair of statements.**
   `EbeanDatabaseProducer.sqliteDataSourceConfig` pins `minConnections` and `maxConnections` to 1
   (`EbeanDatabaseProducer.kt:53-54`); the URL adds `journal_mode=WAL`, `synchronous=NORMAL` and
   `busy_timeout=5000`, and deliberately omits `transaction_mode=IMMEDIATE`, whose eager write-lock
   grab is pointless without pool contention and once reintroduced a deadlock
   (`ebean.properties:16-23`). SQLite is a single-writer database and one connection is what it
-  requires. **A claim about concurrent behaviour is checked against this before it is written down**:
-  two callers cannot interleave a read and a write in this process, so a check-then-insert is not
-  racy here, and a unique index that can only be violated by interleaving is unreachable in
-  practice. An index that collides by value is a different matter and stays reachable however well
-  writes are serialised: `ix_user_password_hashes_user_created` (two hashes at the same instant) is
-  the one the code translates, and `docs/adr/0006-domain-owned-timestamps.md:111` is where that
-  reasoning lives. Recorded 2026-08-04, after a backlog entry asserted a race that the pool
-  configuration had already closed.
+  requires. **A claim about concurrent behaviour is checked against this before it is written down**,
+  and the check turns on where the transaction boundary is, not on the connection count. The single
+  connection serialises each statement; it does **not** serialise a pair, because in autocommit each
+  statement takes and releases the connection separately. So a check-then-insert **inside** one
+  transaction cannot be interleaved and is not racy, and the same pair written as two autocommit
+  statements is racy today. Both current sites hold the pair (`UserCreator.kt:21,27`,
+  `EbeanTaskQueue.kt:50`); a new one that does not is a defect, whatever the pool is set to. An index
+  that collides by value is a different matter again and stays reachable however well writes are
+  serialised: `ix_user_password_hashes_user_created` (two hashes at the same instant) is the one the
+  code translates, and `docs/adr/0006-domain-owned-timestamps.md:111` is where that reasoning lives.
+  Recorded 2026-08-04, after a backlog entry asserted a race that the pool configuration had already
+  closed; corrected 2026-08-05 against a measurement, which found the pair racy without its
+  transaction on that same single connection, roughly 335 to 341 interleavings in 400 attempts across
+  three runs, and zero with it (`docs/adr/0009-unique-index-named-outcomes.md`, findings).
 
 Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
