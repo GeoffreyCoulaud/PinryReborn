@@ -219,8 +219,9 @@ sees when it fires; a removed one fails it until the stale entry goes.
 Its limit, stated rather than discovered later: it enforces that an outcome is **named**, not that the
 name is **true**. A wrong outcome passes. What it stops is the silent one.
 
-**B. An index-model assertion on `DbMigrationModelCoverageTest`.** Every index a `.sql` creates appears
-as an `indexName` in some `model/*.model.xml`, with no exemption. This is the assertion that would have
+**B. An index-model assertion on `DbMigrationModelCoverageTest`.** Every index a `.sql` creates is
+recorded by a `createIndex` element in some `model/*.model.xml`, with no exemption: the element rather
+than the `indexName` attribute, which a `dropIndex` carries too. This is the assertion that would have
 caught the `1.3` gap: the existing test checks that a model file exists, not that it records the
 migration's content.
 

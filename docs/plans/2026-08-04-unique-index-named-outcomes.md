@@ -89,7 +89,8 @@ today on four indexes, which is its red.
 **Files.** `api-persistence-sqlite/src/test/.../migration/DbMigrationModelCoverageTest.kt`.
 
 **Work.** A third assertion: extract every index name created by a `.sql` under `dbmigration/`, and
-assert that each appears as an `indexName` in some `model/*.model.xml`. Express it as the prohibition
+assert that each is recorded by a `createIndex` element in some `model/*.model.xml`, the element rather
+than the `indexName` attribute, which a `dropIndex` carries too. Express it as the prohibition
 (`agents/modules/kotlin.md`, Konsist section): filter to the unrecorded ones, assert the list is empty,
 so the failure enumerates them.
 

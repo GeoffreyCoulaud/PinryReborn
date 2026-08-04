@@ -45,14 +45,21 @@ class DbMigrationModelCoverageTest {
     private val createIndexStatement =
         Regex("""create\s+(?:unique\s+)?index\s+(\w+)""", RegexOption.IGNORE_CASE)
 
-    private val modelIndexNameAttribute = Regex("""indexName="([^"]+)"""")
+    // Anchored on the element, not on the attribute: `<dropIndex indexName="..."/>` takes the index
+    // back out of the prior model, so a name whose only record is its removal is not recorded at all.
+    private val modelCreateIndexElement =
+        Regex("""<createIndex\b[^>]*\bindexName="([^"]+)"""")
+
+    // Deliberately loose, and only ever compared against the extraction above: it over-matches so that
+    // a narrower extractor, blind to a form the migrations still use, shows up as a difference.
+    private val looseIndexCreation = Regex("""create\b.*\bindex\b""", RegexOption.IGNORE_CASE)
 
     private val createdIndexNames: Set<String> =
         namesMatching(createIndexStatement, sqlScripts)
 
     private val modelledIndexNames: Set<String> =
         namesMatching(
-            modelIndexNameAttribute,
+            modelCreateIndexElement,
             File(migrationDirectory, "model")
                 .listFiles()
                 ?.toList()
@@ -106,6 +113,18 @@ class DbMigrationModelCoverageTest {
         assertNotEquals(emptySet<String>(), createdIndexNames)
     }
 
+    @Test
+    fun `Given the migration scripts, Then the extraction reads every line that creates an index`() {
+        // The guard above only proves the extraction is non-empty: an extractor blind to one form
+        // still matches the others. Compared both ways, so a loose probe that narrows fails too.
+
+        // Given
+        val extracted = locationsMatching(createIndexStatement)
+
+        // Then
+        assertEquals(locationsMatching(looseIndexCreation), extracted)
+    }
+
     private fun namesMatching(
         pattern: Regex,
         files: List<File>,
@@ -113,4 +132,17 @@ class DbMigrationModelCoverageTest {
         files
             .flatMap { file -> pattern.findAll(file.readText()).map { it.groupValues[1] } }
             .toSet()
+
+    /** Where [pattern] matches, as `<file>:<line>` locators, sorted so a failure reads the same twice. */
+    private fun locationsMatching(pattern: Regex): List<String> =
+        sqlScripts
+            .sortedBy { it.name }
+            .flatMap { file ->
+                file
+                    .readText()
+                    .lineSequence()
+                    .withIndex()
+                    .filter { (_, line) -> pattern.containsMatchIn(line) }
+                    .map { (index, _) -> "${file.name}:${index + 1}" }
+            }
 }
