@@ -3,7 +3,7 @@
 **Living document.** The priority-ordered list of what is still open. What already shipped lives in git history,
 the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-08-03 (the soft-delete read-isolation wave delivered ADR 0008: `io.ebean.Database` confined behind `Persistor`/`TransactionControl`, the `BeanRepository`/`BeanFinder` supertype ban, and the `io.ebean.DB`/`Ebean` static-facade ban. The "`ModelRepository` inherits Ebean finders" item is removed; the ambient-transaction unification and the documented closure residuals are added).
+Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shipped: both collision-translating repositories now route through one object, so that item is removed. Its holistic review found that two of the four unique indexes never translate their violation at all, which is added in its place).
 
 ## How to use this file
 
@@ -96,12 +96,22 @@ Last reviewed: 2026-08-03 (the soft-delete read-isolation wave delivered ADR 000
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27.
-- **Shared `SqliteConstraintViolations` helper.** T3 narrowed `UserDataExportRepository.save`'s catch
-  by extracting `isUniqueConstraint` / `translateIfCollision` into its companion, mirroring the same
-  pair already on `UserPasswordHashRepository`. The two pairs are now duplicated across two
-  repositories. Extract one shared helper (the cause structure `PersistenceException(SQLiteException)`
-  and the `resultCode == SQLITE_CONSTRAINT_UNIQUE` discriminator are identical) and have both sites
-  call it. Small, mechanical; deferred to avoid widening T3's diff. New 2026-08-02.
+- **Two unique indexes have no named domain outcome.** The schema carries four unique indexes and
+  only two translate their violation: `SqliteConstraintViolations` now serves the exports index
+  (`dbmigration/1.11.sql`) and the password-hash one (`1.18.sql`). The other two leak the adapter's
+  framework exception outward, which `agents/modules/kotlin.md` forbids ("exceptions cross layers
+  only as domain types") and which `docs/adr/0006-domain-owned-timestamps.md:111` already decided
+  against for the same shape ("a residual unique-constraint violation is a 409, not a 500"):
+  `UserRepository.saveUser` (`UserRepository.kt:54`) lets `jakarta.persistence.PersistenceException`
+  escape on a username-case collision, and `UserRepositoryTest.kt:197` pins that leak as the expected
+  behaviour, so a race between two sign-ups on the same name is a 500 where the password path
+  answers 409. `EbeanTaskQueue.enqueueWithin` (`EbeanTaskQueue.kt:57`) has the same check-then-insert shape
+  behind `ux_tasks_dedup` (`1.3.sql`), narrowed but not closed by running in one transaction. The
+  root cause is not the two call sites: nothing ties a unique index in the schema to a named
+  applicative outcome, so each new index decides again, in silence. The fix is one lot: give both
+  indexes a domain error through the shared helper, restate the pinning tests around it, and record
+  the tie so the next index inherits it. Surfaced by the holistic review of the
+  `SqliteConstraintViolations` extraction, 2026-08-04.
 - **`PinRepositoryTest` split decision.** T4 tipped `PinRepositoryTest` over `LargeClass`; it is held
   by a reasoned `@Suppress("LargeClass")` (it is the comprehensive main suite; feature slices are
   sibling classes). Keep the suppress, or split the suite along its feature slices so the suppress can
