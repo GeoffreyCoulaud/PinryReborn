@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.migration
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 import java.io.File
 
@@ -17,6 +18,11 @@ import java.io.File
  *
  * The no-op rule below catches a related failure: a migration Ebean cannot render is written as
  * `-- not supported: ...` and applies silently, enforcing nothing.
+ *
+ * Pairing is not content: a model file can exist and still record none of its migration's indexes,
+ * which is what `1.3.model.xml` did for the three `ix_tasks_*` indexes `1.3.sql` creates. The
+ * index-model rule below closes that gap and admits no exemption
+ * (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
  */
 class DbMigrationModelCoverageTest {
     private val migrationDirectory = File("src/main/resources/dbmigration")
@@ -35,6 +41,24 @@ class DbMigrationModelCoverageTest {
             ?.toList()
             .orEmpty()
             .filter { it.name.endsWith(".sql") }
+
+    private val createIndexStatement =
+        Regex("""create\s+(?:unique\s+)?index\s+(\w+)""", RegexOption.IGNORE_CASE)
+
+    private val modelIndexNameAttribute = Regex("""indexName="([^"]+)"""")
+
+    private val createdIndexNames: Set<String> =
+        namesMatching(createIndexStatement, sqlScripts)
+
+    private val modelledIndexNames: Set<String> =
+        namesMatching(
+            modelIndexNameAttribute,
+            File(migrationDirectory, "model")
+                .listFiles()
+                ?.toList()
+                .orEmpty()
+                .filter { it.name.endsWith(".model.xml") },
+        )
 
     @Test
     fun `Given the migration scripts, Then each one is backed by a generated model or documented here`() {
@@ -65,4 +89,28 @@ class DbMigrationModelCoverageTest {
             }
         assertEquals(emptyList<File>(), noOpMigrations)
     }
+
+    @Test
+    fun `Given the migration scripts, Then every index they create is recorded in a migration model`() {
+        // Given
+        val unrecorded = createdIndexNames.filterNot { it in modelledIndexNames }.sorted()
+
+        // Then
+        assertEquals(emptyList<String>(), unrecorded)
+    }
+
+    @Test
+    fun `Given the migration scripts, Then they create at least one index`() {
+        // Guards the assertion above against a silent pass: a regex that stops matching leaves an
+        // empty set, which is trivially recorded in full.
+        assertNotEquals(emptySet<String>(), createdIndexNames)
+    }
+
+    private fun namesMatching(
+        pattern: Regex,
+        files: List<File>,
+    ): Set<String> =
+        files
+            .flatMap { file -> pattern.findAll(file.readText()).map { it.groupValues[1] } }
+            .toSet()
 }
