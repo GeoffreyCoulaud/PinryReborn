@@ -11,8 +11,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserPassword
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserPasswordHashModel
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
-import org.sqlite.SQLiteErrorCode
-import org.sqlite.SQLiteException
 
 @ApplicationScoped
 class UserPasswordHashRepository(
@@ -31,7 +29,10 @@ class UserPasswordHashRepository(
         return try {
             sqlRepository.saveAndReturn(hashedPasswordModel).toDomain()
         } catch (error: PersistenceException) {
-            translateIfCollision(error)
+            // Only a unique-constraint violation on (user_id, when_created) is a 409 collision.
+            SqliteConstraintViolations.translateUniqueConstraint(error) {
+                PasswordChangeCollisionException(cause = it)
+            }
         }
     }
 
@@ -58,28 +59,5 @@ class UserPasswordHashRepository(
             .user.id
             .equalTo(user.id)
             .delete()
-    }
-
-    companion object {
-        // Package-visible for the focused unit tests of the collision decision; not part of the
-        // repository port. The cause structure (PersistenceException wrapping SQLiteException) was
-        // observed empirically against Ebean-on-SQLite and is pinned by the duplicate-insert test.
-        internal fun isUniqueConstraint(error: PersistenceException): Boolean {
-            val sqliteException = error.cause as? SQLiteException ?: return false
-            return sqliteException.resultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE
-        }
-
-        // Always throws (returns Nothing); the catch site has no branch of its own. Only a
-        // unique-constraint violation on (user_id, when_created) becomes a 409 collision; any other
-        // persistence failure (NOT NULL, connection, ...) must surface as a genuine 500. SQLite
-        // wraps both as PersistenceException(SQLiteException) and both share vendor errorCode 19,
-        // so the typed resultCode is the one reliable discriminator (verified empirically:
-        // SQLITE_CONSTRAINT_UNIQUE vs SQLITE_CONSTRAINT_NOTNULL). Extracted so the rethrow branch
-        // is unit-testable: a non-unique PersistenceException cannot be produced through the public
-        // save against a real store, so the branch could not otherwise be covered.
-        internal fun translateIfCollision(error: PersistenceException): Nothing {
-            if (isUniqueConstraint(error)) throw PasswordChangeCollisionException(cause = error)
-            throw error
-        }
     }
 }
