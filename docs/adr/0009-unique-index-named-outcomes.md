@@ -96,12 +96,152 @@ another.
 The lot opens by trying to produce both violations under concurrency rather than by designing against
 them. This section records what that produced, and is written during the work.
 
-_To be filled in Act, before any translation is written._
-
-Two questions it must answer, because the shape of decisions 2 and 3 depends on them:
+Two questions it had to answer, because the shape of decisions 2 and 3 depends on them:
 
 - whether a constraint violation surfaces at the `Persistor` call or only at commit;
 - whether an Ebean transaction stays usable for a read after a caught unique-constraint violation.
+
+### What was run
+
+A throwaway probe, `ConstraintProbeSpikeTest` in `api-persistence-sqlite`, deleted before this commit.
+It is not merged for two reasons: `AGENTS.md` exempts a spike from the TDD order but not from the
+safety net, and a concurrency attempt that reproduces nothing would pass forever whatever the code,
+which `AGENTS.md` Evidence calls a check that cannot fail. It extended `RepositoryTest`, so it ran on
+the module's test datasource: in-memory SQLite pinned to one connection
+(`application-test.properties:16-21`), Ebean 19.2.0 and sqlite-jdbc 3.53.2.0
+(`gradle/libs.versions.toml:4,8`).
+
+```
+$ ./gradlew :api-persistence-sqlite:test --tests "ConstraintProbeSpikeTest"
+BUILD SUCCESSFUL in 3s
+21 actionable tasks: 4 executed, 17 up-to-date
+```
+
+The probe wrote its observations to a scratch file outside the repository, because Gradle prints test
+standard output only at debug level and this suite configures no `showStandardStreams`:
+
+```
+=== FACT 1: where a unique-constraint violation surfaces ===
+merge / autocommit    : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / autocommit    : rows for name  -> 1
+merge / transaction   : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / transaction   : at the commit  -> NONE
+merge / transaction   : rows for name  -> 1
+save  / autocommit    : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / autocommit    : rows for key   -> 1
+save  / transaction   : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / transaction   : at the commit  -> NONE
+save  / transaction   : rows for key   -> 1
+
+=== FACT 2: is the transaction usable for a read after a caught violation ===
+save  / tx survival   : violation      -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / tx survival   : read of the row written in this tx -> Success(96161877-13a3-4874-9c02-90883ce3fb8d) (expected 96161877-13a3-4874-9c02-90883ce3fb8d)
+save  / tx survival   : read of committed data             -> Success(1)
+save  / tx survival   : a further write in the same tx     -> NONE
+save  / tx survival   : commit after the caught violation  -> NONE
+save  / tx survival   : rows for key after the tx closed   -> 1
+save  / tx survival   : the further write survived commit  -> 1
+merge / tx survival   : violation      -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / tx survival   : read of the row written in this tx -> Success(073e0a84-c0ac-4225-ab1a-d467fa05de5b) (expected 073e0a84-c0ac-4225-ab1a-d467fa05de5b)
+merge / tx survival   : read of committed data             -> Success(1)
+merge / tx survival   : a further write in the same tx     -> NONE
+merge / tx survival   : commit after the caught violation  -> NONE
+merge / tx survival   : rows for name after the tx closed  -> 1
+merge / tx survival   : the further write survived commit  -> 1
+
+=== CONCURRENCY: UserRepository.saveUser ===
+50 rounds of 8 threads each, one fresh username per round.
+A. check+save inside ONE transaction (production shape, UserCreator.kt:21,27):
+   failures=0 rows written=50 (one per round is 50)
+   distinct failure kinds -> []
+B. check+save WITHOUT a transaction (two autocommit statements):
+   failures=337 rows written=50
+   distinct failure kinds -> [PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)]
+C. bare concurrent saveUser of the same name, no check at all:
+   failures=350 rows written=50
+   distinct failure kinds -> [PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)]
+
+=== CONCURRENCY: EbeanTaskQueue.enqueue ===
+50 rounds of 8 threads each, one fresh dedup key per round.
+   failures=0 rows written=50 (one per round is 50)
+   returned tasks=400 summed distinct ids per round=50 (converged is 50)
+   distinct failure kinds -> []
+```
+
+### Fact 1: the violation surfaces at the `Persistor` call, in all four combinations
+
+| Operation | Mode | Where it surfaces |
+|---|---|---|
+| `merge` | autocommit | at the `Persistor.merge` call |
+| `merge` | explicit transaction | at the `Persistor.merge` call; the later commit then succeeds |
+| `save` | autocommit | at the `Persistor.save` call |
+| `save` | explicit transaction | at the `Persistor.save` call; the later commit then succeeds |
+
+**Neither stop clause fires.** The catch T4 puts in `saveUser` and the one T6 puts in `enqueueWithin`
+both fire in production, and both are reachable from a test. The weaker mode matters too: T4's tests
+run through `RepositoryTest`, which gives the repository no ambient transaction, and the autocommit
+row of the table says the violation is visible there as well.
+
+The exception shape is the one `SqliteConstraintViolations` already discriminates on:
+`jakarta.persistence.PersistenceException` wrapping `org.sqlite.SQLiteException` with
+`resultCode = SQLITE_CONSTRAINT_UNIQUE` and vendor `errorCode` 19. The object needs no widening to
+recognise either of these two constraints.
+
+The answer holds because JDBC batching is off, and that is the one setting that would overturn it.
+Ebean buffers a `save` until the batch fills or the transaction commits only in batch mode, which is
+opt-in per transaction through `transaction.setBatchMode(true)` or through configuration
+(ebean.io/docs/transactions/batch). This project sets neither: `persistBatch` appears in no
+`.properties`, `.kt` or `.kts` file in the tree. Enabling it would move both violations to the commit
+or to the next flush and invalidate both catches.
+
+### Fact 2: the transaction stays usable, for reads and for further writes
+
+Probed inside one transaction: write the conflicting row, catch the violation raised by the duplicate,
+then keep using the transaction. Every follow-up worked, for `save` and for `merge` alike. The read of
+the row written earlier in the same uncommitted transaction returned it, the read of committed data
+returned it, a further unrelated write succeeded, and the commit succeeded with both written rows
+surviving. SQLite rolled back the failing statement, not the transaction, and Ebean did not mark the
+transaction rollback-only.
+
+So decision 3 takes the shape the specification's first branch describes: the catch sits in
+`enqueueWithin` and re-reads the live task there, which needs no transaction of its own and therefore
+works on both of `enqueue`'s branches. The asymmetric fallback the specification held in reserve is
+not needed. The further-write result settles the ambient branch specifically: `UserDataExportRequester`
+writes again after its enqueue (`UserDataExportRequester.kt:73`), and that write is unaffected by a
+violation caught earlier in the same transaction.
+
+### The two concurrency attempts: neither reproduces the production race
+
+**`UserRepository.saveUser`.** Fifty rounds of eight threads, one fresh username per round, in three
+shapes. The production shape (A), which wraps the check and the save in one transaction the way
+`UserCreator.kt:21,27` does, produced zero failures in 400 attempts and exactly one row per round. The
+premise the lot rests on is confirmed: the username violation does not reproduce in this process.
+
+**`EbeanTaskQueue.enqueue`.** Fifty rounds of eight threads on one dedup key produced zero failures,
+one row per round, and one distinct task id per round: all eight callers received the same task. The
+dedup violation does not reproduce either, and the documented convergence is already delivered by the
+fast path.
+
+Neither attempt becomes a merged test, which is the finding rather than a gap.
+
+### What the control cases add, and the one claim they narrow
+
+Shapes B and C existed to keep A from being a check that cannot fail, and they turned out to say
+something about the invariant recorded in `agents/project.md` under Design invariants.
+
+C is the arithmetic of a value collision: eight concurrent bare `saveUser` calls on one name, no check
+at all, gave 350 failures, exactly seven per round. Every unique index still refuses a duplicate value
+however well writes are serialised, which is what T4's and T6's tests will lean on.
+
+B is the interesting one. It is A minus the transaction: the same check-then-save pair, run as two
+separate autocommit statements. It reproduced 337 times in 400 attempts. So the number of connections
+is not by itself what makes a check-then-insert non-racy here. A and B differ in exactly one thing,
+whether the pair sits inside one transaction, and only B reproduces. The invariant's conclusion is
+untouched, because both production sites do hold the pair inside one transaction
+(`UserCreator.kt:21,27` for the username, `EbeanTaskQueue.kt:50` for the dedup key), but its stated
+mechanism is one step wider than the observation supports: what serialises a read-write pair is the
+transaction that holds the single connection across both statements, not the single connection alone.
+Correcting that wording is out of this lot's scope and is proposed for the backlog.
 
 ## Consequences
 
