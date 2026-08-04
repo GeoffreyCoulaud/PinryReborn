@@ -16,10 +16,17 @@ identically to the next reader.
 Two of the four silences leak `jakarta.persistence.PersistenceException` out of the persistence
 adapter, which `agents/modules/kotlin.md` forbids: `UserRepository.saveUser` under
 `ix_users_name_nocase`, and `EbeanTaskQueue.enqueueWithin` under `ux_tasks_dedup`. Neither leak is
-reachable in this process today, because the datasource is pinned to a single connection
-(`EbeanDatabaseProducer.kt:53-54`) and both violations need two callers to interleave a read and a
-write. So this is not a live 500. It is a 500 that arrives the day the connection decision changes,
-with nothing in the repository stating that dependency.
+reachable in this process today, and the experiment below measured what closes them. Both sites hold
+their read and their write inside one transaction (`UserCreator.kt:21,27`, `EbeanTaskQueue.kt:50`),
+and at the username site that transaction is measurably what does the work: with it, zero failures in
+400 concurrent attempts; without it, the same pair run as two autocommit statements on the same single
+connection reproduced the violation 335 times in 400. The single connection is therefore not by itself
+the reason. The dedup site was driven only in its production shape, which also produced zero failures,
+so its answer rests on having the same shape rather than on a second measurement. This is not a live
+500. It is a 500 that arrives the day either site drops its transaction, or the day the connection
+decision changes. Neither dependency was stated anywhere in the repository when this lot opened; the
+transaction one is now recorded in `agents/project.md` under Design invariants, corrected there in
+the same commit as the measurement that established it.
 
 Behind the four silences sits a second, larger question. Where a uniqueness rule is enforced twice,
 once by a read before the write and once by the index, the two can disagree and only one of them is
@@ -111,43 +118,93 @@ the module's test datasource: in-memory SQLite pinned to one connection
 (`application-test.properties:16-21`), Ebean 19.2.0 and sqlite-jdbc 3.53.2.0
 (`gradle/libs.versions.toml:4,8`).
 
+**Why that datasource answers for production.** Production is a file database with three pragmas the
+probe's `jdbc:sqlite::memory:` does not carry: `journal_mode=WAL`, `synchronous=NORMAL` and
+`busy_timeout=5000` (`api-application/src/main/resources/application.properties:12`). None of the
+three sits in the path of anything measured here. The first two govern how a change is journalled and
+how often it is flushed, neither of which decides which call raises a unique violation nor what a
+failed statement leaves behind; `busy_timeout` governs how long a connection waits for a lock another
+connection holds, and both configurations pin the pool to exactly one connection
+(`EbeanDatabaseProducer.kt:53-54`, `application-test.properties:20-21`), so no second connection
+exists to hold one and the setting never fires. The remaining difference, memory against a file, is
+durability and speed. The one place it would be real is across processes, where WAL on a file admits
+several writers and `:memory:` cannot express the case at all; that is out of scope and named in the
+consequences below.
+
 ```
 $ ./gradlew :api-persistence-sqlite:test --tests "ConstraintProbeSpikeTest"
 BUILD SUCCESSFUL in 3s
 21 actionable tasks: 4 executed, 17 up-to-date
 ```
 
+**The discriminator every transactional row carries.** A probe that never opened a transaction, or
+opened one the `Persistor` call did not join, prints the same "at the call, then NONE at the commit,
+then one row" as a probe that did. The first version of this probe printed exactly that and proved
+nothing about the transactional half, which is the half the two stop clauses hang on: the autocommit
+half is already pinned by committed tests (`UserRepositoryTest.kt:197-206`,
+`UserPasswordHashRepositoryTest.kt:81-88`). Every transactional shape below is therefore run twice,
+once committing and once rolling back. The rollback run writes a row through the same `Persistor` call
+under test, a **witness row** in fact 1 and in fact 2 the rows the transaction already wrote, then
+rolls the transaction back instead of committing it. An autocommitted write survives a rollback, so
+the count afterwards separates the two cases: **0 means the write joined the transaction, 1 would have
+meant autocommit** and would have voided every transactional line in the transcript. Each such line
+carries its own "autocommit would print 1" so the discriminating value is visible where it is read.
+
 The probe wrote its observations to a scratch file outside the repository, because Gradle prints test
 standard output only at debug level and this suite configures no `showStandardStreams`:
 
 ```
 === FACT 1: where a unique-constraint violation surfaces ===
-merge / autocommit    : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
-merge / autocommit    : rows for name  -> 1
-merge / transaction   : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
-merge / transaction   : at the commit  -> NONE
-merge / transaction   : rows for name  -> 1
-save  / autocommit    : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
-save  / autocommit    : rows for key   -> 1
-save  / transaction   : at the call    -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
-save  / transaction   : at the commit  -> NONE
-save  / transaction   : rows for key   -> 1
+merge / autocommit   : at the call                       -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / autocommit   : rows for name                     -> 1
+merge / tx commit    : witness row inside the tx          -> 1
+merge / tx commit    : at the call                       -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / tx commit    : at the commit                     -> NONE
+merge / tx commit    : rows for name after commit        -> 1
+merge / tx commit    : witness rows after commit         -> 1
+merge / tx rollback  : witness row inside the tx          -> 1
+merge / tx rollback  : at the call                       -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / tx rollback  : at the rollback                   -> NONE
+merge / tx rollback  : witness rows after rollback       -> 0 (autocommit would print 1)
+merge / tx rollback  : rows for name after rollback      -> 1
+save  / autocommit   : at the call                       -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / autocommit   : rows for key                      -> 1
+save  / tx commit    : witness row inside the tx          -> 1
+save  / tx commit    : at the call                       -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / tx commit    : at the commit                     -> NONE
+save  / tx commit    : rows for key after commit         -> 1
+save  / tx commit    : witness rows after commit         -> 1
+save  / tx rollback  : witness row inside the tx          -> 1
+save  / tx rollback  : at the call                       -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / tx rollback  : at the rollback                   -> NONE
+save  / tx rollback  : witness rows after rollback       -> 0 (autocommit would print 1)
+save  / tx rollback  : rows for key after rollback       -> 1
 
 === FACT 2: is the transaction usable for a read after a caught violation ===
-save  / tx survival   : violation      -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
-save  / tx survival   : read of the row written in this tx -> Success(96161877-13a3-4874-9c02-90883ce3fb8d) (expected 96161877-13a3-4874-9c02-90883ce3fb8d)
-save  / tx survival   : read of committed data             -> Success(1)
-save  / tx survival   : a further write in the same tx     -> NONE
-save  / tx survival   : commit after the caught violation  -> NONE
-save  / tx survival   : rows for key after the tx closed   -> 1
-save  / tx survival   : the further write survived commit  -> 1
-merge / tx survival   : violation      -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
-merge / tx survival   : read of the row written in this tx -> Success(073e0a84-c0ac-4225-ab1a-d467fa05de5b) (expected 073e0a84-c0ac-4225-ab1a-d467fa05de5b)
-merge / tx survival   : read of committed data             -> Success(1)
-merge / tx survival   : a further write in the same tx     -> NONE
-merge / tx survival   : commit after the caught violation  -> NONE
-merge / tx survival   : rows for name after the tx closed  -> 1
-merge / tx survival   : the further write survived commit  -> 1
+save  / tx commit    : violation                         -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / tx commit    : read of own uncommitted write     -> 1 (the row written in this tx)
+save  / tx commit    : read of committed data            -> 1 (a row committed before this tx)
+save  / tx commit    : a further write in the same tx    -> NONE
+save  / tx commit    : commit after the caught violation -> NONE
+save  / tx commit    : rows for key after the tx closed  -> 1
+save  / tx commit    : the further write survived commit -> 1
+save  / tx rollback  : violation                         -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: tasks.dedup_key)
+save  / tx rollback  : a further write in the same tx    -> NONE
+save  / tx rollback  : rollback after the violation      -> NONE
+save  / tx rollback  : rows for key after rollback       -> 0 (autocommit would print 1)
+save  / tx rollback  : further-write rows after rollback -> 0 (autocommit would print 1)
+merge / tx commit    : violation                         -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / tx commit    : read of own uncommitted write     -> 1 (the row written in this tx)
+merge / tx commit    : read of committed data            -> 1 (a row committed before this tx)
+merge / tx commit    : a further write in the same tx    -> NONE
+merge / tx commit    : commit after the caught violation -> NONE
+merge / tx commit    : rows for name after the tx closed -> 1
+merge / tx commit    : the further write survived commit -> 1
+merge / tx rollback  : violation                         -> PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)
+merge / tx rollback  : a further write in the same tx    -> NONE
+merge / tx rollback  : rollback after the violation      -> NONE
+merge / tx rollback  : rows for name after rollback      -> 0 (autocommit would print 1)
+merge / tx rollback  : further-write rows after rollback -> 0 (autocommit would print 1)
 
 === CONCURRENCY: UserRepository.saveUser ===
 50 rounds of 8 threads each, one fresh username per round.
@@ -155,7 +212,7 @@ A. check+save inside ONE transaction (production shape, UserCreator.kt:21,27):
    failures=0 rows written=50 (one per round is 50)
    distinct failure kinds -> []
 B. check+save WITHOUT a transaction (two autocommit statements):
-   failures=337 rows written=50
+   failures=335 rows written=50
    distinct failure kinds -> [PersistenceException <- SQLiteException(resultCode=SQLITE_CONSTRAINT_UNIQUE, errorCode=19) (UNIQUE constraint failed: users.name)]
 C. bare concurrent saveUser of the same name, no check at all:
    failures=350 rows written=50
@@ -170,12 +227,12 @@ C. bare concurrent saveUser of the same name, no check at all:
 
 ### Fact 1: the violation surfaces at the `Persistor` call, in all four combinations
 
-| Operation | Mode | Where it surfaces |
-|---|---|---|
-| `merge` | autocommit | at the `Persistor.merge` call |
-| `merge` | explicit transaction | at the `Persistor.merge` call; the later commit then succeeds |
-| `save` | autocommit | at the `Persistor.save` call |
-| `save` | explicit transaction | at the `Persistor.save` call; the later commit then succeeds |
+| Operation | Mode | Where it surfaces | Discriminator |
+|---|---|---|---|
+| `merge` | autocommit | at the `Persistor.merge` call | not needed: pinned by `UserRepositoryTest.kt:197-206` |
+| `merge` | explicit transaction | at the `Persistor.merge` call; the later commit then succeeds | witness row gone after rollback (0) |
+| `save` | autocommit | at the `Persistor.save` call | not needed: `UserPasswordHashRepositoryTest.kt:81-88` reaches the same violation at the call, on another index |
+| `save` | explicit transaction | at the `Persistor.save` call; the later commit then succeeds | witness row gone after rollback (0) |
 
 **Neither stop clause fires.** The catch T4 puts in `saveUser` and the one T6 puts in `enqueueWithin`
 both fire in production, and both are reachable from a test. The weaker mode matters too: T4's tests
@@ -188,11 +245,33 @@ The exception shape is the one `SqliteConstraintViolations` already discriminate
 recognise either of these two constraints.
 
 The answer holds because JDBC batching is off, and that is the one setting that would overturn it.
-Ebean buffers a `save` until the batch fills or the transaction commits only in batch mode, which is
-opt-in per transaction through `transaction.setBatchMode(true)` or through configuration
-(ebean.io/docs/transactions/batch). This project sets neither: `persistBatch` appears in no
-`.properties`, `.kt` or `.kts` file in the tree. Enabling it would move both violations to the commit
-or to the next flush and invalidate both catches.
+Ebean buffers a `save` until the batch fills or the transaction commits only in batch mode, which
+ebean.io/docs/transactions/batch and ebean.io/docs/persist name three ways in: on a transaction
+(`transaction.setBatchMode(true)`, `setBatch(PersistBatch.ALL)`, `setCascadeBatch`, `setBatchSize`),
+on a method (`@Transactional(batchSize = 50)`), and on the database
+(`databaseBuilder.persistBatch(PersistBatch.ALL)`, or the `persistBatch` property that backs it).
+This project takes none of them. One search covers all three, over every tracked file rather than
+only the source:
+
+```
+$ git grep -nE 'setBatchMode|setBatch\(|setCascadeBatch|setBatchSize|persistBatch|PersistBatch|@Transactional|batchSize' -- '*.kt' '*.kts' '*.java' '*.properties' '*.yaml' '*.yml' '*.xml' 'Dockerfile*'; echo "exit=$?"
+api-application/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/application/wiring/GarbageCollectionProducers.kt:43:            batchSize = config.orphanBatchSize(),
+api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorage.kt:13: * bounded by [batchSize] regardless of how many files or rows an active instance accumulates. The
+api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorage.kt:17: * Not `@ApplicationScoped`: [batchSize] is a primitive ARC cannot resolve, so the bean is produced
+api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorage.kt:28:    private val batchSize: Int,
+api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorage.kt:31:     * Reclaim every orphaned rendition subtree and export archive on disk, batched by [batchSize].
+api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorage.kt:39:            ids.chunked(batchSize).forEach { chunk ->
+api-usecases/src/main/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorage.kt:47:            parsed.chunked(batchSize).forEach { chunk ->
+api-usecases/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorageTest.kt:23:    private val batchSize = 2
+api-usecases/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorageTest.kt:30:        batchSize = batchSize,
+api-usecases/src/test/kotlin/fr/geoffreyCoulaud/pinryReborn/api/usecases/ReapOrphanedStorageTest.kt:101:    fun `Given more disk ids than batchSize, Then reap processes them across multiple chunks`() {
+exit=0
+```
+
+Every hit is `ReapOrphanedStorage`'s own chunk size for a filesystem sweep, unrelated to Ebean. The
+six Ebean tokens and `@Transactional` match nothing, in code or in configuration. Enabling batching
+by any of the three routes would move both violations to the commit or to the next flush and
+invalidate both catches.
 
 ### Fact 2: the transaction stays usable, for reads and for further writes
 
@@ -201,7 +280,17 @@ then keep using the transaction. Every follow-up worked, for `save` and for `mer
 the row written earlier in the same uncommitted transaction returned it, the read of committed data
 returned it, a further unrelated write succeeded, and the commit succeeded with both written rows
 surviving. SQLite rolled back the failing statement, not the transaction, and Ebean did not mark the
-transaction rollback-only.
+transaction rollback-only. The rollback run is what makes those lines mean anything: it discards the
+transaction instead of committing it, and both the pre-violation row and the post-violation further
+write are gone afterwards (0 and 0). Autocommit would have left both at 1, and would have shown that
+the probe was never testing a transaction at all.
+
+**The re-read is an inference here, not an observation.** The reads the probe ran after the violation
+are a count by `dedup_key` and a count by `name`, not the `dedupKey` plus `state` query T6's catch
+will run (`EbeanTaskQueue.kt:59-63`). What the probe establishes is the general property, that the
+transaction accepts reads and writes after a caught violation, from which the specific query follows.
+Nothing here pins that specific query, and nothing here should: T6's own test drives the catch and
+asserts the task it returns, which covers the exact read directly.
 
 So decision 3 takes the shape the specification's first branch describes: the catch sits in
 `enqueueWithin` and re-reads the live task there, which needs no transaction of its own and therefore
@@ -234,14 +323,29 @@ at all, gave 350 failures, exactly seven per round. Every unique index still ref
 however well writes are serialised, which is what T4's and T6's tests will lean on.
 
 B is the interesting one. It is A minus the transaction: the same check-then-save pair, run as two
-separate autocommit statements. It reproduced 337 times in 400 attempts. So the number of connections
-is not by itself what makes a check-then-insert non-racy here. A and B differ in exactly one thing,
-whether the pair sits inside one transaction, and only B reproduces. The invariant's conclusion is
+separate autocommit statements. It reproduced 335 times in 400 attempts, and three runs of the same
+probe gave 335, 337 and 341, so it is a broad target and not a knife edge. The number of connections
+is therefore not by itself what makes a check-then-insert non-racy here. A and B differ in exactly one
+thing, whether the pair sits inside one transaction, and only B reproduces. The conclusion is
 untouched, because both production sites do hold the pair inside one transaction
-(`UserCreator.kt:21,27` for the username, `EbeanTaskQueue.kt:50` for the dedup key), but its stated
+(`UserCreator.kt:21,27` for the username, `EbeanTaskQueue.kt:50` for the dedup key), but the stated
 mechanism is one step wider than the observation supports: what serialises a read-write pair is the
 transaction that holds the single connection across both statements, not the single connection alone.
-Correcting that wording is out of this lot's scope and is proposed for the backlog.
+
+That wording existed in three places. **This document's own Context** carried it and is corrected
+above, because a dated document absorbs changes until it is delivered and it cannot contradict the
+findings it now carries. **`agents/project.md`, under Design invariants** carried it as the invariant
+itself, and is corrected in this same commit by the operator's decision of 2026-08-05: a living
+document ships with the measurement that justifies the change, not after it. The heading now credits
+the transaction rather than the connection count, and the corollary the old wording lacked is written
+down, that a check-then-insert outside a transaction is racy today. The dated history stays and the
+correction is appended to it.
+
+**`docs/backlog.md:112-122`** is the third copy, in the entry this lot is working. It still reads
+"the datasource is pinned to a single connection, which serialises them" and "a 500 the day the
+single-connection decision changes". It is not corrected here: that entry is narrowed or deleted when
+the lot wraps, which is where the project puts the change, and a rewrite now would be undone in the
+same branch.
 
 ## Consequences
 
