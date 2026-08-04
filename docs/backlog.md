@@ -96,22 +96,30 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27.
-- **Two unique indexes have no named domain outcome.** The schema carries four unique indexes and
-  only two translate their violation: `SqliteConstraintViolations` now serves the exports index
-  (`dbmigration/1.11.sql`) and the password-hash one (`1.18.sql`). The other two leak the adapter's
-  framework exception outward, which `agents/modules/kotlin.md` forbids ("exceptions cross layers
-  only as domain types") and which `docs/adr/0006-domain-owned-timestamps.md:111` already decided
-  against for the same shape ("a residual unique-constraint violation is a 409, not a 500"):
+- **Two unique indexes have no named outcome, and an implicit invariant is what closes them.** The
+  schema carries four unique indexes and only two translate their violation: `SqliteConstraintViolations`
+  serves the exports index (`dbmigration/1.11.sql`) and the password-hash one (`1.18.sql`).
   `UserRepository.saveUser` (`UserRepository.kt:54`) lets `jakarta.persistence.PersistenceException`
-  escape on a username-case collision, and `UserRepositoryTest.kt:197` pins that leak as the expected
-  behaviour, so a race between two sign-ups on the same name is a 500 where the password path
-  answers 409. `EbeanTaskQueue.enqueueWithin` (`EbeanTaskQueue.kt:57`) has the same check-then-insert shape
-  behind `ux_tasks_dedup` (`1.3.sql`), narrowed but not closed by running in one transaction. The
-  root cause is not the two call sites: nothing ties a unique index in the schema to a named
-  applicative outcome, so each new index decides again, in silence. The fix is one lot: give both
-  indexes a domain error through the shared helper, restate the pinning tests around it, and record
-  the tie so the next index inherits it. Surfaced by the holistic review of the
-  `SqliteConstraintViolations` extraction, 2026-08-04.
+  escape on a username-case collision (`1.2.sql`), and `UserRepositoryTest.kt:197` pins that leak as
+  the expected behaviour; `EbeanTaskQueue.enqueueWithin` (`EbeanTaskQueue.kt:57`) inserts under
+  `ux_tasks_dedup` (`1.3.sql`) with no catch. Both leak a framework exception across a layer, which
+  `agents/modules/kotlin.md` forbids.
+  **The two want different outcomes.** Only the username collision wants an error:
+  `UserCreator.createUserInternal` (`UserCreator.kt:43`) already answers `UsernameAlreadyTakenError`
+  (409) from its pre-check, and a lost race should be indistinguishable from it. The dedup insert
+  wants convergence instead, because `TaskQueueInterface.enqueue` (`TaskQueueInterface.kt:13-16`)
+  documents that a live dedup key returns the existing task without inserting.
+  **Neither violation is reachable in-process today, which is the real finding.** Both need two
+  callers to interleave a read and a write, and the datasource is pinned to a single connection
+  (`EbeanDatabaseProducer.kt:53-54`, rationale in `ebean.properties:16-23`), which serialises them.
+  The password-hash index differs because it collides by value: two hashes at the same instant
+  collide however well serialised, which is what `docs/adr/0006-domain-owned-timestamps.md:111`
+  describes. So the exposure is not a 500 today, it is a 500 the day the single-connection decision
+  changes, with nothing to say so. The lot therefore starts by trying to produce the violation at
+  both sites rather than by designing against it. Root cause: no rule ties a unique index to a named
+  applicative outcome, and the invariant that closes these two is implicit. Surfaced by the holistic
+  review of the `SqliteConstraintViolations` extraction, corrected against the connection-pool
+  configuration, 2026-08-04.
 - **`PinRepositoryTest` split decision.** T4 tipped `PinRepositoryTest` over `LargeClass`; it is held
   by a reasoned `@Suppress("LargeClass")` (it is the comprehensive main suite; feature slices are
   sibling classes). Keep the suppress, or split the suite along its feature slices so the suppress can

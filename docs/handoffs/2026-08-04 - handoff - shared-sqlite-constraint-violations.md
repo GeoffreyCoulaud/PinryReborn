@@ -63,11 +63,28 @@ propagated.
 
 ## Suggested next step
 
-The backlog item this review created: **two unique indexes have no named domain outcome**. Four
-unique indexes exist in the schema and only the two touched here translate their violation.
+The backlog item this review created: **two unique indexes have no named outcome**. Four unique
+indexes exist in the schema and only the two touched here translate their violation.
 `UserRepository.saveUser` lets the raw framework exception escape on a username-case collision, and
-`UserRepositoryTest.kt:197` pins that leak as expected, so a sign-up race answers 500 where the
-password path answers 409, against `docs/adr/0006-domain-owned-timestamps.md:111`.
-`EbeanTaskQueue.enqueueWithin` has the same shape behind `ux_tasks_dedup`. The helper this branch
-built is what those two sites would call; the lot's real content is the missing tie between a unique
-index and a named applicative outcome, so that the next index does not decide again in silence.
+`UserRepositoryTest.kt:197` pins that leak as expected; `EbeanTaskQueue.enqueueWithin` inserts under
+`ux_tasks_dedup` with no catch.
+
+Two things were established while triaging that item, after this branch was written and before it
+was integrated, so they belong here rather than in a later document.
+
+- **The two sites want different outcomes.** Only the username collision wants an error, and it
+  wants the one the pre-check already gives (`UsernameAlreadyTakenError`, 409), so that a lost race
+  is indistinguishable from a name that was taken. The dedup insert wants convergence:
+  `TaskQueueInterface.enqueue` documents that a live dedup key returns the existing task without
+  inserting.
+- **Neither violation is reachable in-process today.** Both need two callers to interleave a read
+  and a write, and the datasource is pinned to one connection (`EbeanDatabaseProducer.kt:53-54`),
+  which serialises them. The password-hash index this branch touches is different in kind: it
+  collides by value, so serialisation does not close it, which is what
+  `docs/adr/0006-domain-owned-timestamps.md:111` describes. The exposure is therefore conditional on
+  the single-connection decision, and nothing states that dependency today.
+
+So the lot opens with an experiment (try to produce the violation at both sites) rather than with a
+design. The helper this branch built is what the username site would call if the answer is to
+translate; the lot's real content is the missing tie between a unique index and a named applicative
+outcome, so that the next index does not decide again in silence.
