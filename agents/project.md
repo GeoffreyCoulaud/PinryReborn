@@ -192,6 +192,20 @@ The three values `modules/backend.md` expects this file to declare.
   dependency is a dedicated type that carries its role (e.g. `PeriodicScheduler`, `WorkerExecutor`),
   and the container provides the instance. `@Identifier("...")` string qualifiers are not used for new
   code, because they couple the consumer to a producer's name rather than its type.
+- **The database is one connection, and that is what serialises writes.**
+  `EbeanDatabaseProducer.sqliteDataSourceConfig` pins `minConnections` and `maxConnections` to 1
+  (`EbeanDatabaseProducer.kt:53-54`); the URL adds `journal_mode=WAL`, `synchronous=NORMAL` and
+  `busy_timeout=5000`, and deliberately omits `transaction_mode=IMMEDIATE`, whose eager write-lock
+  grab is pointless without pool contention and once reintroduced a deadlock
+  (`ebean.properties:16-23`). SQLite is a single-writer database and one connection is what it
+  requires. **A claim about concurrent behaviour is checked against this before it is written down**:
+  two callers cannot interleave a read and a write in this process, so a check-then-insert is not
+  racy here, and a unique index that can only be violated by interleaving is unreachable in
+  practice. An index that collides by value is a different matter and stays reachable however well
+  writes are serialised: `ix_user_password_hashes_user_created` (two hashes at the same instant) is
+  the one the code translates, and `docs/adr/0006-domain-owned-timestamps.md:111` is where that
+  reasoning lives. Recorded 2026-08-04, after a backlog entry asserted a race that the pool
+  configuration had already closed.
 
 Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
