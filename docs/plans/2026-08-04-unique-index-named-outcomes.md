@@ -51,6 +51,8 @@ produced in this process, and settle the two facts the dedup design depends on.
    later run in the weaker mode.
 4. A deterministic probe of **fact 2**, whether the transaction survives: inside one transaction,
    catch the violation and then attempt a read, observing whether Ebean left the transaction usable.
+   Only T6 consumes this, and only for `save`, so probe it there; answering it for `merge` as well is
+   cheap and worth doing, but it is `save` that gates a task.
 
 **Acceptance.**
 
@@ -62,10 +64,16 @@ produced in this process, and settle the two facts the dedup design depends on.
   test file under `src/test` would pollute every later task's run.
 - Commit: `docs(adr): record what the unique-constraint experiment produced`.
 
-**If fact 1 comes back "only at commit" for `merge`**, stop and report before T4 is dispatched. The
-catch this lot puts in `saveUser` would never fire in production, and no test written in T4 could see
-it, because `RepositoryTest` autocommits. That is a specification change, not an implementation
-choice.
+**Two stop clauses hang on fact 1**, one per operation, because the answer may differ between them:
+
+- **`merge` inside a transaction fails only at commit**: stop before T4 is dispatched. The catch this
+  lot puts in `saveUser` would never fire in production, and no test written in T4 could see it,
+  because `RepositoryTest` autocommits.
+- **`save` inside a transaction fails only at commit**: stop before T6 is dispatched, for the same
+  reason at the other site.
+
+Either is a specification change, not an implementation choice. The transactional answer is the one
+that binds: production writes inside a transaction at both sites.
 
 **Note for the reviewer of T1.** A concurrency attempt that reproduces nothing must not be merged as a
 test: it would pass forever regardless of the code, which `AGENTS.md` Evidence calls a check that
@@ -108,38 +116,60 @@ same reason. T2's red proves the extraction matches today; nothing else keeps it
 `dbmigration/model/1.2.model.xml` (new), `DbMigrationModelCoverageTest.kt` (allowlist),
 `agents/project.md`.
 
-**Work.**
-
-**"No change" is the wrong observable on its own.** The generator already reports no change on the
-unmodified tree, measured on 2026-08-04 at `f380800`:
+**Why "no change" is the wrong observable on its own.** The generator already reports no change on the
+unmodified tree, measured on 2026-08-04 at `cecc331`:
 
 ```
-$ ./gradlew :api-persistence-sqlite:generateDbMigration
-BUILD SUCCESSFUL in 1s
+$ ./gradlew :api-persistence-sqlite:generateDbMigration --rerun-tasks
+> Task :api-persistence-sqlite:generateDbMigration
+DbMigration> no changes detected - no migration written
+BUILD SUCCESSFUL in 12s
 $ git status --porcelain
 $ ls api-persistence-sqlite/src/main/resources/dbmigration/*.sql | wc -l
 18
 ```
 
-So "the generator produced nothing" is equally true of having done the work, having done half of it,
-and having done none. The task is therefore built in two steps with a **visible change in between**.
+The `DbMigration>` line is the one that carries the claim; `BUILD SUCCESSFUL` prints just as happily
+when a migration *was* written. So "the generator produced nothing" is equally true of having done the
+work, having done half of it, and having done none. The task is therefore built in two steps with a
+**visible change in between**.
 
 **Work.**
 
-1. **Step A, the red.** Declare the four indexes on their entities and nothing else: `TaskModel` gets
-   `ix_tasks_claim` (`1.3.sql:23`), `ix_tasks_lease` (`1.3.sql:25`) and `ux_tasks_dedup`
+1. **Step A, the red.** Declare the four indexes on their entities and nothing else, each as
+   `@Index(name = "...", definition = "...")` with no `columnNames` and no `unique`: all four are
+   partial or expression indexes whose DDL only the `definition` attribute can carry, so they take the
+   `UserPasswordHashModel.kt:16-20` form rather than the `UserDataExportModel.kt:17-23` one. `TaskModel`
+   gets `ix_tasks_claim` (`1.3.sql:23`), `ix_tasks_lease` (`1.3.sql:25`) and `ux_tasks_dedup`
    (`1.3.sql:27`); `UserModel` gets `ix_users_name_nocase` (`1.2.sql:2`). Copy each DDL verbatim from
    the line named, without its terminating semicolon; the lines between them are comments, not DDL.
    Run the generator. It now writes a migration carrying four `create index` statements for indexes
    that already exist in every deployed database. Paste that output into the commit body: it is the
-   evidence that the prior model was wrong. Delete the generated `.sql` and `.model.xml` pair before
-   moving on.
-2. **Step B, the green.** `1.3.model.xml` gains three `<createIndex>` elements and `1.2.model.xml` is
-   created with one, mirroring `1.11.model.xml` and `1.18.model.xml`. Re-run the generator: it writes
-   nothing, and now that silence means something.
+   evidence that the prior model was wrong.
+2. **Step B, the green.** The generated `<version>.model.xml` from step A holds the four
+   `<createIndex>` elements Ebean itself derived from those annotations, with the four attributes
+   `MIndex.compare` diffs already filled. **Harvest them**: move three into `1.3.model.xml` and one
+   into a new `1.2.model.xml`, changing nothing but the containing file. Do not hand-write them from
+   the `1.11.model.xml` / `1.18.model.xml` precedents, which disagree with each other because they came
+   from different annotation forms. Then delete the generated `.sql` and `.model.xml` pair and re-run
+   the generator: it writes nothing, and now that silence means something.
 3. `handWritten` in `DbMigrationModelCoverageTest` becomes an empty set.
 4. `agents/project.md`, Design invariants: the migration-history line stops counting `1.2` among the
    two accepted costs. This hunk ships in this commit, not later.
+
+**The generated migration is live while it sits on disk.** `ebean.properties:8` sets
+`ebean.migration.run=true`, so the module's test bootstrap applies whatever `.sql` is in
+`dbmigration/`, and these `create index` statements carry no `if not exists`: any test run in that
+window dies with "index ix_tasks_claim already exists". Run nothing but the generator between steps A
+and B, and delete the generated pair before any other command. If a test did run in the window, delete
+the test database files too: `.gitignore:5-7` ignores `*.db`, `*.db-shm` and `*.db-wal`, so a database
+left carrying a phantom migration row is invisible to every `git status` check in this plan.
+
+**One commit, not two.** The Conventions block above has the failing artefact commit alone, and that is
+right for a test. It is wrong here: a step-A-only commit leaves four indexes declared on entities and
+recorded in no model file, which is the exact drift T3 exists to remove, and **no assertion catches
+it**, because all three of `DbMigrationModelCoverageTest`'s checks key on `.sql` files and step A
+changes none. The red is a pasted generator run, not a committed artefact.
 
 **Acceptance.**
 
@@ -238,10 +268,38 @@ the KDoc rather than in a comment at the call site.
 **Goal.** `EbeanTaskQueue.enqueue` returns the live task when its insert loses the dedup race, which is
 what `TaskQueueInterface:13-16` already documents.
 
-**Files.** `repositories/EbeanTaskQueue.kt`, `api-persistence-sqlite/src/test/.../EbeanTaskQueueTest.kt`.
+**Files.** `repositories/EbeanTaskQueue.kt`, `repositories/SqliteConstraintViolations.kt`,
+`api-persistence-sqlite/src/test/.../EbeanTaskQueueTest.kt`,
+`api-persistence-sqlite/src/test/.../repositories/SqliteConstraintViolationsTest.kt`.
+
+**The shared helper is widened, deliberately.** Converging needs to tell a unique violation from every
+other `PersistenceException` and then **return a value**. The only discriminator in the repository is
+`SqliteConstraintViolations.isUniqueConstraint`, which is `private` (`SqliteConstraintViolations.kt:34`),
+and its public member returns `Nothing` (`:25`), so it can only throw. Duplicating the discriminator
+would undo the extraction that shipped three commits ago; widening the object is the alternative and it
+is in scope for this task.
+
+Generalise it to one recovery function, keeping the existing entry point as a special case:
+
+```kotlin
+fun <T> onUniqueConstraint(error: PersistenceException, recover: (PersistenceException) -> T): T
+fun translateUniqueConstraint(error, toDomainError): Nothing = onUniqueConstraint(error) { throw toDomainError(it) }
+```
+
+This keeps one discriminator and **one** rethrow branch, both still owned by
+`SqliteConstraintViolations` and its test. That matters beyond tidiness: it is what lets T4 say it adds
+no branch of its own, and inlining the check in `EbeanTaskQueue` would give T6 a third branch, the
+non-unique rethrow, that the plan does not budget for. Update `SqliteConstraintViolationsTest`'s KDoc,
+which argues today that the rethrow branch lives in the object because no caller can reach it: the
+argument survives the generalisation but its wording names one function.
 
 **Shape.** Read T1's ADR section before writing anything; do not re-derive the answer.
 
+- **If fact 1 says a `save` inside a transaction only fails at commit, stop and report.** That is the
+  mode `enqueueWithin` always runs in, since `enqueue` opens its own transaction whenever there is no
+  ambient one (`EbeanTaskQueue.kt:50`). The catch would never fire, the decorator below could not
+  produce a catchable violation, and on the ambient branch the failure would surface inside
+  `UserDataExportRequester`'s commit instead. Same gate as T4's, for the other operation.
 - **If the transaction survives a caught unique violation**, the catch sits in `enqueueWithin` and
   re-reads the live task there. This shape works on both of `enqueue`'s branches
   (`EbeanTaskQueue.kt:46-55`) because it needs no transaction of its own.
@@ -261,8 +319,10 @@ with a `Persistor` decorator around the real one:
 1. **The convergent case.** On its first `save` of a `TaskModel`, the decorator writes a conflicting
    live task carrying the same dedup key through the real persistor, then delegates the original save,
    which now violates `ux_tasks_dedup`. The production path runs whole: the check misses, the insert
-   violates, the catch re-reads, and the conflicting task is what `enqueue` must return. Run it in both
-   transaction modes, since `enqueue` branches on that.
+   violates, the catch re-reads, and the conflicting task is what `enqueue` must return. Run it on both
+   of `enqueue`'s branches, ambient and own: there is no autocommit mode, since `enqueue` opens a
+   transaction when it finds none. Assert on the returned `Task`, whose id is the decorator's row. An
+   assertion on stored rows would have to commit the ambient branch itself, since `enqueue` does not.
 2. **The case where the re-read finds nothing**, reachable with a decorator that raises the violation
    without writing anything. This is a branch, so the coverage bound will demand it, and it needs a
    decided answer: rethrow the original violation. The documented contract is "returns that existing
@@ -278,7 +338,7 @@ and the translation itself stayed observable through the repository's public sav
 **Acceptance.**
 
 - A test drives the losing path **through `enqueue`** and asserts the existing task is returned, not
-  an exception, in both transaction modes.
+  an exception, on both the ambient and the own-transaction branch.
 - A test drives the empty-re-read case and asserts the violation propagates.
 - `EbeanTaskQueueConcurrencyTest` still green.
 - `./gradlew :api-persistence-sqlite:test` green with the coverage bound.
@@ -301,18 +361,21 @@ pins the interval to zero, which is exactly why this case is untested today. The
 `minimumInterval` is already `Duration.ofHours(1)` (`UserDataExportRequesterTest.kt:47`), so no new
 instance is needed: the interval is non-zero and the export's `requestedAt` sits inside it.
 
-**Stub only `findPendingForUser`.** `BaseTest.kt:16-21` runs MockK's `checkUnnecessaryStub()` after
-every test, and `UserDataExportRequester.kt:58` throws before reaching `findLastRequestedAtForUser`, so
-stubbing that second read would fail the green run on the stub check rather than passing. The sibling
-test at `UserDataExportRequesterTest.kt:127-139` is the precedent.
+**Do not stub `findLastRequestedAtForUser`.** `BaseTest.kt:16-21` runs MockK's `checkUnnecessaryStub()`
+after every test, and `UserDataExportRequester.kt:58` throws before reaching that read, so stubbing it
+would fail the green run on the stub check rather than passing. The other stubs the path does reach are
+still needed: `reauthenticator.reauthenticate`, `transactionRunner.inTransaction`, `clock.now` and
+`findPendingForUser`. The sibling test at `UserDataExportRequesterTest.kt:127-139` shows the set.
 
 **Acceptance.**
 
-- The test passes against the current code, so its red is a **mutation**, run in three moves: delete
-  `UserDataExportRequester.kt:58`, add the `findLastRequestedAtForUser` stub the mutated path now needs,
-  run it, watch it fail with `ExportTooSoonError`. Paste that output into the commit body, then restore
-  the line and remove the temporary stub. Mutating without adding the stub reddens on MockK's
-  "no answer found" instead, which proves nothing about the precedence.
+- The test passes against the current code, so its red is a **mutation**, and the mutation is a stub
+  swap rather than an addition: delete `UserDataExportRequester.kt:58`, remove the now-unreachable
+  `findPendingForUser` stub, add the `findLastRequestedAtForUser` one the mutated path needs, run it,
+  watch it fail with `ExportTooSoonError`. Paste that output into the commit body, then restore all
+  three. Skipping the stub swap reddens on MockK instead ("no answer found" on the added read, or
+  `checkUnnecessaryStub` on the orphaned one), which proves nothing about the precedence: say in the
+  commit body which failure is the evidence if the pasted run carries more than one.
 - Commit: `test(usecases): pin 409 ahead of 429 when an export is already running`.
 
 ---
