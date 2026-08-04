@@ -4,7 +4,6 @@ import jakarta.persistence.PersistenceException
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
@@ -47,40 +46,9 @@ class SqliteConstraintViolationsTest {
         )
 
     @Test
-    fun `Given a unique-constraint violation, Then isUniqueConstraint returns true`() {
+    fun `Given a unique-constraint violation, Then translateUniqueConstraint throws the caller's domain error`() {
         // Given: the exact structure observed from Ebean/SQLite, a PersistenceException wrapping a
         // SQLiteException whose resultCode is SQLITE_CONSTRAINT_UNIQUE
-        val error = uniqueConstraintFailure()
-        // When
-        val result = SqliteConstraintViolations.isUniqueConstraint(error)
-        // Then
-        assertTrue(result)
-    }
-
-    @Test
-    fun `Given a not-null constraint violation, Then isUniqueConstraint returns false`() {
-        // Given: same wrapper shape, but a NOT NULL constraint (vendor errorCode 19 is shared with
-        // the unique case, so only the typed resultCode distinguishes them)
-        val error = notNullConstraintFailure()
-        // When
-        val result = SqliteConstraintViolations.isUniqueConstraint(error)
-        // Then
-        assertFalse(result)
-    }
-
-    @Test
-    fun `Given a persistence failure with no SQLite cause, Then isUniqueConstraint returns false`() {
-        // Given: a connection or IO failure surfaced as a bare PersistenceException with no cause
-        val error = PersistenceException("connection refused")
-        // When
-        val result = SqliteConstraintViolations.isUniqueConstraint(error)
-        // Then
-        assertFalse(result)
-    }
-
-    @Test
-    fun `Given a unique-constraint violation, Then translateUniqueConstraint throws the caller's domain error`() {
-        // Given
         val error = uniqueConstraintFailure()
         // When / Then: the caller's factory decides the type, and receives the failure as its cause
         val thrown =
@@ -92,7 +60,8 @@ class SqliteConstraintViolationsTest {
 
     @Test
     fun `Given a non-unique persistence failure, Then translateUniqueConstraint rethrows it unchanged`() {
-        // Given: a NOT NULL violation is a persistence failure that must NOT be reported as a 409
+        // Given: a NOT NULL violation must NOT be reported as a 409, and it was observed carrying
+        // the same vendor errorCode 19 as the unique case, so only the typed resultCode parts them
         val error = notNullConstraintFailure()
         var factoryCalled = false
         // When / Then: the exact same instance propagates, no translation
