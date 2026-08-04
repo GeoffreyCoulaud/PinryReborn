@@ -17,8 +17,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPag
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.UserDataExportModelSortStrategy
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
-import org.sqlite.SQLiteErrorCode
-import org.sqlite.SQLiteException
 import java.time.Instant
 import java.util.UUID
 
@@ -55,7 +53,10 @@ class UserDataExportRepository(
         return try {
             persist(model)
         } catch (error: PersistenceException) {
-            translateIfCollision(error)
+            // Only a unique-constraint violation is an export already in progress (409).
+            SqliteConstraintViolations.translateUniqueConstraint(error) {
+                ExportAlreadyInProgressException(cause = it)
+            }
         }
     }
 
@@ -126,20 +127,5 @@ class UserDataExportRepository(
 
     override fun deleteAllForUser(userId: UUID) {
         QUserDataExportModel().user.id.equalTo(userId).delete()
-    }
-
-    companion object {
-        // Internal for the focused collision-decision test (not part of the repository port).
-        internal fun isUniqueConstraint(error: PersistenceException): Boolean {
-            val sqliteException = error.cause as? SQLiteException ?: return false
-            return sqliteException.resultCode == SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE
-        }
-
-        // Only a unique-constraint violation becomes ExportAlreadyInProgress (409); anything else
-        // rethrows as a genuine 500. Mirrors UserPasswordHashRepository.translateIfCollision.
-        internal fun translateIfCollision(error: PersistenceException): Nothing {
-            if (isUniqueConstraint(error)) throw ExportAlreadyInProgressException(cause = error)
-            throw error
-        }
     }
 }
