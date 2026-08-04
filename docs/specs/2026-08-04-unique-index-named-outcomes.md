@@ -1,7 +1,7 @@
 # Every unique constraint has a named outcome, and the database owns uniqueness
 
 Date: 2026-08-04
-Status: Draft
+Status: Approved 2026-08-04
 Branch: `fix/unique-index-named-outcomes`
 ADR: `docs/adr/0009-unique-index-named-outcomes.md`
 Closes the backlog item "Two unique indexes have no named outcome, and an implicit invariant is what
