@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRe
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.domain.users.UsernameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
@@ -37,12 +38,13 @@ class UserCreator(
 
     private fun createUserInternal(name: String): User {
         val normalizedName = name.trim()
-        // Check that the username is free (case-insensitive via the repository lookup), including
-        // usernames still held by tombstoned (pending-deletion) accounts
-        val existingUser = userRepository.findUserByNameIncludingDeleted(normalizedName)
-        if (existingUser != null) throw UsernameAlreadyTakenError()
-        // Create the user
         val user = User(id = UUID.randomUUID(), name = normalizedName, createdAt = clock.now())
-        return userRepository.saveUser(user)
+        // The unique index is the sole authority on the name being free, case and tombstones
+        // included, so the refusal arrives from the store rather than from a lookup of our own
+        return try {
+            userRepository.saveUser(user)
+        } catch (error: UsernameAlreadyTakenException) {
+            throw UsernameAlreadyTakenError(error)
+        }
     }
 }

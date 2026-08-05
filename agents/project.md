@@ -214,6 +214,14 @@ The three values `modules/backend.md` expects this file to declare.
   closed; corrected 2026-08-05 against a measurement, which found the pair racy without its
   transaction on that same single connection, roughly 335 to 341 interleavings in 400 attempts across
   three runs, and zero with it (`docs/adr/0009-unique-index-named-outcomes.md`, findings).
+- **The database is the authority on uniqueness** (decided 2026-08-05): no read before a write exists
+  **solely** to answer a uniqueness question an index already answers. The write goes ahead, the
+  adapter translates the violation into a domain exception and the use case rethrows its own error
+  (`UserRepository.saveUser` under `ix_users_name_nocase`, caught by `UserCreator`). A read that also
+  does something else stays, and what that something else is gets written down: the one written
+  exception is `UserDataExportRequester.kt:58`, which orders two refusals and answers 409 ahead of
+  429 while an export is running. No tool can tell a uniqueness read from any other read, so this
+  line is the whole guard (`docs/adr/0009-unique-index-named-outcomes.md`, decision 2).
 
 Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
