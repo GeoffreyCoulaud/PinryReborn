@@ -204,8 +204,10 @@ class EbeanTaskQueueTest : RepositoryTest() {
     /**
      * Turns the first task insert into a lost dedup race: writes [conflict] through the real
      * persistor, so the insert that follows violates `ux_tasks_dedup`. The race itself does not
-     * reproduce on the single-connection datasource (ADR 0009, findings from the experiment), so the
-     * situation it would leave behind is created instead and driven through enqueue's public surface.
+     * reproduce while `enqueue` holds its check and its insert in one transaction, which is what
+     * serialises the pair (400 attempts, no violation: ADR 0009, findings from the experiment), so
+     * the situation it would leave behind is created instead and driven through enqueue's public
+     * surface.
      */
     private class LosingDedupRacePersistor(
         private val delegate: Persistor,
