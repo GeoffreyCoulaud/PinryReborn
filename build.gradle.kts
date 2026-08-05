@@ -54,6 +54,12 @@ subprojects {
         // native access is enabled"). Grant it explicitly so tests run clean and stay
         // forward-compatible. (The runtime image passes the same flag; see Dockerfile.)
         jvmArgs("--enable-native-access=ALL-UNNAMED")
+        // Gradle's default console prints the assertion's location and drops its message, and CI
+        // keeps no HTML report, so a failure there names a line number and nothing else. Assertions
+        // written to enumerate their violations are worth nothing read that way.
+        testLogging {
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
     }
 
     // vips-ffm (api-imaging-vips, api-application) resolves libvips/glib/gobject via
