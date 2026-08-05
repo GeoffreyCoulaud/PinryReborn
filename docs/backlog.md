@@ -111,6 +111,22 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
   `createUserWithPassword`, so the password-less entry point is exercised only by its unit test.
   Predates this branch (`e102883`). Either it is a public surface someone intends to use, or it is
   code nobody asked for and goes. Surfaced by the T5 review, 2026-08-05. **P2**, and small.
+- **A partial index's `where` clause and the Kotlin query that mirrors it agree only by hand.**
+  `ux_tasks_dedup` is partial on `dedup_key is not null and state in ('PENDING','RUNNING')`
+  (`dbmigration/1.3.sql:27`), and `EbeanTaskQueue.findLiveTaskWithDedupKey` repeats that state set in
+  Kotlin. The two agreeing is what makes the dedup fast path correct and the recovery's empty re-read
+  unreachable, and nothing ties them: a migration narrowing or widening the index would leave the query
+  silently disagreeing. `UniqueConstraintOutcomeTest` names each index's outcome, not its predicate.
+  Same shape for `uq_user_data_exports_pending` and `findPendingForUser`. Surfaced by the T6 review and
+  its remediation, 2026-08-05. **P2**.
+- **A test run left a 515 MB JVM heap dump at the repository root, and a forced gate run failed once
+  with `SQLITE_BUSY, the database file is locked`.** Both on 2026-08-05, minutes apart. The gate then
+  passed three consecutive forced runs with no such message, and the dump was deleted, so neither is
+  reproduced and neither is tied to a change. A heap dump means a test JVM died on an
+  `OutOfMemoryError`, and a JVM dying mid-run is a plausible source of the lock, so the two are
+  probably one event rather than two. Nothing in the build sets `-XX:+HeapDumpOnOutOfMemoryError` and
+  no module sets a heap bound. Worth a look before it is met in CI, where it reads as a flake. `.hprof`
+  is deliberately **not** gitignored: hiding the artefact would hide the signal. New 2026-08-05. **P2**.
 - **Nothing checks that a migration model's index matches the DDL that was applied.**
   `DbMigrationModelCoverageTest` compares index *names* between the `.sql` files and the
   `model/*.model.xml`, and `generateDbMigration` compares the model against the entity annotations the
