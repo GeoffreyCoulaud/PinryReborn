@@ -39,13 +39,6 @@ class UserRepository(
             .findOne()
             ?.toDomain()
 
-    override fun findUserByNameIncludingDeleted(name: String): User? =
-        UserQueries.any()
-            .name
-            .ieq(name)
-            .findOne()
-            ?.toDomain()
-
     override fun findUserByIdIncludingDeleted(id: UUID): User? =
         UserQueries.any()
             .id

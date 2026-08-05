@@ -67,7 +67,6 @@ class UserRepositoryTest : RepositoryTest() {
         val found = repository.findUserByIdIncludingDeleted(user.id)
         assertEquals(user.id, found?.id)
         assertNotNull(found?.softDeletedAt)
-        assertEquals(user.id, repository.findUserByNameIncludingDeleted(user.name)?.id)
     }
 
     @Test
@@ -152,16 +151,6 @@ class UserRepositoryTest : RepositoryTest() {
 
         // When / Then
         repository.permanentlyDeleteUser(user)
-    }
-
-    @Test
-    fun `Given no user with the given name, Then findUserByNameIncludingDeleted returns null`() {
-        // Given
-        // When
-        val foundUser = repository.findUserByNameIncludingDeleted(createRandomString())
-
-        // Then
-        assertNull(foundUser)
     }
 
     @Test
