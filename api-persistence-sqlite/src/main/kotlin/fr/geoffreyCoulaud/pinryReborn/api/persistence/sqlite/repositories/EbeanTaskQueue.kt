@@ -11,6 +11,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TaskModelMa
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TaskModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QTaskModel
 import jakarta.enterprise.context.ApplicationScoped
+import jakarta.persistence.PersistenceException
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -55,14 +56,35 @@ class EbeanTaskQueue(
         }
 
     private fun enqueueWithin(task: NewTask): Task {
-        if (task.dedupKey != null) {
-            val existing =
-                QTaskModel()
-                    .dedupKey.equalTo(task.dedupKey)
-                    .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
-                    .findOne()
-            if (existing != null) return existing.toDomain()
+        val dedupKey = task.dedupKey
+        return if (dedupKey == null) insert(task) else enqueueDeduplicated(task, dedupKey)
+    }
+
+    /**
+     * Converges on the live task [dedupKey] already names, whether the read finds it or the insert
+     * loses the race and `ux_tasks_dedup` refuses it. A violation with no live task behind it has
+     * nothing to converge on, so it propagates (ADR 0009, decision 3).
+     */
+    private fun enqueueDeduplicated(task: NewTask, dedupKey: String): Task {
+        val existing = findLiveTaskWithDedupKey(dedupKey)
+        if (existing != null) return existing.toDomain()
+        return try {
+            insert(task)
+        } catch (error: PersistenceException) {
+            SqliteConstraintViolations.onUniqueConstraint(error) {
+                val live = findLiveTaskWithDedupKey(dedupKey) ?: throw error
+                live.toDomain()
+            }
         }
+    }
+
+    private fun findLiveTaskWithDedupKey(dedupKey: String): TaskModel? =
+        QTaskModel()
+            .dedupKey.equalTo(dedupKey)
+            .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
+            .findOne()
+
+    private fun insert(task: NewTask): Task {
         val model =
             TaskModel(
                 id = randomUUID(),
