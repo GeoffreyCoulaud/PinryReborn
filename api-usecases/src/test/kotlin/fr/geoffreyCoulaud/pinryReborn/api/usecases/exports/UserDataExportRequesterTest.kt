@@ -155,6 +155,23 @@ class UserDataExportRequesterTest : BaseTest() {
     }
 
     @Test
+    fun `Given a pending export inside the minimum interval, Then the in-progress refusal wins`() {
+        // Given: both refusals apply, because a PENDING row counts towards the minimum interval too.
+        // 409 wins: the problem is that an export is running, not that the request came too soon.
+        stubTransactionPassthrough()
+        every { reauthenticator.reauthenticate(user, factor) } just runs
+        every { clock.now() } returns now
+        val requestedInsideTheInterval = now.minus(Duration.ofMinutes(30))
+        every { repository.findPendingForUser(user.id) } returns pendingExport(requestedInsideTheInterval)
+
+        // When / Then
+        assertThrows(ExportAlreadyInProgressError::class.java) { requester.request(user, factor) }
+        verify(exactly = 0) { repository.findLastRequestedAtForUser(any()) }
+        verify(exactly = 0) { repository.save(any()) }
+        verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `Given a previous export older than the minimum interval, Then a new export is created`() {
         // Given
         stubTransactionPassthrough()
