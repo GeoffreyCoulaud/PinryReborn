@@ -205,8 +205,10 @@ The three values `modules/backend.md` expects this file to declare.
   connection serialises each statement; it does **not** serialise a pair, because in autocommit each
   statement takes and releases the connection separately. So a check-then-insert **inside** one
   transaction cannot be interleaved and is not racy, and the same pair written as two autocommit
-  statements is racy today. Both current sites hold the pair (`UserCreator.kt:21,27`,
-  `EbeanTaskQueue.kt:50`); a new one that does not is a defect, whatever the pool is set to. An index
+  statements is racy today. One such pair is left, `EbeanTaskQueue.enqueue` (`EbeanTaskQueue.kt:50`),
+  and it holds its transaction; a new one that does not is a defect, whatever the pool is set to.
+  `UserCreator` was the second until 2026-08-05, when its pair stopped existing rather than being made
+  safe: the read went and the index became the authority (the invariant below). An index
   that collides by value is a different matter again and stays reachable however well writes are
   serialised: `ix_user_password_hashes_user_created` (two hashes at the same instant) is the one the
   code translates, and `docs/adr/0006-domain-owned-timestamps.md:111` is where that reasoning lives.
