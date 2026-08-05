@@ -1,9 +1,9 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.domain.users.UsernameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
-import jakarta.persistence.PersistenceException
 import java.time.temporal.ChronoUnit
 import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -195,14 +195,24 @@ class UserRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `saving two users whose names differ only by case is rejected`() {
-        // Given
-        repository.saveUser(User(id = randomUUID(), name = "Alice", createdAt = storableNow()))
+    fun `Given a name already taken up to case, Then saveUser throws UsernameAlreadyTakenException`() {
+        // Given: ix_users_name_nocase folds case, so the store sees these two names as one
+        val takenName = "Alice${createRandomString()}"
+        saveUser(takenName)
 
         // When, Then
-        assertThrows<PersistenceException> {
-            repository.saveUser(User(id = randomUUID(), name = "alice", createdAt = storableNow()))
-        }
+        assertThrows<UsernameAlreadyTakenException> { saveUser(takenName.uppercase()) }
+    }
+
+    @Test
+    fun `Given a name held by a tombstoned account, Then saveUser throws UsernameAlreadyTakenException`() {
+        // Given: ix_users_name_nocase covers every row of users, tombstoned ones included, so a name
+        // is not released by a pending deletion
+        val tombstoned = saveUser()
+        repository.markPendingDeletion(tombstoned, storableNow())
+
+        // When, Then
+        assertThrows<UsernameAlreadyTakenException> { saveUser(tombstoned.name) }
     }
 
     @Test
