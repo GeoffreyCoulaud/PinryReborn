@@ -15,15 +15,18 @@ import java.io.File
  * stops is the constraint that arrives with no answer at all.
  */
 class UniqueConstraintOutcomeTest {
-    // The outcome is a value rather than a comment, so a new key cannot be added without writing one.
+    // The outcome is a value rather than a comment, and the assertion below refuses a blank one, so a
+    // new key cannot be added without writing an answer.
     private val namedOutcomes =
         mapOf(
             "ix_users_name_nocase" to
                 "UserRepository.saveUser translates it to UsernameAlreadyTakenException and UserCreator " +
                 "rethrows UsernameAlreadyTakenError, so the client sees 409 USERNAME_ALREADY_EXISTS.",
             "ux_tasks_dedup" to
-                "No error: EbeanTaskQueue.enqueueWithin catches it and returns the live task the dedup key " +
-                "already names, which is the convergence TaskQueueInterface documents.",
+                "No error while a live task exists: EbeanTaskQueue.enqueueWithin catches it and returns the " +
+                "live task the dedup key already names, which is the convergence TaskQueueInterface documents. " +
+                "A violation with no live task behind it has nothing to converge on and propagates, so the " +
+                "client sees 500.",
             "uq_images_pin_id" to
                 "No translation, deliberately: EbeanImageRepository.saveWithin deletes by pinId then inserts, " +
                 "in one transaction, so a second image for a pin replaces the first instead of colliding.",
@@ -59,12 +62,14 @@ class UniqueConstraintOutcomeTest {
     // that a third spelling, which they would read as no constraint at all, shows up as a difference.
     private val looseUniqueness = Regex("""\bunique\b""", RegexOption.IGNORE_CASE)
 
+    private val lineComment = Regex("--.*")
+
     // No non-empty guard sits beside these, unlike DbMigrationModelCoverageTest's: the table below is
     // not empty, so an extraction that stops matching fails the assertion rather than passing it.
     private val declaredConstraints: Set<String> =
         sqlScripts
             .flatMap { file ->
-                val text = file.readText()
+                val text = schemaOnly(file.readText())
                 (uniqueIndexStatement.findAll(text) + inlineUniqueConstraint.findAll(text))
                     .map { it.groupValues[1] }
                     .toList()
@@ -75,6 +80,18 @@ class UniqueConstraintOutcomeTest {
         // Sorted for a failure that reads the same twice; both sides are sets, so this is set equality
         // and a stale entry fails as loudly as a new constraint.
         assertEquals(namedOutcomes.keys.sorted(), declaredConstraints.sorted())
+    }
+
+    @Test
+    fun `Given the outcome table, Then no entry names a constraint without answering for it`() {
+        // The assertion above reads keys only, so `"ux_new" to ""` satisfies it: the name arrives and
+        // the silence stays, which is what decision 1 refuses.
+
+        // Given
+        val unanswered = namedOutcomes.filterValues { it.isBlank() }.keys.sorted()
+
+        // Then
+        assertEquals(emptyList<String>(), unanswered)
     }
 
     @Test
@@ -94,12 +111,17 @@ class UniqueConstraintOutcomeTest {
         sqlScripts
             .sortedBy { it.name }
             .flatMap { file ->
-                file
-                    .readText()
+                schemaOnly(file.readText())
                     .lineSequence()
                     .withIndex()
                     .filter { (_, line) -> patterns.any { it.containsMatchIn(line) } }
                     .map { (index, _) -> "${file.name}:${index + 1}" }
                     .toList()
             }
+
+    /**
+     * [text] with its SQL line comments blanked, keeping every newline so a locator still names the
+     * line it came from. A commented-out statement is prose about the schema, not schema.
+     */
+    private fun schemaOnly(text: String): String = text.replace(lineComment, "")
 }

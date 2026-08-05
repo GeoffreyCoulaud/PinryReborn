@@ -50,7 +50,7 @@ these two.
 | Constraint | Write path | Today | Decided outcome |
 |---|---|---|---|
 | `ix_users_name_nocase` | `UserRepository.kt:54` | `PersistenceException` escapes | Translate to `UsernameAlreadyTakenException`, rethrown by `UserCreator` as `UsernameAlreadyTakenError` (409) |
-| `ux_tasks_dedup` | `EbeanTaskQueue.kt:78` | no catch | Converge: return the live task the dedup key already names |
+| `ux_tasks_dedup` | `EbeanTaskQueue.kt:78` | no catch | Converge: return the live task the dedup key already names. A violation with no live task behind it has nothing to converge on, so it propagates and the client sees 500 |
 | `uq_images_pin_id` | `EbeanImageRepository.kt:33` | no catch | None needed: the path deletes by `pinId` then inserts, in one transaction |
 | `uq_session_tokens_token_hash` | `SessionTokenRepository.kt:20` | no catch | None wanted: a token-hash collision is a broken generator, and a 500 is the correct answer |
 | `uq_user_data_exports_pending` | `UserDataExportRepository` | translated | Unchanged: `ExportAlreadyInProgressException` |

@@ -135,6 +135,18 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
   byte-exact, checked by hand during the T3 review of 2026-08-05, which is what makes this a gap in the
   net rather than a defect. The assertion to add pairs each `<createIndex definition>` with the
   create-index line of the `.sql` of the same version. New 2026-08-05.
+- **The two migration tests each own their own reader of the migration directory.**
+  `UniqueConstraintOutcomeTest` and `DbMigrationModelCoverageTest` sit in the same package and repeat
+  `migrationDirectory`, the `sqlScripts` listing, `locationsMatching` and the rationale for the loose
+  probe near-verbatim, which `AGENTS.md` Design names as the signal that the design is the defect: the
+  repeated explanatory comment is there because there is no shared reader to hang it on. A test helper
+  owning the listing, the locators and the loose-probe idiom would delete all four duplicates and give
+  the comment one home. It would also give comment-stripping a single site: `UniqueConstraintOutcomeTest`
+  strips SQL line comments so a commented-out `create unique index` is not read as schema, and
+  `DbMigrationModelCoverageTest` still reads raw text, so its `create index` extractor and its loose
+  probe have the same false positive. The helper has to expose both texts, because the no-op assertion
+  looks for the `-- not supported` comment itself and a stripped text would make it pass on anything.
+  Surfaced by the T8 review, 2026-08-05. **P2**, and small.
 - **`UserDataExportModel.kt:16` states a rule about Ebean that is not true**, and it is the only
   precedent a reader finds for a partial index. Its comment says `columnNames` "keeps the index in the
   migration model so a later diff drops and recreates it correctly"; Ebean keys an index by name and
