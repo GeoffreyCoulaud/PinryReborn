@@ -19,5 +19,8 @@
             <column name="when_modified" type="timestamp" notnull="true"/>
             <column name="version" type="bigint" notnull="true"/>
         </createTable>
+        <createIndex indexName="ix_tasks_claim" tableName="tasks" columns="" definition="create index ix_tasks_claim on tasks (priority desc, available_at asc, id asc) where state = 'PENDING'"/>
+        <createIndex indexName="ix_tasks_lease" tableName="tasks" columns="" definition="create index ix_tasks_lease on tasks (lease_expires_at) where state = 'RUNNING'"/>
+        <createIndex indexName="ux_tasks_dedup" tableName="tasks" columns="" definition="create unique index ux_tasks_dedup on tasks (dedup_key) where dedup_key is not null and state in ('PENDING','RUNNING')"/>
     </changeSet>
 </migration>

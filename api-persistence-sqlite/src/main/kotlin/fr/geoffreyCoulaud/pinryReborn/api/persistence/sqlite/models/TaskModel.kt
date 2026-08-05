@@ -16,6 +16,22 @@ import java.util.UUID
 // Without it the sweep is a full scan over a table that accumulates terminal rows forever
 // (spec 2026-07-27-periodic-gc.md section 11, D6).
 @Index(columnNames = ["state", "terminal_state_at"])
+// The three below already exist in every database, created by `1.3.sql:23,25,27`. Each is partial,
+// so only `definition` can carry its `where` clause; declaring them here puts them in the model.
+@Index(
+    name = "ix_tasks_claim",
+    definition = "create index ix_tasks_claim " +
+        "on tasks (priority desc, available_at asc, id asc) where state = 'PENDING'",
+)
+@Index(
+    name = "ix_tasks_lease",
+    definition = "create index ix_tasks_lease on tasks (lease_expires_at) where state = 'RUNNING'",
+)
+@Index(
+    name = "ux_tasks_dedup",
+    definition = "create unique index ux_tasks_dedup on tasks (dedup_key) " +
+        "where dedup_key is not null and state in ('PENDING','RUNNING')",
+)
 class TaskModel
     @Suppress("LongParameterList")
     constructor(

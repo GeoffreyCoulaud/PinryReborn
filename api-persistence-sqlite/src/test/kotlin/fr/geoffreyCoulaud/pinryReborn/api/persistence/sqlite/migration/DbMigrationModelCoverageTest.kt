@@ -27,13 +27,10 @@ import java.io.File
 class DbMigrationModelCoverageTest {
     private val migrationDirectory = File("src/main/resources/dbmigration")
 
-    private val handWritten =
-        setOf(
-            // Case-insensitive unique index on users.name. Predates this rule; `@Index(definition = ...)`
-            // on UserModel would express it today, but rewriting an applied migration changes its
-            // checksum and breaks startup. Cleared when the history is flattened at beta (backlog).
-            "1.2",
-        )
+    // Empty, and meant to stay so: `1.2` was the last entry and its model file now exists. Writing
+    // one rewrites no `.sql`, so the checksum argument the entry rested on never applied
+    // (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
+    private val handWritten = emptySet<String>()
 
     private val sqlScripts: List<File> =
         migrationDirectory
