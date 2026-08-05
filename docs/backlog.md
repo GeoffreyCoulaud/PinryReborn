@@ -94,6 +94,23 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
   caller wires it through. The cost is a lost stack trace in a log, since the use case translates to
   its status code either way, which is why this is one item over three sites rather than a fix on the
   one written most recently. Surfaced by the T4 review, 2026-08-05. **P2**, and small.
+  **Widened by the T5 review**: the same gap has a shape as well as a test side. Every one of these
+  error types declares `cause: Throwable? = null`, so dropping the chain at a new call site compiles
+  and passes. `UsernameAlreadyTakenError` has one construction site today and its exception's KDoc
+  already anticipates a second (a rename use case). A required `cause` would make the drop a compile
+  error. Left as it stands for now because the optional shape is the convention every sibling follows
+  (`PasswordChangeError.kt:16`), so changing one is worse than changing none: decide it across the set.
+- **The tombstoned-name refusal exists only as a composition of two levels.** Since the pre-check
+  went, "a name held by an account pending deletion is still taken" is pinned by a repository test
+  (the index refuses the row) and by a use-case test (the translation to 409), with nothing joining
+  them: no integration test drives that scenario end to end, unlike the case-variant one
+  (`UserCreationIntegrationTest.kt:191-208`). The composition is sound, because the catch is
+  type-based and scenario-blind, so this is a coverage seam rather than a defect. Surfaced by the T5
+  review, 2026-08-05. **P2**.
+- **`UserCreator.createUser(name)` has no production caller.** `UserController` calls
+  `createUserWithPassword`, so the password-less entry point is exercised only by its unit test.
+  Predates this branch (`e102883`). Either it is a public surface someone intends to use, or it is
+  code nobody asked for and goes. Surfaced by the T5 review, 2026-08-05. **P2**, and small.
 - **Nothing checks that a migration model's index matches the DDL that was applied.**
   `DbMigrationModelCoverageTest` compares index *names* between the `.sql` files and the
   `model/*.model.xml`, and `generateDbMigration` compares the model against the entity annotations the
