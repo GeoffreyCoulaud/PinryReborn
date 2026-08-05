@@ -313,7 +313,8 @@ argument survives the generalisation but its wording names one function.
   the transaction and rethrowing when it joined one, but a documented method behaving differently on
   its two call paths is a specification decision and not the implementer's.
 
-**Driving the losing path.** The race is not reproducible on a single connection, so a test cannot
+**Driving the losing path.** The race is not reproducible while `enqueue` holds its check and its
+insert in one transaction, which is what serialises the pair (ADR 0009, findings), so a test cannot
 create it. It can create the *situation* the race produces, through `enqueue`'s own public surface,
 with a `Persistor` decorator around the real one:
 

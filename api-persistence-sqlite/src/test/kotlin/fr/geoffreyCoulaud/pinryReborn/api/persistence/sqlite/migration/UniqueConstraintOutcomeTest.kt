@@ -23,7 +23,7 @@ class UniqueConstraintOutcomeTest {
                 "UserRepository.saveUser translates it to UsernameAlreadyTakenException and UserCreator " +
                 "rethrows UsernameAlreadyTakenError, so the client sees 409 USERNAME_ALREADY_EXISTS.",
             "ux_tasks_dedup" to
-                "No error while a live task exists: EbeanTaskQueue.enqueueWithin catches it and returns the " +
+                "No error while a live task exists: EbeanTaskQueue.enqueueDeduplicated catches it and returns the " +
                 "live task the dedup key already names, which is the convergence TaskQueueInterface documents. " +
                 "A violation with no live task behind it has nothing to converge on and propagates, so the " +
                 "client sees 500.",

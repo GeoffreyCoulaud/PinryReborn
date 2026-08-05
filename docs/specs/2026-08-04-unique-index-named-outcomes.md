@@ -207,13 +207,17 @@ the lot is removing, documented then by an attempt rather than by a comment with
 
 ## 8. The guard rail
 
-Two assertions, both in `api-persistence-sqlite/src/test/.../migration/`, next to
+Two rules, both in `api-persistence-sqlite/src/test/.../migration/`, next to
 `DbMigrationModelCoverageTest`, which is the project's declared home for an invariant about repository
-content (`agents/project.md`, Conventions).
+content (`agents/project.md`, Conventions). They shipped as nine assertions, the count the two classes
+now carry: six in `DbMigrationModelCoverageTest`, three of which predate this lot, and three in
+`UniqueConstraintOutcomeTest`. Each rule needs its own guards against a silent pass, an extraction
+that stops matching or a directory that moved, and those guards are assertions too.
 
 **A. `UniqueConstraintOutcomeTest`.** Extracts every unique constraint name from the committed `.sql`
 files, in both spellings, and compares the set to a table declared in the test, each entry carrying its
-outcome in a comment. A new unique constraint fails the test until someone writes down what a client
+outcome as its value rather than as a comment, so that a key cannot be added without an answer and a
+blank one fails. A new unique constraint fails the test until someone writes down what a client
 sees when it fires; a removed one fails it until the stale entry goes.
 
 Its limit, stated rather than discovered later: it enforces that an outcome is **named**, not that the
