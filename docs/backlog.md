@@ -85,6 +85,15 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
   debt, the hand-written `1.2` index, which is now closed. It was never blocked by the checksum: `1.2.sql` is
   untouched, and what was missing was a `.model.xml`, which is generator state rather than applied DDL
   (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
+- **No repository test pins the cause chain on a translated constraint violation.** All three
+  collision-translating sites pass the original `PersistenceException` into their domain exception, and
+  all three tests assert the type alone (`UserRepositoryTest.kt:204,215`,
+  `UserPasswordHashRepositoryTest.kt:86`, `UserDataExportRepositoryTest.kt:263`). Replace
+  `SomeException(cause = it)` with `SomeException()` at any of the three and every test stays green.
+  `SqliteConstraintViolationsTest` pins that the helper hands the failure to the factory, not that the
+  caller wires it through. The cost is a lost stack trace in a log, since the use case translates to
+  its status code either way, which is why this is one item over three sites rather than a fix on the
+  one written most recently. Surfaced by the T4 review, 2026-08-05. **P2**, and small.
 - **Nothing checks that a migration model's index matches the DDL that was applied.**
   `DbMigrationModelCoverageTest` compares index *names* between the `.sql` files and the
   `model/*.model.xml`, and `generateDbMigration` compares the model against the entity annotations the
