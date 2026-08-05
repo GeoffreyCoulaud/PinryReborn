@@ -167,10 +167,12 @@ The three values `modules/backend.md` expects this file to declare.
 - **All code is English** (decided 2026-07-07). Documents written before that decision keep their
   original language: no retro-translation.
 - **The migration history is append-only until beta**, when it will be flattened into a single
-  generated baseline. Two known costs are accepted meanwhile: `1.2` is a hand-written
-  case-insensitive unique index that `@Index(definition = ...)` would express today, and
-  `users`/`pins`/`boards`/`tags` keep `when_created` (and `pins`/`boards` also `when_modified`) column
-  names that no longer match the domain's `createdAt` and `updatedAt`.
+  generated baseline. One known cost is accepted meanwhile: `users`/`pins`/`boards`/`tags` keep
+  `when_created` (and `pins`/`boards` also `when_modified`) column names that no longer match the
+  domain's `createdAt` and `updatedAt`. The hand-written `1.2` index was the second and is closed:
+  it is declared on `UserModel` and recorded in `1.2.model.xml`, and a `.model.xml` is generator
+  state rather than applied DDL, so writing one rewrites no migration
+  (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
 - **A query rooted on a recyclable model is built by its `Queries` object** (decided 2026-07-29): a
   model whose rows are recycled implements the `SoftDeletableModel` marker, and every query rooted
   on it says which state it means through `active()`, `recycled()` or `any()` rather than
