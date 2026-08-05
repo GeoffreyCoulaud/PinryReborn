@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import jakarta.persistence.PersistenceException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -61,6 +62,24 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a dedup key whose only task is terminal, Then enqueue creates a new task`() {
+        // Given: the sole row under this key has settled, so ux_tasks_dedup no longer covers it
+        // (`1.3.sql:27` indexes PENDING and RUNNING only) and the dedup read must not either
+        val dedupKey = createRandomString()
+        val settled = queue.enqueue(newTask(dedupKey = dedupKey))
+        val claimed = requireNotNull(queue.claimNext(now, Duration.ofMinutes(1)))
+        queue.markSucceeded(claimed.id, claimed.leaseId, now)
+
+        // When
+        val enqueued = queue.enqueue(newTask(dedupKey = dedupKey))
+
+        // Then: coalescing onto a finished task would drop the work the caller just asked for
+        assertNotEquals(settled.id, enqueued.id)
+        assertEquals(TaskState.SUCCEEDED, queue.findById(settled.id)?.state)
+        assertEquals(TaskState.PENDING, queue.findById(enqueued.id)?.state)
+    }
+
+    @Test
     fun `Given no dedup key, Then two enqueues create two tasks`() {
         // Given / When
         queue.enqueue(newTask(dedupKey = null))
@@ -101,8 +120,8 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val conflict = liveTaskModel(dedupKey)
         val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionControl)
 
-        // When: the caller owns the transaction, so enqueue joins it and commits nothing itself.
-        // The assertion is on the returned task: committing here would be the test doing enqueue's job.
+        // When: the caller owns the transaction, so enqueue joins it and the commit below is the
+        // caller's own. It is also what shows the caught violation left it usable (ADR 0009, fact 2).
         val converged =
             transactionControl.beginTransaction().use { transaction ->
                 val task = racingQueue.enqueue(newTask(dedupKey = dedupKey))
@@ -110,8 +129,9 @@ class EbeanTaskQueueTest : RepositoryTest() {
                 task
             }
 
-        // Then
+        // Then: the committed transaction holds the conflicting row and not the refused insert
         assertEquals(conflict.id, converged.id)
+        assertEquals(1, queue.countByState(TaskState.PENDING))
     }
 
     @Test
