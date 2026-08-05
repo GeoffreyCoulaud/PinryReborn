@@ -135,6 +135,24 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a non-unique failure on the dedup insert, Then enqueue propagates it`() {
+        // Given: a live task is there to converge on, so the only thing keeping the caller from being
+        // handed it is the discriminator in SqliteConstraintViolations
+        val dedupKey = createRandomString()
+        val conflict = liveTaskModel(dedupKey)
+        val violation = notNullConstraintViolation()
+        val persistorRaising = ForeignFailurePersistor(persistor, conflict, violation)
+        val racingQueue = EbeanTaskQueue(persistorRaising, transactionControl)
+
+        // When, Then: a NOT NULL violation answered by convergence would hide a broken column
+        val thrown =
+            assertThrows(PersistenceException::class.java) {
+                racingQueue.enqueue(newTask(dedupKey = dedupKey))
+            }
+        assertSame(violation, thrown)
+    }
+
+    @Test
     fun `Given a dedup violation with no live task behind it, Then enqueue propagates the violation`() {
         // Given: the violation carries no row to converge on, so "returns that existing task" has no
         // answer and a 500 is the honest one
@@ -173,6 +191,16 @@ class EbeanTaskQueueTest : RepositoryTest() {
             ),
         )
 
+    /** The shape of a failure that must never converge: same vendor errorCode 19, other resultCode. */
+    private fun notNullConstraintViolation() =
+        PersistenceException(
+            "[SQLITE_CONSTRAINT_NOTNULL] A NOT NULL constraint failed",
+            SQLiteException(
+                "[SQLITE_CONSTRAINT_NOTNULL] A NOT NULL constraint failed",
+                SQLiteErrorCode.SQLITE_CONSTRAINT_NOTNULL,
+            ),
+        )
+
     /**
      * Turns the first task insert into a lost dedup race: writes [conflict] through the real
      * persistor, so the insert that follows violates `ux_tasks_dedup`. The race itself does not
@@ -189,6 +217,24 @@ class EbeanTaskQueueTest : RepositoryTest() {
             if (bean is TaskModel && !raced) {
                 raced = true
                 delegate.save(conflict)
+            }
+            delegate.save(bean)
+        }
+    }
+
+    /**
+     * Writes [conflict], then fails the insert with [violation]: convergence has an answer to give,
+     * and only the unique-constraint discriminator stops it being given for the wrong failure.
+     */
+    private class ForeignFailurePersistor(
+        private val delegate: Persistor,
+        private val conflict: TaskModel,
+        private val violation: PersistenceException,
+    ) : Persistor by delegate {
+        override fun save(bean: Any) {
+            if (bean is TaskModel && bean.dedupKey == conflict.dedupKey) {
+                delegate.save(conflict)
+                throw violation
             }
             delegate.save(bean)
         }

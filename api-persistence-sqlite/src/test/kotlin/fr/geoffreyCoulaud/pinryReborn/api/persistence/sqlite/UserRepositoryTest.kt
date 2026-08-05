@@ -2,15 +2,20 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.users.UsernameAlreadyTakenException
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import jakarta.persistence.PersistenceException
 import java.time.temporal.ChronoUnit
 import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 
 class UserRepositoryTest : RepositoryTest() {
     private val repository = UserRepository(persistor)
@@ -202,6 +207,40 @@ class UserRepositoryTest : RepositoryTest() {
 
         // When, Then
         assertThrows<UsernameAlreadyTakenException> { saveUser(tombstoned.name) }
+    }
+
+    @Test
+    fun `Given a non-unique persistence failure, Then saveUser propagates it untouched`() {
+        // Given: a NOT NULL violation, which carries the same vendor errorCode 19 as the unique one,
+        // so only the discriminator in SqliteConstraintViolations parts them
+        val violation = notNullConstraintViolation()
+        val failingRepository = UserRepository(NotNullViolatingPersistor(persistor, violation))
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = storableNow())
+
+        // When, Then: translating this one would report a broken column as a taken name
+        val thrown = assertThrows<PersistenceException> { failingRepository.saveUser(user) }
+        assertSame(violation, thrown)
+    }
+
+    /** The shape of a failure that must never be translated: same vendor errorCode 19, other resultCode. */
+    private fun notNullConstraintViolation() =
+        PersistenceException(
+            "[SQLITE_CONSTRAINT_NOTNULL] A NOT NULL constraint failed",
+            SQLiteException(
+                "[SQLITE_CONSTRAINT_NOTNULL] A NOT NULL constraint failed",
+                SQLiteErrorCode.SQLITE_CONSTRAINT_NOTNULL,
+            ),
+        )
+
+    /** Raises [violation] on a user merge, which is the call saveUser's translation wraps. */
+    private class NotNullViolatingPersistor(
+        private val delegate: Persistor,
+        private val violation: PersistenceException,
+    ) : Persistor by delegate {
+        override fun merge(bean: Any) {
+            if (bean is UserModel) throw violation
+            delegate.merge(bean)
+        }
     }
 
     @Test
