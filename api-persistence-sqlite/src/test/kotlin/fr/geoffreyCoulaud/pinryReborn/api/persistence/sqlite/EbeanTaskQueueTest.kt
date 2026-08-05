@@ -3,13 +3,20 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TaskModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanTaskQueue
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import jakarta.persistence.PersistenceException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -68,6 +75,114 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val stored = queue.findById(java.util.UUID.randomUUID())
         // Then
         assertNull(stored)
+    }
+
+    // --- enqueue: the dedup insert loses the race ---
+
+    @Test
+    fun `Given the dedup insert loses the race, Then enqueue returns the live task it collided with`() {
+        // Given: a live task appears under the same dedup key between enqueue's check and its insert
+        val dedupKey = createRandomString()
+        val conflict = liveTaskModel(dedupKey)
+        val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionControl)
+
+        // When: no ambient transaction, so enqueue opens and commits its own
+        val converged = racingQueue.enqueue(newTask(dedupKey = dedupKey))
+
+        // Then: the losing path answers what the winning one does, the task the key already names
+        assertEquals(conflict.id, converged.id)
+        assertEquals(1, queue.countByState(TaskState.PENDING))
+    }
+
+    @Test
+    fun `Given an ambient transaction, Then a lost dedup race still converges on the live task`() {
+        // Given
+        val dedupKey = createRandomString()
+        val conflict = liveTaskModel(dedupKey)
+        val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionControl)
+
+        // When: the caller owns the transaction, so enqueue joins it and commits nothing itself.
+        // The assertion is on the returned task: committing here would be the test doing enqueue's job.
+        val converged =
+            transactionControl.beginTransaction().use { transaction ->
+                val task = racingQueue.enqueue(newTask(dedupKey = dedupKey))
+                transaction.commit()
+                task
+            }
+
+        // Then
+        assertEquals(conflict.id, converged.id)
+    }
+
+    @Test
+    fun `Given a dedup violation with no live task behind it, Then enqueue propagates the violation`() {
+        // Given: the violation carries no row to converge on, so "returns that existing task" has no
+        // answer and a 500 is the honest one
+        val violation = uniqueConstraintViolation()
+        val racingQueue = EbeanTaskQueue(NoConflictRowPersistor(persistor, violation), transactionControl)
+
+        // When, Then
+        val thrown =
+            assertThrows(PersistenceException::class.java) {
+                racingQueue.enqueue(newTask(dedupKey = createRandomString()))
+            }
+        assertSame(violation, thrown)
+    }
+
+    /** A live row under [dedupKey]: what a lost race leaves for the losing insert to collide with. */
+    private fun liveTaskModel(dedupKey: String) =
+        TaskModel(
+            id = UUID.randomUUID(),
+            kind = "test.kind",
+            payload = "{}",
+            state = TaskState.PENDING.name,
+            priority = 0,
+            availableAt = now,
+            attempts = 0,
+            maxAttempts = 3,
+            dedupKey = dedupKey,
+        )
+
+    /** The exception shape Ebean-on-SQLite raises for a unique-index violation. */
+    private fun uniqueConstraintViolation() =
+        PersistenceException(
+            "[SQLITE_CONSTRAINT_UNIQUE] A UNIQUE constraint failed",
+            SQLiteException(
+                "[SQLITE_CONSTRAINT_UNIQUE] A UNIQUE constraint failed",
+                SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE,
+            ),
+        )
+
+    /**
+     * Turns the first task insert into a lost dedup race: writes [conflict] through the real
+     * persistor, so the insert that follows violates `ux_tasks_dedup`. The race itself does not
+     * reproduce on the single-connection datasource (ADR 0009, findings from the experiment), so the
+     * situation it would leave behind is created instead and driven through enqueue's public surface.
+     */
+    private class LosingDedupRacePersistor(
+        private val delegate: Persistor,
+        private val conflict: TaskModel,
+    ) : Persistor by delegate {
+        private var raced = false
+
+        override fun save(bean: Any) {
+            if (bean is TaskModel && !raced) {
+                raced = true
+                delegate.save(conflict)
+            }
+            delegate.save(bean)
+        }
+    }
+
+    /** Raises [violation] on a task insert without writing anything, so the re-read finds nothing. */
+    private class NoConflictRowPersistor(
+        private val delegate: Persistor,
+        private val violation: PersistenceException,
+    ) : Persistor by delegate {
+        override fun save(bean: Any) {
+            if (bean is TaskModel) throw violation
+            delegate.save(bean)
+        }
     }
 
     // --- claimNext ---
