@@ -179,6 +179,19 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
   applicative outcome, and the invariant that closes these two is implicit. Surfaced by the holistic
   review of the `SqliteConstraintViolations` extraction, corrected against the connection-pool
   configuration, 2026-08-04.
+- **The export refusal precedence is pinned only at unit level.** `UserDataExportRequesterTest`
+  asserts that a live `PENDING` export answers 409 rather than 429, but MockK's
+  `checkUnnecessaryStub` forces that assertion into the shape
+  `verify(exactly = 0) { repository.findLastRequestedAtForUser(any()) }`: an internal call count, not
+  the outcome a client sees. An integration companion asserting `409 EXPORT_ALREADY_IN_PROGRESS`
+  rather than `429 EXPORT_TOO_SOON` would pin the wire behaviour the ADR argues for
+  (`docs/adr/0009-unique-index-named-outcomes.md`, decision 2). It is feasible: the shared export
+  profile pins the interval to zero (`MeExportTestProfile.kt:20`), which is why no existing export
+  integration test can reach this case, and `MePasswordRateLimitIntegrationTest.kt:14` is the in-repo
+  precedent for a per-class profile that overrides one interval. Not done inside T7 because the task's
+  file list was the use-case test alone: the companion is a new `@QuarkusTest` class with its own
+  profile and its own boot in `api-application`, which is scope T7 did not carry. Surfaced by the T7
+  review, 2026-08-05. **P2**.
 - **`PinRepositoryTest` split decision.** T4 tipped `PinRepositoryTest` over `LargeClass`; it is held
   by a reasoned `@Suppress("LargeClass")` (it is the comprehensive main suite; feature slices are
   sibling classes). Keep the suppress, or split the suite along its feature slices so the suppress can

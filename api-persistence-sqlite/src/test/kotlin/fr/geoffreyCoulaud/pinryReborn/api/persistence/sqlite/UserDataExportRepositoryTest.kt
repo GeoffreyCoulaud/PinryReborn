@@ -240,6 +240,19 @@ class UserDataExportRepositoryTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a pending export as the only row, Then it still counts as the last request`() {
+        // Given: a live PENDING row counting towards the minimum interval is what makes both export
+        // refusals apply at once (docs/adr/0009-unique-index-named-outcomes.md, decision 2), which is
+        // the whole reason UserDataExportRequester keeps its read and orders 409 ahead of 429.
+        val user = createAndSaveUser()
+        val at = Instant.parse("2026-07-22T09:00:00Z")
+        repository.save(pendingExport(user.id, at))
+
+        // When / Then
+        assertEquals(at, repository.findLastRequestedAtForUser(user.id))
+    }
+
+    @Test
     fun `Given no exports for a user, Then there is no last requested time`() {
         // Given
         val user = createAndSaveUser()

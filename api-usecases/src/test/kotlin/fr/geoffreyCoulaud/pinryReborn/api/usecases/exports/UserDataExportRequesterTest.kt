@@ -156,11 +156,14 @@ class UserDataExportRequesterTest : BaseTest() {
 
     @Test
     fun `Given a pending export inside the minimum interval, Then the in-progress refusal wins`() {
-        // Given: both refusals apply, because a PENDING row counts towards the minimum interval too.
-        // 409 wins: the problem is that an export is running, not that the request came too soon.
+        // Given: both refusals apply, because findLastRequestedAtForUser counts a live PENDING row
+        // towards the minimum interval (pinned by UserDataExportRepositoryTest, against the real
+        // store). 409 wins: an export is running, not a request that came too soon.
         stubTransactionPassthrough()
         every { reauthenticator.reauthenticate(user, factor) } just runs
         every { clock.now() } returns now
+        // Illustrative, not load-bearing: the use case tests this export for nullity only and never
+        // reaches the interval read, so the same assertion holds with an instant seven days old.
         val requestedInsideTheInterval = now.minus(Duration.ofMinutes(30))
         every { repository.findPendingForUser(user.id) } returns pendingExport(requestedInsideTheInterval)
 
