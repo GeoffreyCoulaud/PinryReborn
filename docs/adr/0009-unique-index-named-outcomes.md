@@ -98,6 +98,14 @@ another.
    This clears one of the beta-flattening item's two debts. The `when_created` / `when_modified` column
    names remain and do require rewriting applied migrations, so that item narrows rather than closes.
 
+   **What this leaves unguarded, deliberately.** Neither measurement can see an element's content. The
+   generator compares the model against the annotations the model was harvested from, so the two agree
+   by construction, and the assertion compares index names only. A `<createIndex>` whose `definition`
+   differs from the DDL its migration actually applied would satisfy both. Today's nine are byte-exact,
+   checked by hand during this task's review; the missing assertion is in the backlog. Naming the limit
+   is the point: an index recorded under the right name with the wrong body is the next version of the
+   failure this decision closes.
+
 ## Findings from the experiment
 
 The lot opens by trying to produce both violations under concurrency rather than by designing against

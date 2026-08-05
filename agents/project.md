@@ -324,8 +324,15 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   `unique = true`.** `unique = true` makes Ebean's dialect try `ALTER TABLE ADD CONSTRAINT UNIQUE`,
   which SQLite does not support, so the generated migration is a `-- not supported:` comment that
   applies silently and enforces nothing. The `definition` attribute makes Ebean emit the
-  `create unique index` itself (the modern form for the hand-written `1.2` index).
+  `create unique index` itself, and it is the form `UserModel` now uses for `ix_users_name_nocase`.
   `DbMigrationModelCoverageTest` now fails if any committed migration carries that no-op marker.
+- **A partial or expression index is declared by `definition` alone**, with no `columnNames` and no
+  `unique = true`. Ebean keys an index by its name and compares `tableName`, `unique`, `definition`
+  and the column list between the two model sides, so `columnNames` buys nothing when a `definition`
+  is present and only creates a second attribute that has to agree. `UserDataExportModel.kt:16`
+  declares both and its comment claims `columnNames` is what keeps the index diffable; that claim is
+  wrong and is queued in the backlog. The four indexes recorded on 2026-08-05 (`TaskModel`,
+  `UserModel`) use the `definition`-only form, which is also what `1.18` uses.
 - **The `pre-commit` hook rewrites `docs/openapi.json`**, stages it, and exits non-zero when it
   changed, so the commit has to be re-run. That is the hook working, not a failure. It also rejects
   em-dashes and en-dashes in staged text additions (no-em-dash rule, AGENTS.md Conventions): use a
