@@ -2,12 +2,14 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.users.UsernameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.UserModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.UserQueries
 import jakarta.enterprise.context.ApplicationScoped
+import jakarta.persistence.PersistenceException
 import java.time.Instant
 import java.util.UUID
 
@@ -51,7 +53,16 @@ class UserRepository(
             .findOne()
             ?.toDomain()
 
-    override fun saveUser(user: User): User = sqlRepository.saveAndReturn(user.toModel()).toDomain()
+    override fun saveUser(user: User): User =
+        try {
+            sqlRepository.saveAndReturn(user.toModel()).toDomain()
+        } catch (error: PersistenceException) {
+            // ix_users_name_nocase is the only unique index on users, so a unique violation here is
+            // always a taken name.
+            SqliteConstraintViolations.translateUniqueConstraint(error) {
+                UsernameAlreadyTakenException(cause = it)
+            }
+        }
 
     // Rooted on the active accounts: a repeated deletion request then finds nothing and returns,
     // instead of re-stamping the instant and pushing the retention deadline further away every time.
