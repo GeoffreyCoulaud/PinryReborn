@@ -224,6 +224,11 @@ The three values `modules/backend.md` expects this file to declare.
   exception is `UserDataExportRequester.kt:58`, which orders two refusals and answers 409 ahead of
   429 while an export is running. No tool can tell a uniqueness read from any other read, so this
   line is the whole guard (`docs/adr/0009-unique-index-named-outcomes.md`, decision 2).
+- **A unique constraint is not complete until its outcome is named** (decided 2026-08-05): every one
+  the migrations declare, in either spelling, appears in `UniqueConstraintOutcomeTest`'s table with
+  the answer a client gets when it fires, "no translation, deliberately" included, and the test
+  refuses the next one that arrives silent. It holds that an outcome is named, not that it is true
+  (`docs/adr/0009-unique-index-named-outcomes.md`, decision 1).
 
 Claims the old `AGENTS.md` made that the code disproved, recorded rather than deleted:
 
