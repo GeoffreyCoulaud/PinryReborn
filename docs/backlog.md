@@ -77,12 +77,29 @@ Last reviewed: 2026-08-04 (the shared `SqliteConstraintViolations` helper shippe
 - **Flatten the migration history at beta.** The project is alpha (see docs/project.md): breaking changes and data loss
   are
   acceptable, nobody should be running it yet. The migration history is nonetheless append-only, and that already
-  constrains fixes: `1.2` is a hand-written case-insensitive unique index that `@Index(definition = ...)` would
-  express today (`DbMigrationModelCoverageTest` lists it), and `users`/`pins`/`boards`/`tags` keep `when_created` /
-  `when_modified` column names that no longer match the domain's `createdAt` / `updatedAt`, both kept only because
-  rewriting an applied migration changes its checksum and breaks startup. At beta, collapse `1.0` to `1.n` into a
-  single generated baseline and take both fixes with it. Until then, when a fix is blocked only by an already-applied
-  migration, prefer the clean design and record the debt here rather than contorting around it. New 2026-07-23.
+  constrains fixes: `users`/`pins`/`boards`/`tags` keep `when_created` / `when_modified` column names that no longer
+  match the domain's `createdAt` / `updatedAt`, kept only because rewriting an applied migration changes its checksum
+  and breaks startup. At beta, collapse `1.0` to `1.n` into a single generated baseline and take that fix with it.
+  Until then, when a fix is blocked only by an already-applied migration, prefer the clean design and record the debt
+  here rather than contorting around it. New 2026-07-23. **Narrowed 2026-08-05**: this item used to carry a second
+  debt, the hand-written `1.2` index, which is now closed. It was never blocked by the checksum: `1.2.sql` is
+  untouched, and what was missing was a `.model.xml`, which is generator state rather than applied DDL
+  (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
+- **Nothing checks that a migration model's index matches the DDL that was applied.**
+  `DbMigrationModelCoverageTest` compares index *names* between the `.sql` files and the
+  `model/*.model.xml`, and `generateDbMigration` compares the model against the entity annotations the
+  model was harvested from, so the two agree by construction. A `<createIndex>` whose `definition`
+  differs from the `create index` line its migration actually ran would pass both. Today's nine are
+  byte-exact, checked by hand during the T3 review of 2026-08-05, which is what makes this a gap in the
+  net rather than a defect. The assertion to add pairs each `<createIndex definition>` with the
+  create-index line of the `.sql` of the same version. New 2026-08-05.
+- **`UserDataExportModel.kt:16` states a rule about Ebean that is not true**, and it is the only
+  precedent a reader finds for a partial index. Its comment says `columnNames` "keeps the index in the
+  migration model so a later diff drops and recreates it correctly"; Ebean keys an index by name and
+  compares `tableName`, `unique`, `definition` and the column lists between the two model sides, so a
+  `definition`-only declaration diffs correctly on its own. The codebase now carries both forms, and
+  the wrong comment is attached to the older one. `agents/project.md` Gotchas states the right form;
+  correct or delete the comment. Surfaced by the T3 review, 2026-08-05. **P2**, and small.
 - **Periodic maintenance via the task queue instead of dedicated schedulers.** The worker runs three
   periodic lifecycles (task poll, export retention purge, garbage collection), each on its own
   single-thread scheduler. The task queue is a solid, retried, state-tracked system, and periodic work
