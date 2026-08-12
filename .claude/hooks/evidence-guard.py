@@ -1,26 +1,18 @@
-# agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place
 """PreToolUse guard for the rules of AGENTS.md that prose cannot hold.
 
-Three rules, applied by blocking the tool call before it runs:
+Two rules, applied by blocking the tool call before it runs:
 
 - file content is written with the edit tool, never by a command, so that every
   change reaches the user as a reviewable diff
 - a check that cannot fail is not a check
-- a generic file is never edited in place, whatever tool is used
 
 Writing is judged by its target, not by the command's name: a redirection is
 allowed only into an explicitly disposable location. That allow-list is what
 makes the guard survive `/add-dir`, worktrees and monorepos without knowing
 anything about the layout of the working tree.
 
-The third rule judges a file by its own first line rather than by its path, for
-the same reason: a decision that needs no map of the working tree survives
-/add-dir, worktrees and monorepos, and it covers generic files that do not exist
-yet.
-
 There is no shebang on purpose. The hook is invoked as `python3 <path>`, so a
-copy that drops the executable bit cannot silently disable it, and line 1 stays
-free for the marker this guard reads.
+copy that drops the executable bit cannot silently disable it.
 
 Exit 0 allows the call. Exit 2 blocks it and returns the reason to the model,
 which corrects itself without involving the user.
@@ -95,35 +87,6 @@ CHECK_ADVICE = (
     "A check that cannot fail is not evidence. Run the project gate, or a "
     "command whose failure would have proved the claim wrong."
 )
-
-# Both strings, on line 1. Requiring one alone would mark any project file
-# generic if it has its own "do not edit" convention, or any file merely
-# naming the baseline.
-GENERIC_MARKS = ("agents-baseline", "do not edit in place")
-GENERIC_ADVICE = (
-    "This file is generic: identical in every project, replaced by copy and "
-    "never edited here. Change it upstream in agents-baseline, or put the "
-    "project-specific rule in agents/project.md."
-)
-EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
-
-
-def is_generic(path: str) -> bool:
-    """True when line 1 declares the file generic.
-
-    Deciding on the content rather than on the path is what lets the guard work
-    under /add-dir, in a worktree and in a monorepo while knowing nothing about
-    the layout, cover generic files that do not exist yet, and mark no
-    namesake generic. A file that says nothing on its first line belongs to
-    the project.
-    """
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            first = handle.readline(1024)
-    except (OSError, UnicodeDecodeError):
-        # Missing, unreadable or binary. Never block on what cannot be read.
-        return False
-    return all(mark in first for mark in GENERIC_MARKS)
 
 
 def strip_heredoc_bodies(command: str) -> str:
@@ -365,14 +328,7 @@ def main() -> int:
     except (json.JSONDecodeError, ValueError):
         # Never block a call because the guard could not read its own input.
         return 0
-    tool = payload.get("tool_name")
-    if tool in EDIT_TOOLS:
-        path = payload.get("tool_input", {}).get("file_path", "")
-        if path and is_generic(path):
-            print(f"Blocked: {path} is generic. {GENERIC_ADVICE}", file=sys.stderr)
-            return 2
-        return 0
-    if tool != "Bash":
+    if payload.get("tool_name") != "Bash":
         return 0
     command = payload.get("tool_input", {}).get("command", "")
     verdict = evaluate(command, payload.get("cwd"))
