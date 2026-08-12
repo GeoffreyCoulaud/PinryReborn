@@ -42,9 +42,10 @@ Nothing in the workflow says where that recursion stops, and each turn of it lan
 ## Decision
 
 1. **A review finding has four exits.** Fixed inside the lot; a **backlog item**, which means work
-   someone will do; an **accepted limit**, written where the decision lives (its ADR, its spec, its
-   handoff) and not copied into the backlog; or **refused**, with the reason in the handoff. Wrap
-   states which exit each finding took, which is the observable.
+   someone will do; an **accepted limit**, written where the decision lives (its ADR, its spec, or the
+   KDoc a reader meets, which is where most of this lot's landed) and not copied into the backlog; or
+   **refused**, with the reason in the handoff. Wrap states which exit each finding took, which is the
+   observable.
 
 2. **The backlog is banded by nature before it is banded by priority.** *Open work* (P0, P1, P2) is
    what someone will do. *Known limits* points at the document that records each one, and holds no
@@ -63,8 +64,11 @@ a class of its own because its three links are each pinned.
 
 ## Consequences
 
-- **The backlog's size becomes readable again.** Three P2 items after this lot, all of them work
-  someone will do.
+- **The backlog's size becomes readable again.** Sixteen P2 items disposed of, three of them staying
+  open work; two more filed by this lot's own reviews through exit 2, so the band ends at five, all
+  five work someone will do. The round number would have been three, and writing five is the point:
+  the rule does not stop findings arriving, it stops findings that are not work from being counted as
+  work. The measure to watch next time is not the count but the split across the four exits.
 - **A limit now has one home and one only.** Removing the copy means the backlog no longer warns a
   reader about the soft-delete residuals; ADR 0008 does, and the backlog's *Known limits* band points
   at it. A reader who only reads the backlog sees the pointer, not the substance. Accepted: a copy

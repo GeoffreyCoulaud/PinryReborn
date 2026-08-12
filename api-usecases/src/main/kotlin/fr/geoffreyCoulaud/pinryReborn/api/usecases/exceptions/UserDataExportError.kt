@@ -6,6 +6,8 @@ open class UserDataExportError(message: String, code: ErrorCode, cause: Throwabl
 // Thrown by the requester when it catches the domain ExportAlreadyInProgressException raised by the
 // repository's partial-unique-index guard (the ordinary case is caught earlier by
 // findPendingForUser, but this is what surfaces a lost race between two concurrent requests).
+/** The one collision error whose `cause` stays optional: `UserDataExportRequester.kt:58` refuses on a read, with
+ * no failure behind it to carry. Its sibling errors require it, so a translation site cannot drop the chain. */
 class ExportAlreadyInProgressError(cause: Throwable? = null) :
     UserDataExportError("An export is already in progress", ErrorCode.EXPORT_ALREADY_IN_PROGRESS, cause)
 
