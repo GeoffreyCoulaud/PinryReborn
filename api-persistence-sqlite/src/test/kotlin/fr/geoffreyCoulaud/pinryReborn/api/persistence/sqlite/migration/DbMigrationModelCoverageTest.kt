@@ -42,7 +42,7 @@ class DbMigrationModelCoverageTest {
         namesMatching(createIndexStatement, MigrationDirectory.sqlScripts, MigrationDirectory::schemaOnly)
 
     private val modelledIndexNames: Set<String> =
-        namesMatching(modelCreateIndexElement, MigrationDirectory.modelFiles, MigrationDirectory::rawText)
+        namesMatching(modelCreateIndexElement, MigrationDirectory.modelFiles, MigrationDirectory::textWithComments)
 
     @Test
     fun `Given the migration scripts, Then each one is backed by a generated model or documented here`() {
@@ -70,7 +70,7 @@ class DbMigrationModelCoverageTest {
         // which the generator renders.
         val noOpMigrations =
             MigrationDirectory.sqlScripts.filter { script ->
-                MigrationDirectory.rawText(script).lineSequence().any { it.startsWith("-- not supported") }
+                MigrationDirectory.textWithComments(script).lineSequence().any { it.startsWith("-- not supported") }
             }
         assertEquals(emptyList<File>(), noOpMigrations)
     }

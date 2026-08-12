@@ -17,7 +17,7 @@ internal object MigrationDirectory {
             .listFiles()
             ?.toList()
             .orEmpty()
-            .filter { it.name.endsWith(".sql") }
+            .filter { it.isFile && it.name.endsWith(".sql") }
 
     /** The `model/<version>.model.xml` files, each recording the schema state its migration produces. */
     val modelFiles: List<File> =
@@ -30,11 +30,15 @@ internal object MigrationDirectory {
     /** The model file [version] is paired with, whether or not it exists. */
     fun modelFileFor(version: String): File = File(root, "model/$version.model.xml")
 
-    /** [file] as committed, comments included: an assertion whose subject is a comment reads this one. */
-    fun rawText(file: File): String = file.readText()
+    /**
+     * [file] as committed, comments included. An assertion over a `.sql` reads [schemaOnly] instead, or a
+     * commented-out statement counts as schema; this one is for an assertion whose subject is the comment, and
+     * for the model XML, which the SQL line-comment rule would corrupt.
+     */
+    fun textWithComments(file: File): String = file.readText()
 
     /** [file] with SQL line comments blanked, newlines kept so a locator still names the right line. */
-    fun schemaOnly(file: File): String = rawText(file).replace(lineComment, "")
+    fun schemaOnly(file: File): String = textWithComments(file).replace(lineComment, "")
 
     /**
      * Where any of [patterns] matches, as `<file>:<line>` locators, sorted so a failure reads the same twice.
