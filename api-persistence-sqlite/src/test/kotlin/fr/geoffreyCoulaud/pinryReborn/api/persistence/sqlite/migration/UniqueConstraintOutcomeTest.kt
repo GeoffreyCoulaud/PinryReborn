@@ -2,7 +2,6 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.migration
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import java.io.File
 
 /**
  * A unique constraint is not complete until someone has written what a client sees when it fires: every one
@@ -36,15 +35,6 @@ class UniqueConstraintOutcomeTest {
                 "sees 409 PASSWORD_CHANGE_COLLISION.",
         )
 
-    private val migrationDirectory = File("src/main/resources/dbmigration")
-
-    private val sqlScripts: List<File> =
-        migrationDirectory
-            .listFiles()
-            ?.toList()
-            .orEmpty()
-            .filter { it.name.endsWith(".sql") }
-
     // Uniqueness has two spellings: a standalone `create unique index`, and an inline constraint at table creation.
     private val uniqueIndexStatement =
         Regex("""create\s+unique\s+index\s+(\w+)""", RegexOption.IGNORE_CASE)
@@ -52,17 +42,15 @@ class UniqueConstraintOutcomeTest {
     private val inlineUniqueConstraint =
         Regex("""constraint\s+(\w+)\s+unique\b""", RegexOption.IGNORE_CASE)
 
-    // Deliberately loose, and only ever compared against the two extractors above: it over-matches so
-    // that a third spelling, which they would read as no constraint at all, shows up as a difference.
+    // The loose probe for the two extractors above, in the sense MigrationDirectory.locationsMatching describes.
     private val looseUniqueness = Regex("""\bunique\b""", RegexOption.IGNORE_CASE)
-
-    private val lineComment = Regex("--.*")
 
     // No non-empty guard, unlike DbMigrationModelCoverageTest: the table is not empty, so an empty extraction fails.
     private val declaredConstraints: Set<String> =
-        sqlScripts
+        MigrationDirectory
+            .sqlScripts
             .flatMap { file ->
-                val text = schemaOnly(file.readText())
+                val text = MigrationDirectory.schemaOnly(file)
                 (uniqueIndexStatement.findAll(text) + inlineUniqueConstraint.findAll(text))
                     .map { it.groupValues[1] }
                     .toList()
@@ -90,25 +78,9 @@ class UniqueConstraintOutcomeTest {
         // Guards against the spelling it does not know: a form missing from both sides makes them agree in silence.
 
         // Given
-        val extracted = locationsMatching(uniqueIndexStatement, inlineUniqueConstraint)
+        val extracted = MigrationDirectory.locationsMatching(uniqueIndexStatement, inlineUniqueConstraint)
 
         // Then
-        assertEquals(locationsMatching(looseUniqueness), extracted)
+        assertEquals(MigrationDirectory.locationsMatching(looseUniqueness), extracted)
     }
-
-    /** Where any of [patterns] matches, as `<file>:<line>` locators, sorted so a failure reads the same twice. */
-    private fun locationsMatching(vararg patterns: Regex): List<String> =
-        sqlScripts
-            .sortedBy { it.name }
-            .flatMap { file ->
-                schemaOnly(file.readText())
-                    .lineSequence()
-                    .withIndex()
-                    .filter { (_, line) -> patterns.any { it.containsMatchIn(line) } }
-                    .map { (index, _) -> "${file.name}:${index + 1}" }
-                    .toList()
-            }
-
-    /** [text] with SQL line comments blanked, newlines kept so a locator still names the right line. */
-    private fun schemaOnly(text: String): String = text.replace(lineComment, "")
 }
