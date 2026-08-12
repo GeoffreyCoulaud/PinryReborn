@@ -13,7 +13,7 @@ class PasswordChangedTooSoonError(override val retryAfterSeconds: Long) :
     ),
     ThrottledError
 
-class PasswordChangeCollisionError(cause: Throwable? = null) :
+class PasswordChangeCollisionError(cause: Throwable) :
     PasswordChangeError(
         message = "A password change is already in progress",
         code = ErrorCode.PASSWORD_CHANGE_COLLISION,
