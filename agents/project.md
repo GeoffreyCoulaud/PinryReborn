@@ -344,10 +344,12 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
 - **A partial or expression index is declared by `definition` alone**, with no `columnNames` and no
   `unique = true`. Ebean keys an index by its name and compares `tableName`, `unique`, `definition`
   and the column list between the two model sides, so `columnNames` buys nothing when a `definition`
-  is present and only creates a second attribute that has to agree. `UserDataExportModel.kt:16`
-  declares both and its comment claims `columnNames` is what keeps the index diffable; that claim is
-  wrong and is queued in the backlog. The four indexes recorded on 2026-08-05 (`TaskModel`,
-  `UserModel`) use the `definition`-only form, which is also what `1.18` uses.
+  is present and only creates a second attribute that has to agree. `UserDataExportModel` is the one
+  declaration carrying all three: its `columnNames` and `unique = true` are inert beside the
+  `definition`, and they stay because `1.11.model.xml:4` records them, so removing them would diff.
+  The comment that called `columnNames` what keeps the index diffable is gone (2026-08-12). The four
+  indexes recorded on 2026-08-05 (`TaskModel`, `UserModel`) use the `definition`-only form, which is
+  also what `1.18` uses.
 - **The `pre-commit` hook rewrites `docs/openapi.json`**, stages it, and exits non-zero when it
   changed, so the commit has to be re-run. That is the hook working, not a failure. It also rejects
   em-dashes and en-dashes in staged text additions (no-em-dash rule, AGENTS.md Conventions): use a

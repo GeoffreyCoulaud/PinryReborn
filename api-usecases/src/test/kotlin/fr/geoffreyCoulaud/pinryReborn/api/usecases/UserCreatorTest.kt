@@ -64,7 +64,8 @@ class UserCreatorTest : BaseTest() {
 
     @Test
     fun `Given the store refuses a taken name, Then creation rethrows UsernameAlreadyTakenError`() {
-        // Given: the index is the sole authority, so the refusal arrives as the adapter's exception
+        // Given: the index is the sole authority, so the refusal arrives as the adapter's exception.
+        // No hashing stub, because the save refuses before the hash is reached.
         val name = "John Doe"
         val collision = UsernameAlreadyTakenException(Exception("unique constraint violated"))
         every { clock.now() } returns clockInstant

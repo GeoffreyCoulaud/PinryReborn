@@ -7,7 +7,7 @@ open class UserCreationError(
 ) :
     BaseError(message, code, cause)
 
-class UsernameAlreadyTakenError(cause: Throwable? = null) :
+class UsernameAlreadyTakenError(cause: Throwable) :
     UserCreationError(
         message = "Username already taken",
         code = ErrorCode.USERNAME_ALREADY_EXISTS,

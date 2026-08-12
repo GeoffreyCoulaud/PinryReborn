@@ -12,7 +12,8 @@ import java.util.UUID
 @Entity
 @Table(name = "user_data_exports")
 // Enforces "at most one PENDING export per user": a plain unique index on user_id would forbid a
-// second export forever, so the index is partial, which only `definition` can spell.
+// second export forever, so the index is partial, which only `definition` can spell. Do not copy the
+// other two attributes: they are inert here, and kept only because `1.11.model.xml` records them.
 @Index(
     name = "uq_user_data_exports_pending",
     columnNames = ["user_id"],
