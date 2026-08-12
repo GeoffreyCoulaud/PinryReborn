@@ -10,6 +10,17 @@ import java.io.File
 internal object MigrationDirectory {
     private val lineComment = Regex("--.*")
 
+    // Name and the rest of the statement in one pattern, matched over the whole file: `[^;]` cannot leave the
+    // statement, so a statement split over several lines is read like one written on a single line.
+    private val indexCreation =
+        Regex("""create\s+(?:unique\s+)?index\s+(\w+)[^;]*""", RegexOption.IGNORE_CASE)
+
+    // SQLite's form (sqlite.org/lang_dropindex.html); no migration drops an index yet, so nothing pins it.
+    private val indexRemoval =
+        Regex("""drop\s+index\s+(?:if\s+exists\s+)?(\w+)""", RegexOption.IGNORE_CASE)
+
+    private val versionNumber = Regex("""\d+""")
+
     val root = File("src/main/resources/dbmigration")
 
     val sqlScripts: List<File> =
@@ -29,6 +40,70 @@ internal object MigrationDirectory {
 
     /** The model file [version] is paired with, whether or not it exists. */
     fun modelFileFor(version: String): File = File(root, "model/$version.model.xml")
+
+    /**
+     * The create-index statement each index name is left in by the last migration that touched it, keyed by name.
+     * The history is append-only, so a guard asking what the schema holds today asks this rather than whether some
+     * migration once said it: a drop-and-recreate pair would otherwise read as two live indexes.
+     */
+    val currentIndexes: Map<String, CreatedIndex> =
+        sqlScripts
+            .sortedBy { versionKeyOf(it) }
+            .flatMap { indexEventsIn(it) }
+            .fold(mutableMapOf()) { current, event ->
+                val created = event.created
+                if (created == null) current.remove(event.name) else current[event.name] = created
+                current
+            }
+
+    /**
+     * Every create-index statement the history carries, live or since dropped. A guard asking what the schema
+     * holds wants [currentIndexes]; this one is for a guard whose subject is the extraction itself.
+     */
+    val allIndexCreations: List<CreatedIndex> =
+        sqlScripts.sortedBy { versionKeyOf(it) }.flatMap { file -> indexEventsIn(file).mapNotNull { it.created } }
+
+    /** What [file] does to the indexes, in the order it does it: a creation, or a removal as a null one. */
+    private fun indexEventsIn(file: File): List<IndexEvent> {
+        val schema = schemaOnly(file)
+        val creations =
+            indexCreation.findAll(schema).map { match ->
+                IndexEvent(
+                    position = match.range.first,
+                    name = match.groupValues[1],
+                    created = CreatedIndex(name = match.groupValues[1], file = file.name, statement = match.value),
+                )
+            }
+        val removals =
+            indexRemoval.findAll(schema).map { match ->
+                IndexEvent(position = match.range.first, name = match.groupValues[1], created = null)
+            }
+        return (creations + removals).sortedBy { it.position }.toList()
+    }
+
+    /**
+     * [file]'s version as a sortable key: the file name's own order puts `1.11` before `1.3`, and a
+     * `<version>__dropsFor_<version>` name carries a second number that is not its own.
+     */
+    private fun versionKeyOf(file: File): String =
+        versionNumber
+            .findAll(file.name.removeSuffix(".sql").substringBefore("__"))
+            .joinToString(".") { it.value.padStart(VERSION_NUMBER_WIDTH, '0') }
+
+    /** A create-index statement as committed, with the migration it came from. */
+    data class CreatedIndex(
+        val name: String,
+        val file: String,
+        val statement: String,
+    )
+
+    private data class IndexEvent(
+        val position: Int,
+        val name: String,
+        val created: CreatedIndex?,
+    )
+
+    private const val VERSION_NUMBER_WIDTH = 4
 
     /**
      * [file] as committed, comments included. An assertion over a `.sql` reads [schemaOnly] instead, or a
