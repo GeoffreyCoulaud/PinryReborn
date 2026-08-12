@@ -12,8 +12,9 @@ backlog grows faster than the work that feeds it, which no single item describes
 
 Two halves, and the second is what makes the first last.
 
-1. **Resolve the P2 band down to open work only.** Six corrections, four closures by decision, two
-   reclassifications, one item moved out of the backlog to the document that already carries it.
+1. **Resolve the P2 band down to open work only.** Eight corrections, two closures by decision, two
+   reclassifications, one item moved out of the backlog to the document that already carries it, and
+   three that stay open work.
 2. **Give a review finding somewhere to land other than the backlog.** Today it has one exit, so
    everything not fixed inside the lot becomes debt. Three more exits, written down, plus a backlog
    split by nature so a recorded limit stops being counted as work.
@@ -77,7 +78,11 @@ Three causes, and only the first is about volume.
 | 15 | Export refusal precedence pinned only at unit level | Closed: each link already pinned |
 | 16 | `PinRepositoryTest` split decision | Fixed, widest scope (T8) |
 
-P2 holds three items after this lot: 1, 2 and 14.
+Three of the sixteen stay open work: 1, 2 and 14. **The band ends at five, not three**: this lot's
+own reviews filed two new items through exit 2, the partial indexes a bound parameter probably keeps
+SQLite from using, and the integration suite writing to a file while its properties declare
+`:memory:`. That is the rule working rather than failing, and the arithmetic is written here rather
+than rounded down.
 
 ### Why 10 closes
 
@@ -150,9 +155,12 @@ makes the dedup fast path correct and the recovery's empty re-read unreachable, 
 Name each state set once in Kotlin, have the query read that name, and assert the DDL's `where`
 clause names exactly that set.
 
-- Acceptance: the state set appears once per index in the production sources and the query reads it;
-  the assertion fails when the set is widened or narrowed away from the DDL, shown by the mutation in
-  the commit body; the migrations are untouched.
+- Acceptance: the state set appears once per index among the sources that can read it, and the query
+  reads it; the assertion fails when the set is widened or narrowed away from the DDL, shown by the
+  mutation in the commit body; the migrations are untouched. **Amended at implementation**: the
+  literals also sit in the `@Index(definition = ...)` annotations, where an argument must be a
+  compile-time constant, so no set can source them. That residue is a declared limit, written where
+  the named set lives.
 
 ### T4. A dropped cause becomes a compile error
 
@@ -230,7 +238,8 @@ Three moves:
 The dispositions of section 3 are applied to `docs/backlog.md`, which gains the bands of section 5,
 and the rules of section 5 land in `agents/project.md`.
 
-- Acceptance: P2 holds items 1, 2 and 14; the "Known limits" and "Before beta" bands hold what
+- Acceptance: P2 holds items 1, 2 and 14, plus whatever this lot's own reviews file through exit 2;
+  the "Known limits" and "Before beta" bands hold what
   section 3 assigns them; `agents/project.md` carries the four exits, the band definitions and the
   integration-suite rule; the `Last reviewed` line names this spec.
 
@@ -257,9 +266,13 @@ Three rules, into `agents/project.md`.
 - **A heap bound on the test JVMs.** No measurement sizes it (section 3).
 - **A cap on the P2 band.** Considered and not retained: rules 1 and 2 address the cause, a cap
   addresses the symptom. It returns if the band grows again.
-- **Making `cause` required beyond the three collision exceptions.** The sibling use-case errors
-  (`PasswordChangeError.kt:16`) keep the optional shape; T4 is scoped to the three exceptions whose
-  every construction site translates a caught failure.
+- **Making `cause` required beyond the three collision exceptions.** ~~The sibling use-case errors
+  (`PasswordChangeError.kt:16`) keep the optional shape~~. **Reversed at implementation**: T4's review
+  measured the construction sites and found the cited example was the counter-example.
+  `PasswordChangeCollisionError` and `UsernameAlreadyTakenError` have one site each and always pass a
+  cause, so both were made required too; only `ExportAlreadyInProgressError` has a site with no
+  failure behind it and keeps the optional shape. Recorded here rather than left as a scope line the
+  branch quietly crossed.
 - **Any change to an applied migration.** T2 and T3 read the `.sql` files and never write them.
 
 ## 7. Assumptions and risks

@@ -3,9 +3,10 @@
 **Living document.** What is still open, banded by nature first and by priority second. What already shipped lives
 in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-08-12 (the P2 triage lot, `docs/specs/2026-08-12-p2-debt-triage.md`. Sixteen P2 items became
-three: six were fixed, four closed by a decision, two moved to Before beta, one to Known limits. The bands below
-are new, and so is the rule that fills them, `docs/adr/0010-review-finding-dispositions.md`).
+Last reviewed: 2026-08-12 (the P2 triage lot, `docs/specs/2026-08-12-p2-debt-triage.md`. Sixteen P2 items disposed
+of: eight fixed, two closed by a decision, two moved to Before beta, one to Known limits, three left as open work.
+The lot's own reviews then filed two new ones, so the band ends at five. The bands are new, and so is the rule that
+fills them, `docs/adr/0010-review-finding-dispositions.md`).
 
 ## How to use this file
 
@@ -105,18 +106,15 @@ are new, and so is the rule that fills them, `docs/adr/0010-review-finding-dispo
 
 Recorded where the decision lives. None is a copy: follow the pointer.
 
-- **Soft-delete read isolation has three residuals.** A `raw("...")` SQL predicate on `any()`, an
-  in-memory read of `softDeletedAt` after a sanctioned query, and a fully-qualified typed reference
-  written without an import. None is exercised today.
-  `docs/adr/0008-structural-soft-delete-read-isolation.md` and
+- **Soft-delete read isolation leaves residuals.**
+  `docs/adr/0008-structural-soft-delete-read-isolation.md`, and
   `docs/specs/2026-07-29-single-representation-soft-delete.md` section 4.6.
-- **A unique constraint's named outcome is prose, and nothing reads it.**
-  `UniqueConstraintOutcomeTest` enforces that an outcome is named, not that it is true.
+- **A unique constraint's named outcome is not checked against what the code does.**
   `docs/adr/0009-unique-index-named-outcomes.md`, decision 1.
-- **The partial-index state guard has a declared reach.** It reaches a predicate that quotes a literal,
-  it is blind to `not (...)`, the state literals still sit in the `@Index(definition = ...)` annotations
-  where no compile-time constant can source them, and it pins the predicate rather than the uniqueness
-  columns `findOne()` depends on. Written in `PartialUniqueIndexStates` and its test.
+- **The partial-index state guard has a declared reach**, and one part of it is a correctness gap
+  rather than a documentation one: it pins the predicate, not the uniqueness columns that make
+  `findOne()` return at most one row. `PartialUniqueIndexStates` and
+  `api-persistence-sqlite/src/test/kotlin/.../migration/PartialUniqueIndexStatesTest.kt`.
 
 ## Before beta
 
