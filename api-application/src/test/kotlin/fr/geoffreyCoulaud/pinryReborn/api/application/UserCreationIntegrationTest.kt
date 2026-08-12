@@ -1,14 +1,24 @@
 package fr.geoffreyCoulaud.pinryReborn.api.application
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
+import jakarta.inject.Inject
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.CoreMatchers.notNullValue
 import org.junit.jupiter.api.Test
 
 @QuarkusTest
 class UserCreationIntegrationTest : IntegrationTest() {
+
+    @Inject
+    lateinit var userRepository: UserRepositoryInterface
+
+    @Inject
+    lateinit var clock: Clock
 
     // ==================== Simple Scenarios ====================
 
@@ -204,6 +214,44 @@ class UserCreationIntegrationTest : IntegrationTest() {
             .post("/api/v1/users")
             .then()
             .statusCode(409)
+            .body("code", equalTo("USERNAME_ALREADY_EXISTS"))
+    }
+
+    @Test
+    fun `Given a name held by an account pending deletion, Then creating it again is rejected`() {
+        // Given: an account tombstoned in place. The deletion task the endpoint would enqueue is
+        // left out on purpose: the worker runs here and its hard delete would free the name.
+        val name = createRandomString()
+        val password = DEFAULT_PASSWORD
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "$name", "password": "$password"}""")
+            .`when`()
+            .post("/api/v1/users")
+            .then()
+            .statusCode(200)
+        val user = requireNotNull(userRepository.findUserByName(name))
+        userRepository.markPendingDeletion(user, clock.now())
+        given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "$name", "password": "$password"}""")
+            .`when`()
+            .post("/api/v1/sessions")
+            .then()
+            .statusCode(401)
+
+        // When
+        val response = given()
+            .contentType(ContentType.JSON)
+            .body("""{"name": "$name", "password": "$password"}""")
+            .`when`()
+            .post("/api/v1/users")
+
+        // Then
+        response
+            .then()
+            .statusCode(409)
+            .contentType("application/problem+json")
             .body("code", equalTo("USERNAME_ALREADY_EXISTS"))
     }
 
