@@ -10,5 +10,5 @@ package fr.geoffreyCoulaud.pinryReborn.api.domain.exports
  * it and rethrows `ExportAlreadyInProgressError` for the presentation layer, exactly as
  * `ImageStore.stage` throws the domain `ImageTooLargeException` and `SetPinImage` translates it.
  */
-class ExportAlreadyInProgressException(cause: Throwable? = null) :
+class ExportAlreadyInProgressException(cause: Throwable) :
     Exception("An export is already in progress for this user", cause)

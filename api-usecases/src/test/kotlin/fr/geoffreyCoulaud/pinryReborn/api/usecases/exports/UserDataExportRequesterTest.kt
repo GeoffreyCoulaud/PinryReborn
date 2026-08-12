@@ -265,7 +265,7 @@ class UserDataExportRequesterTest : BaseTest() {
         every { repository.findPendingForUser(user.id) } returns null
         every { repository.findLastRequestedAtForUser(user.id) } returns null
         every { repository.findReadyForUser(user.id) } returns null
-        val domainException = ExportAlreadyInProgressException()
+        val domainException = ExportAlreadyInProgressException(Exception("unique constraint violated"))
         every { repository.save(match { it.state == UserDataExportState.PENDING }) } throws domainException
 
         // When

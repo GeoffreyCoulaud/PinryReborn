@@ -11,5 +11,5 @@ package fr.geoffreyCoulaud.pinryReborn.api.domain.users
  * catches it and rethrows `UsernameAlreadyTakenError`, the same layering as
  * `PasswordChangeCollisionException`.
  */
-class UsernameAlreadyTakenException(cause: Throwable? = null) :
+class UsernameAlreadyTakenException(cause: Throwable) :
     Exception("This username is already taken", cause)
