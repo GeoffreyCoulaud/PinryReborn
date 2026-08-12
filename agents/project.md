@@ -271,6 +271,20 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   its handoff, git history and tag. On wrap, delete or narrow the item just finished, add the newly
   discovered ones, and update the `Last reviewed` line. After the merge, reconcile it on `main`: if
   a stale entry survived the pre-merge refresh, delete it with a doc-only commit.
+- **A review finding has four exits, and only one is the backlog** (decided 2026-08-12): fixed inside
+  the lot; a **backlog item**, which means work someone will do; an **accepted limit**, written where
+  the decision lives (its ADR, its spec, the KDoc a reader meets) and never copied into the backlog;
+  or **refused**, with the reason in the handoff. Wrap states which exit each finding took, and that
+  list is the observable. Before this rule the only exit was the backlog, so the P2 band grew by six
+  net in the lot that preceded it (`docs/adr/0010-review-finding-dispositions.md`).
+- **The backlog is banded by nature before it is banded by priority**: *Open work* (P0, P1, P2) is
+  what someone will do, *Known limits* points at the document recording each one, *Before beta* holds
+  dated events. A limit is not debt and is not counted as debt.
+- **A case joins an existing integration suite; a suite is not created for a case.** A new
+  `@QuarkusTest` class costs a full boot in the gate, so it is justified by a scenario an existing
+  suite cannot host (its profile, its wiring), never by a case that could be a method in one. Where no
+  suite fits and each link is pinned separately, the composition is the coverage and the finding is an
+  accepted limit.
 - **"Leave as-is" stays available** as an integration option when the operator wants to handle the
   branch later.
 - **Improve commits separately**: `docs(agents):` for a rule, `test(architecture):` for the test
