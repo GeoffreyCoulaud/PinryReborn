@@ -79,17 +79,19 @@ fills them, `docs/adr/0010-review-finding-dispositions.md`).
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27, kept as its own session by the 2026-08-12 triage.
-- **The three partial indexes on `tasks` are probably serving no query.** SQLite does not use a partial
-  index when the value its predicate tests arrives as a bound parameter, which is how an ORM sends it.
-  Measured against the committed definitions (sqlite 3.53.3): with `state = ?`, the claim query plans as
-  `SCAN tasks` plus `USE TEMP B-TREE FOR ORDER BY`; with `state = 'PENDING'` written as a literal, it
-  plans as `SCAN tasks USING INDEX ix_tasks_claim`. Same for `ux_tasks_dedup`, `SCAN` against `SEARCH`.
-  So `ix_tasks_claim` and `ix_tasks_lease` (`1.3.sql:23,25`) may cost writes and buy nothing, and
-  `claimNext` may be scanning the whole table on every poll. **What is measured is the SQLite behaviour,
-  not Ebean's**: that Ebean binds this value rather than inlining it is the likely explanation and is
-  unverified, so the first step is to read the generated SQL. If it holds, the fix is a decision between
-  inlining the state literal and dropping the indexes. Surfaced by the T3 review of the 2026-08-12
-  triage.
+- **The three partial indexes on `tasks` serve none of the queries they were created for.** Both halves
+  are measured. SQLite does not use a partial index when the value its predicate tests arrives as a
+  bound parameter (sqlite 3.53.3, against the committed definitions): with `state = ?` the claim query
+  plans as `SCAN tasks` plus `USE TEMP B-TREE FOR ORDER BY`, and with `state = 'PENDING'` written as a
+  literal it plans as `SCAN tasks USING INDEX ix_tasks_claim`; the dedup lookup is `SCAN` against
+  `SEARCH ... USING INDEX ux_tasks_dedup` the same way. And Ebean binds: `Query.getGeneratedSql()` on
+  the two queries as the adapter builds them returns `where t0.state = ? and t0.available_at <= ?` and
+  `where t0.dedup_key = ? and t0.state in (?,?)`. So `ix_tasks_claim` and `ix_tasks_lease`
+  (`1.3.sql:23,25`) cost writes and buy nothing, `ux_tasks_dedup` still enforces uniqueness but does not
+  speed its own lookup, and `claimNext` scans the whole table on every poll. The fix is a decision
+  between inlining the state literal, dropping the partial predicate from the two non-unique indexes,
+  and leaving it. Surfaced by the T3 review of the 2026-08-12 triage; the Ebean half was measured before
+  that lot wrapped.
 - **The api-application integration tests run against a file, not memory.**
   `api-application/src/test/resources/application.properties:5` declares
   `datasource.db.url=jdbc:sqlite::memory:`, and `api-application/data.db` is nonetheless written during
