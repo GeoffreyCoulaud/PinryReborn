@@ -40,6 +40,15 @@ The marker goes from all seven files. The hook loses `GENERIC_MARKS`, `GENERIC_A
 `is_generic()`, its call site and the three sentences of the module docstring that describe the
 rule. Its other two rules are untouched.
 
+**The operator removes the marker, because no agent can.** The guard is a PreToolUse deny over
+every write tool, keyed on line 1 of the target, and the hook carries the marker itself: it refuses
+the edit that would disarm it, and refuses it on the six other files too. The routes around it
+(delete and recreate the file, or edit `.claude/settings.json`) circumvent a permission decision
+and are not taken. So the freeze is lifted by hand, outside the agent's tools, on the five files
+an agent must then write: this file's other steps assume that has happened. The two modules need
+no such hand, since `git rm` is not a write the guard inspects (measured: exit 0). Done on
+2026-08-12 with `sed -i '1{/do not edit in place/d}'` in the operator's own shell.
+
 ### 2. Four files become one
 
 `AGENTS.md`, `agents/project.md`, `agents/modules/kotlin.md` and `agents/modules/backend.md` merge
@@ -130,13 +139,18 @@ Each one is a command whose failure is defined.
 
 1. **Nothing is lost.** `grep -o '\*\*[^*]*\*\*'` over the four source files, sorted, measured at
    194 fragments on 2026-08-12 before the first edit, diffed against the same command over the
-   merged file plus the three mandates. The diff shows only the removals of section 4. A surviving
-   fragment that section 4 does not list is a rule silently dropped.
+   merged file alone. The three mandates are not in the comparison on either side: their content
+   does not move, and counting them only after would show their fragments as arrivals. The diff
+   shows only the removals of section 4. A surviving fragment that section 4 does not list is a
+   rule silently dropped.
 2. **The layout is what it claims.** `git ls-files agents` returns the three review mandates and
    nothing else.
 3. **The cut is clean.** `grep -rn "agents-baseline" --exclude-dir=.git --exclude-dir=docs .`
-   returns nothing. `docs/` is excluded because ADR 0001, ADR 0005 and three handoffs are frozen
-   dated documents that record the adoption and are never rewritten.
+   returns nothing but paths to the two ADRs that record the adoption. `docs/` is excluded because
+   ADR 0001, ADR 0005 and three handoffs are frozen dated documents, never rewritten. What the cut
+   removes is the regime: no marker, no upstream to follow, no sentence sending a lesson there. A
+   citation of `docs/adr/0001-adopt-agents-baseline.md` is a pointer to this repository's own
+   history and stays, the way any decision keeps its record.
 4. **The hook still guards what it guarded.** Two invocations, output pasted in the commit message:
    a redirection writing into the working tree still exits 2, and an `Edit` on `AGENTS.md`, which
    exited 2 before this lot, now exits 0. The hook is Python under `.claude/`, outside the gate
