@@ -214,7 +214,7 @@ decided, twice, and the suppression contradicts its own siblings.
 
 Three moves:
 
-1. The `// --- Soft delete tests ---` section (lines 271-616, 21 tests) becomes
+1. The `// --- Soft delete tests ---` section (lines 271-616, 20 tests) becomes
    `PinRepositorySoftDeleteTest`.
 2. The `// --- Pagination cursor resolution ---` section (617-767) returns to
    `PinRepositoryPaginationTest`, which exists.
