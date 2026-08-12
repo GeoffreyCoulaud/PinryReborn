@@ -1,5 +1,3 @@
-<!-- agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place -->
-
 # Review mandate: holistic
 
 You are reviewing **the complete diff of a branch against its base**, after the project gate has

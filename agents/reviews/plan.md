@@ -1,5 +1,3 @@
-<!-- agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place -->
-
 # Review mandate: plan
 
 You are reviewing **an implementation plan before any task is dispatched**. You did not write it.
