@@ -23,18 +23,9 @@ import java.io.File
  * what `1.3.model.xml` did. The index-model rule below closes that gap.
  */
 class DbMigrationModelCoverageTest {
-    private val migrationDirectory = File("src/main/resources/dbmigration")
-
     // Empty, and meant to stay so: writing a model file rewrites no `.sql`, so the checksum argument
     // `1.2` rested on never applied (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
     private val handWritten = emptySet<String>()
-
-    private val sqlScripts: List<File> =
-        migrationDirectory
-            .listFiles()
-            ?.toList()
-            .orEmpty()
-            .filter { it.name.endsWith(".sql") }
 
     private val createIndexStatement =
         Regex("""create\s+(?:unique\s+)?index\s+(\w+)""", RegexOption.IGNORE_CASE)
@@ -44,32 +35,22 @@ class DbMigrationModelCoverageTest {
     private val modelCreateIndexElement =
         Regex("""<createIndex\b[^>]*\bindexName="([^"]+)"""")
 
-    // Deliberately loose, and only ever compared against the extraction above: it over-matches so that
-    // a narrower extractor, blind to a form the migrations still use, shows up as a difference.
+    // The loose probe for the extraction above, in the sense MigrationDirectory.locationsMatching describes.
     private val looseIndexCreation = Regex("""create\b.*\bindex\b""", RegexOption.IGNORE_CASE)
 
-    private val lineComment = Regex("--.*")
-
     private val createdIndexNames: Set<String> =
-        namesMatching(createIndexStatement, sqlScripts, ::schemaOnly)
+        namesMatching(createIndexStatement, MigrationDirectory.sqlScripts, MigrationDirectory::schemaOnly)
 
     private val modelledIndexNames: Set<String> =
-        namesMatching(
-            modelCreateIndexElement,
-            File(migrationDirectory, "model")
-                .listFiles()
-                ?.toList()
-                .orEmpty()
-                .filter { it.name.endsWith(".model.xml") },
-            File::readText,
-        )
+        namesMatching(modelCreateIndexElement, MigrationDirectory.modelFiles, MigrationDirectory::rawText)
 
     @Test
     fun `Given the migration scripts, Then each one is backed by a generated model or documented here`() {
         val withoutModel =
-            sqlScripts
+            MigrationDirectory
+                .sqlScripts
                 .map { it.name.removeSuffix(".sql") }
-                .filterNot { File(migrationDirectory, "model/$it.model.xml").exists() }
+                .filterNot { MigrationDirectory.modelFileFor(it).exists() }
         assertEquals(handWritten, withoutModel.toSet())
     }
 
@@ -77,7 +58,7 @@ class DbMigrationModelCoverageTest {
     fun `Given the migration directory, Then it is where this test expects it`() {
         // Guards against a silent pass if the working directory or the layout ever moves: an empty
         // listing would make the assertions above trivially true.
-        assertEquals(true, migrationDirectory.isDirectory)
+        assertEquals(true, MigrationDirectory.root.isDirectory)
     }
 
     @Test
@@ -88,8 +69,8 @@ class DbMigrationModelCoverageTest {
         // committed. A unique index on SQLite uses @Index(definition = "create unique index ..."),
         // which the generator renders.
         val noOpMigrations =
-            sqlScripts.filter { script ->
-                script.readText().lineSequence().any { it.startsWith("-- not supported") }
+            MigrationDirectory.sqlScripts.filter { script ->
+                MigrationDirectory.rawText(script).lineSequence().any { it.startsWith("-- not supported") }
             }
         assertEquals(emptyList<File>(), noOpMigrations)
     }
@@ -114,10 +95,10 @@ class DbMigrationModelCoverageTest {
         // The guard above only proves non-emptiness: an extractor blind to one form still matches the others.
 
         // Given
-        val extracted = locationsMatching(createIndexStatement)
+        val extracted = MigrationDirectory.locationsMatching(createIndexStatement)
 
         // Then
-        assertEquals(locationsMatching(looseIndexCreation), extracted)
+        assertEquals(MigrationDirectory.locationsMatching(looseIndexCreation), extracted)
     }
 
     private fun namesMatching(
@@ -128,22 +109,4 @@ class DbMigrationModelCoverageTest {
         files
             .flatMap { file -> pattern.findAll(read(file)).map { it.groupValues[1] } }
             .toSet()
-
-    /** Where [pattern] matches, as `<file>:<line>` locators, sorted so a failure reads the same twice. */
-    private fun locationsMatching(pattern: Regex): List<String> =
-        sqlScripts
-            .sortedBy { it.name }
-            .flatMap { file ->
-                schemaOnly(file)
-                    .lineSequence()
-                    .withIndex()
-                    .filter { (_, line) -> pattern.containsMatchIn(line) }
-                    .map { (index, _) -> "${file.name}:${index + 1}" }
-            }
-
-    /**
-     * [file]'s text with SQL line comments blanked, newlines kept so a locator still names the right line. The
-     * `-- not supported` assertion above deliberately reads the raw text: its subject is the comment.
-     */
-    private fun schemaOnly(file: File): String = file.readText().replace(lineComment, "")
 }
