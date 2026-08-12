@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.users.UsernameAlreadyTakenExcep
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.UsernameAlreadyTakenError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import io.mockk.CapturingSlot
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -29,6 +30,7 @@ class UserCreatorTest : BaseTest() {
     private val transactionRunner = mockk<TransactionRunner>()
     private val clock = mockk<Clock>()
     private val clockInstant = Instant.parse("2026-07-23T10:00:00Z")
+    private val password = createRandomString()
     private val useCase =
         UserCreator(
             userRepository = userRepository,
@@ -48,11 +50,12 @@ class UserCreatorTest : BaseTest() {
     fun `When creating a user, then should succeed`() {
         // Given
         val name = "John Doe"
+        stubPasswordHashing()
         every { clock.now() } returns clockInstant
         every { userRepository.saveUser(any()) } answers { firstArg() }
 
         // When
-        val created = useCase.createUser(name)
+        val created = useCase.createUserWithPassword(name = name, password = password)
 
         // Then
         assertEquals(name, created.name)
@@ -68,7 +71,7 @@ class UserCreatorTest : BaseTest() {
         every { userRepository.saveUser(any()) } throws collision
 
         // When
-        val error = assertThrows<UsernameAlreadyTakenError> { useCase.createUser(name) }
+        val error = assertThrows<UsernameAlreadyTakenError> { useCase.createUserWithPassword(name, password) }
 
         // Then: the refusal keeps what refused it, so the stack trace survives into the log
         assertSame(collision, error.cause)
@@ -78,18 +81,23 @@ class UserCreatorTest : BaseTest() {
     fun `Given a clock, Then createUserWithPassword stamps the hash with the clock's instant`() {
         // Given
         val name = "John Doe"
-        val password = createRandomString()
         every { clock.now() } returns clockInstant
         every { userRepository.saveUser(any()) } answers { firstArg() }
-        val stamped = HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = clockInstant)
-        every { passwordHasher.hash(password, clockInstant) } returns stamped
-        val saved = slot<HashedPassword>()
-        every { userPasswordRepository.saveUserPasswordHash(any(), capture(saved)) } returns stamped
+        val saved = stubPasswordHashing()
 
         // When
         useCase.createUserWithPassword(name = name, password = password)
 
         // Then the hash handed to the repository carries the instant from the injected Clock
         assertEquals(clockInstant, saved.captured.createdAt)
+    }
+
+    /** Stubs the hashing pair every creation goes through, and captures what reaches the repository. */
+    private fun stubPasswordHashing(): CapturingSlot<HashedPassword> {
+        val stamped = HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = clockInstant)
+        every { passwordHasher.hash(password, clockInstant) } returns stamped
+        val saved = slot<HashedPassword>()
+        every { userPasswordRepository.saveUserPasswordHash(any(), capture(saved)) } returns stamped
+        return saved
     }
 }
