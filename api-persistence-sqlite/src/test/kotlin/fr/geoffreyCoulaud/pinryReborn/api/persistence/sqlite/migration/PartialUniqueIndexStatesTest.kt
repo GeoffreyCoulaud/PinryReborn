@@ -34,14 +34,7 @@ class PartialUniqueIndexStatesTest {
             "uq_user_data_exports_pending" to PartialUniqueIndexStates.pendingExportStates,
         )
 
-    // Name and the rest of the statement in one pattern, matched over the whole file: `[^;]` cannot leave the
-    // statement, so a statement split over several lines is read like one written on a single line.
-    private val indexCreation =
-        Regex("""create\s+(unique\s+)?index\s+(\w+)([^;]*)""", RegexOption.IGNORE_CASE)
-
-    // SQLite's form (sqlite.org/lang_dropindex.html); no migration drops an index yet, so nothing pins it.
-    private val indexRemoval =
-        Regex("""drop\s+index\s+(?:if\s+exists\s+)?(\w+)""", RegexOption.IGNORE_CASE)
+    private val uniqueCreation = Regex("""create\s+unique\s+index""", RegexOption.IGNORE_CASE)
 
     // The loose probe for the extraction above, in the sense MigrationDirectory.locationsMatching describes,
     // counted over the same whole-file text rather than line by line.
@@ -55,24 +48,13 @@ class PartialUniqueIndexStatesTest {
 
     private val quotedLiteral = Regex("""'([^']*)'""")
 
-    private val versionNumber = Regex("""\d+""")
 
-    /** The declaration each index name is left in by the last migration that touched it. */
-    private val currentIndexes: Map<String, DeclaredIndex> =
-        MigrationDirectory
-            .sqlScripts
-            .sortedBy { versionKeyOf(it) }
-            .flatMap { eventsIn(it) }
-            .fold(mutableMapOf()) { current, event ->
-                val declared = event.declared
-                if (declared == null) current.remove(event.name) else current[event.name] = declared
-                current
-            }
-
-    /** Those of [currentIndexes] a Kotlin set has to mirror: one quoting no literal has no states to name. */
+    /** Those of the current schema a Kotlin set has to mirror: one quoting no literal has no states to name. */
     private val stateBearingIndexes: List<DeclaredIndex> =
-        currentIndexes
+        MigrationDirectory
+            .currentIndexes
             .values
+            .map { declaredFrom(it) }
             .filter { conditionallyUnique(it) && quotedLiteral.containsMatchIn(it.predicate.orEmpty()) }
             .sortedBy { it.name }
 
@@ -112,47 +94,21 @@ class PartialUniqueIndexStatesTest {
         // Guards against the spelling it does not know: a statement missing from both sides is a set nobody mirrors.
 
         // Given
-        val extracted =
-            MigrationDirectory.sqlScripts.sumOf { file ->
-                eventsIn(file).count { conditionallyUnique(it.declared) }
-            }
+        // The whole history, not the current schema: this one's subject is the extraction, not what the schema holds.
+        val extracted = MigrationDirectory.allIndexCreations.count { conditionallyUnique(declaredFrom(it)) }
 
         // Then
         assertEquals(looselyConditionalUniqueCount(), extracted)
     }
 
-    /** What [file] does to the indexes, in the order it does it: a declaration, or a removal as a null one. */
-    private fun eventsIn(file: File): List<IndexEvent> {
-        val schema = MigrationDirectory.schemaOnly(file)
-        val declarations =
-            indexCreation.findAll(schema).map { match ->
-                IndexEvent(
-                    position = match.range.first,
-                    name = match.groupValues[2],
-                    declared =
-                        DeclaredIndex(
-                            name = match.groupValues[2],
-                            file = file.name,
-                            unique = match.groupValues[1].isNotBlank(),
-                            predicate = wherePredicate.split(match.groupValues[3], limit = 2).getOrNull(1),
-                        ),
-                )
-            }
-        val removals =
-            indexRemoval.findAll(schema).map { match ->
-                IndexEvent(position = match.range.first, name = match.groupValues[1], declared = null)
-            }
-        return (declarations + removals).sortedBy { it.position }.toList()
-    }
-
-    /**
-     * [file]'s version as a sortable key: the file name's own order puts `1.11` before `1.3`, and a
-     * `<version>__dropsFor_<version>` name carries a second number that is not its own.
-     */
-    private fun versionKeyOf(file: File): String =
-        versionNumber
-            .findAll(file.name.removeSuffix(".sql").substringBefore("__"))
-            .joinToString(".") { it.value.padStart(VERSION_NUMBER_WIDTH, '0') }
+    /** What the shared reader hands over, read as this guard needs it: unique or not, and its `where` clause. */
+    private fun declaredFrom(index: MigrationDirectory.CreatedIndex): DeclaredIndex =
+        DeclaredIndex(
+            name = index.name,
+            file = index.file,
+            unique = uniqueCreation.containsMatchIn(index.statement),
+            predicate = wherePredicate.split(index.statement, limit = 2).getOrNull(1),
+        )
 
     private fun conditionallyUnique(index: DeclaredIndex?): Boolean =
         index != null && index.unique && index.predicate != null
@@ -179,14 +135,4 @@ class PartialUniqueIndexStatesTest {
         val predicate: String?,
     )
 
-    private data class IndexEvent(
-        val position: Int,
-        val name: String,
-        val declared: DeclaredIndex?,
-    )
-
-    private companion object {
-        /** Wide enough that a padded number never carries into the next one. */
-        const val VERSION_NUMBER_WIDTH = 4
-    }
 }

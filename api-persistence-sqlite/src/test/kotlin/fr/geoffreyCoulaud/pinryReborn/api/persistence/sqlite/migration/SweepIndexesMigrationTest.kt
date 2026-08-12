@@ -21,10 +21,10 @@ class SweepIndexesMigrationTest {
         )
 
     // Column order matters for the terminal-task sweep: `state` is the most selective predicate
-    // (three terminal values out of the full state space) and leads, `when_modified` follows.
-    private val taskStateWhenModifiedIndex =
+    // (three terminal values out of the full state space) and leads, `terminal_state_at` follows.
+    private val taskStateTerminalStateAtIndex =
         Regex(
-            """create\s+(unique\s+)?index\s+\S+\s+on\s+tasks\s*\(\s*state\s*,\s*when_modified\s*\)""",
+            """create\s+(unique\s+)?index\s+\S+\s+on\s+tasks\s*\(\s*state\s*,\s*terminal_state_at\s*\)""",
             RegexOption.IGNORE_CASE,
         )
 
@@ -41,18 +41,21 @@ class SweepIndexesMigrationTest {
     }
 
     @Test
-    fun `Given the migration scripts, Then a composite index targets tasks state and when_modified`() {
+    fun `Given the migration scripts, Then a composite index targets tasks state and terminal_state_at`() {
         // Given
         val migrations = readAllMigrations()
 
         // Then
         assertTrue(
-            taskStateWhenModifiedIndex.containsMatchIn(migrations),
-            "Expected a composite index on tasks (state, when_modified); got:\n$migrations",
+            taskStateTerminalStateAtIndex.containsMatchIn(migrations),
+            "Expected a composite index on tasks (state, terminal_state_at); got:\n$migrations",
         )
     }
 
-    // Comments blanked, so a commented-out create index does not read as the index this test requires.
+    /**
+     * The statements the history leaves in place, not every statement it ever carried: a later migration dropping
+     * one of these indexes has to fail this test, which reading the whole history concatenated cannot do.
+     */
     private fun readAllMigrations(): String =
-        MigrationDirectory.sqlScripts.joinToString(separator = "\n") { MigrationDirectory.schemaOnly(it) }
+        MigrationDirectory.currentIndexes.values.joinToString(separator = "\n") { it.statement }
 }
