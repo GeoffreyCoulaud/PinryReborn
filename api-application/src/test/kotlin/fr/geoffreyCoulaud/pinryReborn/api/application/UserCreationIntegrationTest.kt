@@ -9,6 +9,8 @@ import io.restassured.http.ContentType
 import jakarta.inject.Inject
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.CoreMatchers.notNullValue
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 @QuarkusTest
@@ -232,13 +234,10 @@ class UserCreationIntegrationTest : IntegrationTest() {
             .statusCode(200)
         val user = requireNotNull(userRepository.findUserByName(name))
         userRepository.markPendingDeletion(user, clock.now())
-        given()
-            .contentType(ContentType.JSON)
-            .body("""{"name": "$name", "password": "$password"}""")
-            .`when`()
-            .post("/api/v1/sessions")
-            .then()
-            .statusCode(401)
+        // The arrangement, asserted on the state itself: a 401 on a session attempt is also what a
+        // merely credential-less account answers, and would leave this test pinning a plain duplicate.
+        assertNull(userRepository.findUserByName(name))
+        assertNotNull(userRepository.findUserByIdIncludingDeleted(user.id))
 
         // When
         val response = given()
