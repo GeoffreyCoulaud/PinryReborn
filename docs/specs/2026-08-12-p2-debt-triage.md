@@ -1,7 +1,7 @@
 # The P2 band stops growing: sixteen items triaged, and a rule that keeps it triaged
 
 Date: 2026-08-12
-Status: Proposed
+Status: Approved 2026-08-12
 Branch: `chore/p2-backlog-triage`
 ADR: `docs/adr/0010-review-finding-dispositions.md`
 
