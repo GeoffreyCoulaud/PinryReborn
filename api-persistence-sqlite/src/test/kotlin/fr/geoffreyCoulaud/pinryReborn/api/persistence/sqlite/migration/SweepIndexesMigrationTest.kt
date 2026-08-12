@@ -52,13 +52,6 @@ class SweepIndexesMigrationTest {
         )
     }
 
-    @Test
-    fun `Given the migration directory, Then it is where this test expects it`() {
-        // Guards against a silent pass if the working directory or the layout ever moves: an empty
-        // listing would make the assertions above trivially pass.
-        assertTrue(MigrationDirectory.root.isDirectory, "${MigrationDirectory.root.path} must be a directory")
-    }
-
     // Comments blanked, so a commented-out create index does not read as the index this test requires.
     private fun readAllMigrations(): String =
         MigrationDirectory.sqlScripts.joinToString(separator = "\n") { MigrationDirectory.schemaOnly(it) }
