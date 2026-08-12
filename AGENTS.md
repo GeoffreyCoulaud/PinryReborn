@@ -63,7 +63,9 @@ graph and by `ArchitectureKonsistTest`, not by this table.
   installs) or the `api-imaging-vips` tests and the `api-application` image-touching integration
   tests cannot load the library, and `python3`
   must be on the PATH because `.claude/settings.json` runs `.claude/hooks/evidence-guard.py` on
-  every Bash, Edit and Write. Without it the guard cannot run and enforces nothing, silently.
+  every Bash, Edit and Write. What it inspects is narrower than what fires it: since the
+  generic-file rule was dropped it returns at once on the three edit tools, so what it still
+  enforces is over Bash commands. Without `python3` it cannot run and enforces nothing, silently.
 - **THE GATE**: `./gradlew gate` (detekt with type resolution, all tests, the 100% branch coverage
   bound, and `checkNoLongDashes` over every tracked file). The `gate` task in the root `build.gradle.kts`
   aggregates `check` and `koverVerify` across every module, so it is the single knob: grow the gate by
