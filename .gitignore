@@ -22,6 +22,8 @@ docs/openapi.yaml
 !.claude/settings.json
 !.claude/hooks/
 !.claude/CLAUDE.md
+# The re-inclusion above takes the whole directory, bytecode cache included.
+.claude/hooks/__pycache__/
 
 # Superpowers SDD scratch workspace (task briefs, implementer reports, review packages, progress ledger)
 .superpowers/

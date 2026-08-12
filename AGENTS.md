@@ -138,6 +138,8 @@ Nothing is asserted without the command that established it, nothing changed wit
 
 ## Design
 
+How to decide. The decisions already taken for this project are under Design invariants.
+
 - **Prefer the convention the tool already has.** _Observable: any new abstraction is justified in one
   line naming the convention found insufficient._
 - **Fix the design, do not work around it.** Three smells that the design is the defect: the same
@@ -355,6 +357,9 @@ place where an agent must not decide alone.
 
 ### Tests and coverage
 
+What the language and its tools give. How this project names, orders and maintains its tests is
+under Conventions, Tests.
+
 - **JUnit is the test framework**, at whatever major version the version catalog pins. This section
   states no number: an instruction naming one only ages, and the catalog is where the answer
   already lives. Test names describe the behaviour and the condition, not the method under test.
@@ -513,6 +518,8 @@ The three values the rules above expect a project to declare.
   HTTP Basic is gone.
 
 ## Design invariants
+
+What is already settled here, and why. How to decide the next one is under Design.
 
 - **Alpha status**: breaking changes and data loss are acceptable, and nobody should be running
   Pinry Reborn yet. This is a decision input, not a disclaimer: when the only thing standing in the
@@ -680,6 +687,9 @@ not documentation, so it stands outside this regime.
   abbreviate after the first definition, but the source must not.
 
 ### Tests
+
+How this project writes tests. The framework, the coverage tool and the stance on mocking are
+under Kotlin, Tests and coverage.
 
 - **Testing order**, each level failing before implementation: integration tests in
   `api-application` (REST Assured, end to end), then use-case unit tests in `api-usecases` (MockK),
