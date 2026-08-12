@@ -11,5 +11,5 @@ package fr.geoffreyCoulaud.pinryReborn.api.domain.security
  * `PasswordChanger` catches it and rethrows `PasswordChangeCollisionError`, the same layering as
  * `ExportAlreadyInProgressException`.
  */
-class PasswordChangeCollisionException(cause: Throwable? = null) :
+class PasswordChangeCollisionException(cause: Throwable) :
     Exception("A password hash for this user already exists at that instant", cause)

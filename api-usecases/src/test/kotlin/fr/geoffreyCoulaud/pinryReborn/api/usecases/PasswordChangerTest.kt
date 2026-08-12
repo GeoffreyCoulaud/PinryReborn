@@ -149,7 +149,8 @@ class PasswordChangerTest : BaseTest() {
         every { clock.now() } returns now
         val newHash = HashedPassword("new-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now)
         every { hasher.hash("new", now) } returns newHash
-        every { passwords.saveUserPasswordHash(any(), any()) } throws PasswordChangeCollisionException()
+        val violation = Exception("unique constraint violated")
+        every { passwords.saveUserPasswordHash(any(), any()) } throws PasswordChangeCollisionException(violation)
         // When / Then
         assertThrows<PasswordChangeCollisionError> { changer.changePassword(user, "old", "new") }
     }
