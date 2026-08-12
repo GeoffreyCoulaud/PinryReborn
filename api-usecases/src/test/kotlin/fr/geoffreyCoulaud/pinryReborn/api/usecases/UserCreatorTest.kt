@@ -61,8 +61,7 @@ class UserCreatorTest : BaseTest() {
 
     @Test
     fun `Given the store refuses a taken name, Then creation rethrows UsernameAlreadyTakenError`() {
-        // Given: the index is the sole authority on the name being free, so the refusal arrives as
-        // the adapter's exception rather than from a lookup of our own
+        // Given: the index is the sole authority, so the refusal arrives as the adapter's exception
         val name = "John Doe"
         val collision = UsernameAlreadyTakenException()
         every { clock.now() } returns clockInstant

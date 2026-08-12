@@ -39,8 +39,7 @@ class UserCreator(
     private fun createUserInternal(name: String): User {
         val normalizedName = name.trim()
         val user = User(id = UUID.randomUUID(), name = normalizedName, createdAt = clock.now())
-        // The unique index is the sole authority on the name being free, case and tombstones
-        // included, so the refusal arrives from the store rather than from a lookup of our own
+        // The index is the sole authority on the name being free, case and tombstones included: no read here.
         return try {
             userRepository.saveUser(user)
         } catch (error: UsernameAlreadyTakenException) {

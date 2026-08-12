@@ -5,18 +5,13 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * A unique constraint is not complete until someone has written what a client sees when it fires.
- * Every constraint the committed migrations declare appears in [namedOutcomes] carrying that answer,
- * and "no translation, deliberately" is a valid answer: it is silence that is refused
+ * A unique constraint is not complete until someone has written what a client sees when it fires: every one
+ * the migrations declare appears in [namedOutcomes] with that answer, "no translation, deliberately" included
  * (`docs/adr/0009-unique-index-named-outcomes.md`, decision 1).
  *
- * **Its limit, stated rather than discovered later: this enforces that an outcome is named, not that
- * it is true.** A wrong entry passes, and only the code and its own tests say otherwise. What this
- * stops is the constraint that arrives with no answer at all.
+ * It enforces that an outcome is named, not that it is true: a wrong entry passes.
  */
 class UniqueConstraintOutcomeTest {
-    // The outcome is a value rather than a comment, and the assertion below refuses a blank one, so a
-    // new key cannot be added without writing an answer.
     private val namedOutcomes =
         mapOf(
             "ix_users_name_nocase" to
@@ -50,8 +45,7 @@ class UniqueConstraintOutcomeTest {
             .orEmpty()
             .filter { it.name.endsWith(".sql") }
 
-    // The schema spells uniqueness two ways and enforces both: a standalone `create unique index`, and
-    // the inline table constraint `@Column(unique = true)` produces, which SQLite accepts at creation.
+    // Uniqueness has two spellings: a standalone `create unique index`, and an inline constraint at table creation.
     private val uniqueIndexStatement =
         Regex("""create\s+unique\s+index\s+(\w+)""", RegexOption.IGNORE_CASE)
 
@@ -64,8 +58,7 @@ class UniqueConstraintOutcomeTest {
 
     private val lineComment = Regex("--.*")
 
-    // No non-empty guard sits beside these, unlike DbMigrationModelCoverageTest's: the table below is
-    // not empty, so an extraction that stops matching fails the assertion rather than passing it.
+    // No non-empty guard, unlike DbMigrationModelCoverageTest: the table is not empty, so an empty extraction fails.
     private val declaredConstraints: Set<String> =
         sqlScripts
             .flatMap { file ->
@@ -77,15 +70,13 @@ class UniqueConstraintOutcomeTest {
 
     @Test
     fun `Given the migration scripts, Then every unique constraint they declare names its outcome`() {
-        // Sorted for a failure that reads the same twice; both sides are sets, so this is set equality
-        // and a stale entry fails as loudly as a new constraint.
+        // Sorted so a failure reads the same twice; set equality, so a stale entry fails as loudly as a new one.
         assertEquals(namedOutcomes.keys.sorted(), declaredConstraints.sorted())
     }
 
     @Test
     fun `Given the outcome table, Then no entry names a constraint without answering for it`() {
-        // The assertion above reads keys only, so `"ux_new" to ""` satisfies it: the name arrives and
-        // the silence stays, which is what decision 1 refuses.
+        // The assertion above reads keys only, so `"ux_new" to ""` satisfies it while the silence stays.
 
         // Given
         val unanswered = namedOutcomes.filterValues { it.isBlank() }.keys.sorted()
@@ -96,8 +87,7 @@ class UniqueConstraintOutcomeTest {
 
     @Test
     fun `Given the migration scripts, Then the extraction reads every line that declares uniqueness`() {
-        // Guards the assertion above against the spelling it does not know: an extractor blind to a
-        // third form leaves that constraint out of both sides, which then agree in silence.
+        // Guards against the spelling it does not know: a form missing from both sides makes them agree in silence.
 
         // Given
         val extracted = locationsMatching(uniqueIndexStatement, inlineUniqueConstraint)
@@ -119,9 +109,6 @@ class UniqueConstraintOutcomeTest {
                     .toList()
             }
 
-    /**
-     * [text] with its SQL line comments blanked, keeping every newline so a locator still names the
-     * line it came from. A commented-out statement is prose about the schema, not schema.
-     */
+    /** [text] with SQL line comments blanked, newlines kept so a locator still names the right line. */
     private fun schemaOnly(text: String): String = text.replace(lineComment, "")
 }

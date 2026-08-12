@@ -9,8 +9,8 @@ import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 
 /**
- * Focused unit tests for the collision decision shared by the repositories that answer a
- * unique-index violation with something other than the driver's exception.
+ * Focused unit tests for the collision decision shared by the repositories that answer a unique-index
+ * violation with a domain error or the row the insert collided with.
  *
  * They do not extend [fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.RepositoryTest]: the
  * decision under test is a pure function of the exception's cause structure, observed empirically as
@@ -21,8 +21,7 @@ import org.sqlite.SQLiteException
  * [fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.UserDataExportRepositoryTest], the
  * collided-with row in [fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.EbeanTaskQueueTest].
  * These tests cover the decision itself and the rethrow of unrelated failures, which cannot be
- * produced through a public save against a real store. Both callers reach that rethrow through
- * `onUniqueConstraint`, so it stays one branch however many shapes the object serves.
+ * produced through a public save against a real store.
  */
 class SqliteConstraintViolationsTest {
     private class DomainError(

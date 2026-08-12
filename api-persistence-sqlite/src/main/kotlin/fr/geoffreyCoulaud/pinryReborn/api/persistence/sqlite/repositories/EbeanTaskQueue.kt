@@ -60,11 +60,7 @@ class EbeanTaskQueue(
         return if (dedupKey == null) insert(task) else enqueueDeduplicated(task, dedupKey)
     }
 
-    /**
-     * Converges on the live task [dedupKey] already names, whether the read finds it or the insert
-     * loses the race and `ux_tasks_dedup` refuses it. A violation with no live task behind it has
-     * nothing to converge on, so it propagates (ADR 0009, decision 3).
-     */
+    /** Converges on the live task [dedupKey] already names, whether the read finds it or the insert collides. */
     private fun enqueueDeduplicated(task: NewTask, dedupKey: String): Task {
         val existing = findLiveTaskWithDedupKey(dedupKey)
         if (existing != null) return existing.toDomain()
