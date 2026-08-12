@@ -74,10 +74,19 @@ more precise one, and drops the generic portion it annulled. The effective norm 
 |---|---|---|
 | `project.md:250` | "`AGENTS.md` offers squash or rebase; here only rebase exists" | "Merging is rebase only: `gh repo view` reports squash and merge commits disabled." |
 | `project.md:257` | "`AGENTS.md` lets documentation-only changes merge locally; this project declares no such paths" | "Everything integrates through a PR, including documentation-only changes, because a local merge to `main` bypasses the `validate / gate` check." |
-| `project.md:95,103` | the perimeter, plus "the only other narrowed `AGENTS.md` rule is the merge convention" | the perimeter unchanged, and the count of departures kept as a statement of its own: two exist, the models-package exclusion and the merge convention, both named. |
+| `project.md:95,103` | the perimeter, plus "the only other narrowed `AGENTS.md` rule is the merge convention" | the perimeter unchanged, and one departure left to count instead of two, since the merge convention no longer departs from anything once both halves are in one file. |
 
-The vocabulary of narrowing goes, since there is no third-party document left to narrow. What it
-carried, that departures are counted and named rather than accumulated quietly, stays.
+The vocabulary of narrowing goes, since there is no third-party document left to narrow: both
+"**the one genuine narrowing**" and "departures from the rules of this file" go with it. What it
+carried, that a departure is counted and named rather than accumulated quietly, stays, and it now
+has one subject rather than two. The merge convention was a departure from a generic file that
+offered squash or rebase; that file is this one, it offers rebase only, and nothing departs from
+it. The models-package exclusion remains a real one, because the norms here do ask for 100% inside
+the perimeter with no per-category exemption.
+
+The first draft of this section kept the count at two and left the narrowing vocabulary in place.
+The holistic review found the paragraph unverifiable as delivered: rewritten on 2026-08-12, and the
+count is now one.
 
 ### 4. What is deleted (closed list)
 
@@ -107,15 +116,38 @@ Nothing leaves the file except these. Anything else surviving in the diff is a d
 ### 5. One guard replaces the freeze
 
 The freeze did two things and only one of them is being refused. Synchronising two repositories is
-the cost. Preventing an agent from amending, mid-lot, the rules that govern it is worth keeping and
-costs nothing. It becomes a convention in the merged file: a rule changes only in a lot whose
-subject it is, never in passing, and the observable is a separate `docs(agents):` commit. The
-Improve phase already commits that way, so this states an existing practice rather than adding one.
+the cost. Preventing an agent from amending, mid-lot, the rules and the review criteria that govern
+it is worth keeping and costs nothing. It becomes a convention in the merged file: a rule or a
+review mandate changes only in a lot whose subject it is, never in passing.
+
+**It has to yield to Simultaneity, and the first draft did not say so.** A rule this repository
+discovers while writing the code that establishes it belongs in that code's commit: that is how
+`cf9a547` shipped the uniqueness invariant, and the plans of the day asked for exactly that. Before
+the merge the two regimes lived in two files and could not collide, `AGENTS.md` being frozen and
+`agents/project.md` moving with the code. In one file they do collide, so the guard names what it
+forbids, loosening a criterion that judges the work in flight, rather than prescribing one commit
+shape. Found by the holistic review, 2026-08-12.
+
+### 6. What the merge adds
+
+Prose that was in none of the four sources. None of it carries a norm: each piece replaces plumbing
+the split had made necessary, or answers a review.
+
+- The header, and the amendment guard of section 5.
+- Under Review mandates, why the three stay files of their own rather than becoming a section.
+- Under Commands, what the guard still inspects now that its generic-file rule is gone (task review
+  of the hook).
+- Four cross-references between the pairs the merge made homonymous: Design against Design
+  invariants, and Kotlin's "Tests and coverage" against Conventions' "Tests" (task review of the
+  merge).
+
+Listed here on 2026-08-12: the first draft of this document said only titles and section 4 changed,
+which its own diff contradicted, and the holistic review said so.
 
 ## Target structure
 
-One file, sections in this order. Every bullet moves intact; only section titles and the sentences
-listed in section 4 change.
+One file, sections in this order. Every bullet moves intact; what changes is section titles, the
+sentences listed in section 4, and the prose the merge adds, listed in section 6.
 
 | Section | Source |
 |---|---|

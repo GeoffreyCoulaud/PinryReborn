@@ -4,8 +4,12 @@ The instructions this repository runs on: what the project is, where its code li
 engineering baseline it holds itself to, the workflow, and the rules situated to Pinry Reborn's API
 server. The repository owns this file and edits it here.
 
-**A rule changes only in a lot whose subject it is**, never in passing to make the work at hand
-easier. _Observable: a separate `docs(agents):` commit._
+**A rule or a review mandate changes only in a lot whose subject it is**, never in passing to make
+the work at hand easier. _Observable: the change is the lot's declared subject, or it arrives in its
+own `docs(agents):` commit._ The opposite case is not this one and is required by Simultaneity
+below: a rule this repository discovers while writing the code that establishes it ships in that
+code's commit. What this forbids is loosening a criterion that judges the work in flight, not
+recording what the work just proved.
 
 Every rule is written so breaking it is **visible in the output**: when a rule names an observable,
 produce it; a rule you cannot satisfy is reported, never silently skipped. Rules govern work from
@@ -295,12 +299,11 @@ begins with "confirm", "verify" or "check that", and every document named carrie
     `io.ebean.typequery.Generated` annotation and the `Q*` query package. See
     `docs/adr/0002-generated-artefacts-in-gate-perimeter.md`.
 
-The models-package exclusion above (decision B1) is **the one genuine narrowing** of the gate
-perimeter that remains: those entity classes are hand-written and Ebean enhances them in place, so
-their exclusion is the operator's call, not a generated-artefact declaration
-(`docs/adr/0001-adopt-agents-baseline.md`). Two departures from the rules of this file exist in all,
-and they are counted rather than left to accumulate quietly: this one, and the merge convention
-under Conventions.
+The models-package exclusion above (decision B1) is the one place where this file holds itself to
+less than its own norms ask: they want 100% inside the perimeter with no per-category exemption, and
+those entity classes are hand-written, so excluding them is the operator's call rather than a
+generated-artefact declaration (`docs/adr/0001-adopt-agents-baseline.md`). It is counted here rather
+than left to accumulate quietly.
 
 The perimeter is transcribed from `build.gradle.kts`, which is where it is enforced. Change it
 there first.
@@ -601,7 +604,8 @@ What is already settled here, and why. How to decide the next one is under Desig
 
 ## Documentation
 
-Two regimes; the table below declares which document belongs to which.
+Two regimes; the table under "Which document is in which regime" says which document belongs to
+which.
 
 | Regime | Property | Rule |
 | --- | --- | --- |

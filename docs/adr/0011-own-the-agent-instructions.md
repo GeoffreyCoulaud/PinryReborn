@@ -53,9 +53,13 @@ Settled by the operator on 2026-08-12.
 3. **The hook loses its third rule.** `evidence-guard.py` blocked any edit to a file whose first
    line carried the marker. With no marked file left, the rule guards nothing, so it goes rather
    than remaining as unreachable code. Its two other rules are untouched.
-4. **A rule changes only in a lot whose subject it is.** This replaces what the freeze incidentally
-   provided. The observable is a separate `docs(agents):` commit, which the Improve phase already
-   practises.
+4. **A rule or a review mandate changes only in a lot whose subject it is.** This replaces what the
+   freeze incidentally provided, for the mandates as much as for the rules: the marker protected
+   all seven files, and nothing mechanical protects the three mandates now. The guard names what it
+   forbids, loosening a criterion that judges the work in flight, and it yields to Simultaneity: a
+   rule discovered while writing the code that establishes it ships in that code's commit, as
+   `cf9a547` did. Naming a commit shape instead would have contradicted a rule this repository
+   practises, which the holistic review caught before delivery.
 5. **ADR 0001 and ADR 0005 stay `Accepted`.** They arbitrated contradictions between the project's
    own rules and the arriving ones, and every one of those arbitrations still holds. What ends is
    the adoption mechanism, not its outcomes, so marking them superseded would retract decisions that
