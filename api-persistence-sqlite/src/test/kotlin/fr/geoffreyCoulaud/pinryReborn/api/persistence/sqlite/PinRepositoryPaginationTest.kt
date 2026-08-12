@@ -4,18 +4,24 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Page
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import java.util.UUID.randomUUID
 
 /**
+ * How `PinRepository` pages: the cursor a page hands back, and the pivot a caller sends in.
+ *
  * Pins created in the same clock tick share a `createdAt`. Without a tie-breaker the cursor
  * cannot advance past such a group, so a caller draining the pages loops forever on the same rows.
- * These tests drain the pages with a hard page budget: an unfixed strategy blows the budget instead
- * of hanging the suite.
+ * The draining tests use a hard page budget: an unfixed strategy blows the budget instead
+ * of hanging the suite. The cursor-resolution tests below them pin what a pivot resolves to,
+ * including one naming a pin that is not there.
  */
 class PinRepositoryPaginationTest : PinRepositoryFixtures() {
     private val tiedPinCount = 5
@@ -156,5 +162,156 @@ class PinRepositoryPaginationTest : PinRepositoryFixtures() {
         // Then
         assertTrue(drain.pages < maxPages, "pagination did not terminate")
         assertEquals(expectedIds, drain.seen)
+    }
+
+    // --- Pagination cursor resolution ---
+
+    @Test
+    fun `Given a cursor pointing to an existing pin, Then findPinsForUser resumes from it`() {
+        // Given
+        val user = createAndSaveUser()
+        val firstPin = createAndSavePin(user, createdAt = firstInstant)
+        val secondPin = createAndSavePin(user, createdAt = secondInstant)
+        val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
+
+        // When
+        val page =
+            repository.findPinsForUser(
+                reader = user,
+                cursor = cursor,
+                pageSize = 10,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertTrue(page.items.none { it.id == firstPin.id })
+        assertNotNull(page.items.find { it.id == secondPin.id })
+    }
+
+    @Test
+    fun `Given a cursor pointing to a nonexistent pin, Then findPinsForUser treats it as the first page`() {
+        // Given
+        val user = createAndSaveUser()
+        val pin = createAndSavePin(user)
+        val cursor = Cursor(pivotId = randomUUID(), direction = CursorDirection.FORWARD)
+
+        // When
+        val page =
+            repository.findPinsForUser(
+                reader = user,
+                cursor = cursor,
+                pageSize = 10,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertEquals(1, page.items.size)
+        assertEquals(pin.id, page.items[0].id)
+    }
+
+    @Test
+    fun `Given a cursor pointing to an existing soft-deleted pin, Then findSoftDeletedPinsForUser resumes from it`() {
+        // Given
+        val user = createAndSaveUser()
+        val firstPin = repository.softDeletePin(createAndSavePin(user, createdAt = firstInstant), storableNow())
+        val secondPin = repository.softDeletePin(createAndSavePin(user, createdAt = secondInstant), storableNow())
+        val cursor = Cursor(pivotId = firstPin.id, direction = CursorDirection.FORWARD)
+
+        // When
+        val page =
+            repository.findSoftDeletedPinsForUser(
+                reader = user,
+                cursor = cursor,
+                pageSize = 10,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertTrue(page.items.none { it.id == firstPin.id })
+        assertNotNull(page.items.find { it.id == secondPin.id })
+    }
+
+    @Test
+    fun `Given a cursor pointing to a nonexistent pin, Then findSoftDeletedPinsForUser treats it as the first page`() {
+        // Given
+        val user = createAndSaveUser()
+        val pin = repository.softDeletePin(createAndSavePin(user), storableNow())
+        val cursor = Cursor(pivotId = randomUUID(), direction = CursorDirection.FORWARD)
+
+        // When
+        val page =
+            repository.findSoftDeletedPinsForUser(
+                reader = user,
+                cursor = cursor,
+                pageSize = 10,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertEquals(1, page.items.size)
+        assertEquals(pin.id, page.items[0].id)
+    }
+
+    @Test
+    fun `Given many pins, Then findPinsForUser exposes both cursors`() {
+        // Given
+        val user = createAndSaveUser()
+        repeat(3) { createAndSavePin(user) }
+
+        // When
+        val page =
+            repository.findPinsForUser(
+                reader = user,
+                cursor = null,
+                pageSize = 2,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertEquals(2, page.items.size)
+        assertNotNull(page.nextCursor)
+        assertNotNull(page.previousCursor)
+    }
+
+    @Test
+    fun `Given many soft-deleted pins, Then findSoftDeletedPinsForUser exposes both cursors`() {
+        // Given
+        val user = createAndSaveUser()
+        repeat(3) { repository.softDeletePin(createAndSavePin(user), storableNow()) }
+
+        // When
+        val page =
+            repository.findSoftDeletedPinsForUser(
+                reader = user,
+                cursor = null,
+                pageSize = 2,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertEquals(2, page.items.size)
+        assertNotNull(page.nextCursor)
+        assertNotNull(page.previousCursor)
+    }
+
+    @Test
+    fun `Given no soft-deleted pins, Then findSoftDeletedPinsForUser returns an empty page with no cursors`() {
+        // Given
+        val user = createAndSaveUser()
+        createAndSavePin(user)
+
+        // When
+        val page =
+            repository.findSoftDeletedPinsForUser(
+                reader = user,
+                cursor = null,
+                pageSize = 10,
+                sortStrategy = PinSortStrategy.CREATED_AT_ASC,
+            )
+
+        // Then
+        assertTrue(page.items.isEmpty())
+        assertNull(page.nextCursor)
+        assertNull(page.previousCursor)
     }
 }
