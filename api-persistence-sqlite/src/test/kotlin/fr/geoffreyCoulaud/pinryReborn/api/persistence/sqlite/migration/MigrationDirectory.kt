@@ -46,10 +46,18 @@ internal object MigrationDirectory {
      * the extractor reads as nothing at all shows up as a difference instead of as silent agreement.
      */
     fun locationsMatching(vararg patterns: Regex): List<String> =
-        sqlScripts
+        locationsMatching(sqlScripts, ::schemaOnly, *patterns)
+
+    /** The same over [files], read through [read]: the model files need [textWithComments], not [schemaOnly]. */
+    fun locationsMatching(
+        files: List<File>,
+        read: (File) -> String,
+        vararg patterns: Regex,
+    ): List<String> =
+        files
             .sortedBy { it.name }
             .flatMap { file ->
-                schemaOnly(file)
+                read(file)
                     .lineSequence()
                     .withIndex()
                     .filter { (_, line) -> patterns.any { it.containsMatchIn(line) } }
