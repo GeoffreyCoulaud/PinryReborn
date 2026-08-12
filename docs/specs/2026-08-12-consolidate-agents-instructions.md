@@ -90,8 +90,12 @@ Nothing leaves the file except these. Anything else surviving in the diff is a d
    (`agents-baseline`), never edited here."
 5. `project.md:122`: the `sourced` row of the documentation regime table. `AGENTS.md` joins the
    table as `living`; `agents/reviews/*` joins it as `living` too.
-6. `project.md:291`: "since `AGENTS.md` is generic and the hook refuses to edit it", and the clause
-   sending a generic lesson upstream.
+6. `project.md:291`: the whole sentence "A rule lands in **this file**, since `AGENTS.md` is generic
+   and the hook refuses to edit it", plus the clause sending a generic lesson upstream. The main
+   proposition goes with its subordinates: in a single file, "a rule lands in this file" opposes
+   nothing, and the rule survives where it is load-bearing, in phase Improve, which names this file
+   as the home of a judgement call. The first draft of this item named the subordinates only; the
+   task review found the proposition deleted outside the list and it was added here on 2026-08-12.
 7. The cross-file plumbing: nine renvois in `project.md`, four in the two modules, and the two `@`
    import lines.
 8. The generic halves of the three restrictions in section 3.
@@ -143,6 +147,13 @@ Each one is a command whose failure is defined.
    does not move, and counting them only after would show their fragments as arrivals. The diff
    shows only the removals of section 4. A surviving fragment that section 4 does not list is a
    rule silently dropped.
+
+   **What it misses, and it is not small**: `comm` compares multisets, so a fragment deleted in one
+   place and created in another cancels out and shows on neither side. The check establishes that
+   every statement still exists somewhere, never that it still exists where its rule was. The task
+   review demonstrated it on `**this file**`, whose count held at one across a deletion and a
+   rewording, and closed the gap with three further diffs (backticked fragments, table rows, word
+   multiset) that found nothing beyond the closed list.
 2. **The layout is what it claims.** `git ls-files agents` returns the three review mandates and
    nothing else.
 3. **The cut is clean.** `grep -rn "agents-baseline" --exclude-dir=.git --exclude-dir=docs .`
