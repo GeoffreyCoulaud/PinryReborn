@@ -19,16 +19,12 @@ class UserCreator(
     private val transactionRunner: TransactionRunner,
     private val clock: Clock,
 ) {
-    fun createUser(name: String): User = transactionRunner.inTransaction { createUserInternal(name) }
-
     fun createUserWithPassword(
         name: String,
         password: String,
     ): User =
         transactionRunner.inTransaction {
-            // Create the user as usual
-            val user = createUserInternal(name)
-            // Hash and save the password
+            val user = saveUser(name)
             userPasswordRepository.saveUserPasswordHash(
                 user = user,
                 hashedPassword = passwordHasher.hash(password, clock.now()),
@@ -36,9 +32,8 @@ class UserCreator(
             user
         }
 
-    private fun createUserInternal(name: String): User {
-        val normalizedName = name.trim()
-        val user = User(id = UUID.randomUUID(), name = normalizedName, createdAt = clock.now())
+    private fun saveUser(name: String): User {
+        val user = User(id = UUID.randomUUID(), name = name.trim(), createdAt = clock.now())
         // The index is the sole authority on the name being free, case and tombstones included: no read here.
         return try {
             userRepository.saveUser(user)
