@@ -42,6 +42,12 @@ class DbMigrationModelCoverageTest {
     // order the generator happens to write the attributes in.
     private val indexNameAttribute = Regex("""\bindexName="([^"]+)"""")
     private val definitionAttribute = Regex("""\bdefinition="([^"]+)"""")
+    private val tableNameAttribute = Regex("""\btableName="([^"]*)"""")
+    private val columnsAttribute = Regex("""\bcolumns="([^"]*)"""")
+    private val uniqueAttribute = Regex("""\bunique="true"""")
+
+    // A definition on any other element would be counted by the loose probe and read by no extractor.
+    private val definitionOnCreateIndex = Regex("""<createIndex\b[^>]*\bdefinition="""")
 
     // The loose probes for the extractions above, in the sense MigrationDirectory.locationsMatching describes.
     private val looseIndexCreation = Regex("""create\b.*\bindex\b""", RegexOption.IGNORE_CASE)
@@ -66,6 +72,9 @@ class DbMigrationModelCoverageTest {
                         version = version,
                         name = indexNameAttribute.find(element.value)?.groupValues?.get(1).orEmpty(),
                         definition = definitionAttribute.find(element.value)?.groupValues?.get(1),
+                        tableName = tableNameAttribute.find(element.value)?.groupValues?.get(1).orEmpty(),
+                        columns = columnsAttribute.find(element.value)?.groupValues?.get(1).orEmpty(),
+                        unique = uniqueAttribute.containsMatchIn(element.value),
                     )
                 }.toList()
         }
@@ -134,23 +143,37 @@ class DbMigrationModelCoverageTest {
     }
 
     @Test
-    fun `Given a model index definition, Then it repeats the statement its own migration applied`() {
+    fun `Given a model index, Then what it records repeats the statement its migration applied`() {
+        // Every element is paired, with no branch that skips one: deleting a `definition` attribute leaves the
+        // column list as the claim, and a partial or expression index cannot be spelled that way, so it fails.
+
         // Given
         val disagreeing =
             modelIndexes
                 .mapNotNull { index ->
-                    val definition = index.definition ?: return@mapNotNull null
-                    val applied = appliedIndexStatements[index.version]?.get(index.name)
-                    if (applied != null && normalised(applied) == normalised(definition)) {
+                    val recorded = index.definition ?: columnListStatement(index)
+                    val applied = appliedStatementFor(index)
+                    if (applied != null && normalised(applied) == normalised(recorded)) {
                         null
                     } else {
-                        "${index.version}.model.xml declares ${index.name} as [$definition], " +
-                            "${index.version}.sql applies [${applied ?: "nothing"}]"
+                        "${index.version}.model.xml records ${index.name} as [$recorded], " +
+                            "${appliedDescription(index)}"
                     }
                 }.sorted()
 
         // Then
         assertEquals(emptyList<String>(), disagreeing)
+    }
+
+    @Test
+    fun `Given the migration models, Then no definition attribute sits outside a createIndex`() {
+        // Guards the count above, which a definition on another element and a truncated extraction cancel out of.
+
+        // Given
+        val onCreateIndex = modelLocationsMatching(definitionOnCreateIndex)
+
+        // Then
+        assertEquals(modelLocationsMatching(looseDefinitionAttribute), onCreateIndex)
     }
 
     @Test
@@ -193,9 +216,37 @@ class DbMigrationModelCoverageTest {
     private fun normalised(statement: String): String =
         statement.replace(whitespaceRun, " ").trim().removeSuffix(";").trim()
 
+    /** The statement a `<createIndex>` claims through its column list alone, which is all Ebean renders from it. */
+    private fun columnListStatement(index: ModelIndex): String =
+        "create ${if (index.unique) "unique " else ""}index ${index.name} " +
+            "on ${index.tableName} (${index.columns})"
+
+    private fun appliedStatementFor(index: ModelIndex): String? =
+        appliedIndexStatements[index.version]?.get(index.name)
+
+    /** Names which of the two absences a failure met, so the reader is not sent to a file that does not exist. */
+    private fun appliedDescription(index: ModelIndex): String {
+        val applied = appliedStatementFor(index)
+        return when {
+            applied != null -> "${index.version}.sql applies [$applied]"
+            index.version !in appliedIndexStatements -> "there is no ${index.version}.sql"
+            else -> "${index.version}.sql creates no such index"
+        }
+    }
+
+    private fun modelLocationsMatching(pattern: Regex): List<String> =
+        MigrationDirectory.locationsMatching(
+            MigrationDirectory.modelFiles,
+            MigrationDirectory::textWithComments,
+            pattern,
+        )
+
     private data class ModelIndex(
         val version: String,
         val name: String,
         val definition: String?,
+        val tableName: String,
+        val columns: String,
+        val unique: Boolean,
     )
 }
