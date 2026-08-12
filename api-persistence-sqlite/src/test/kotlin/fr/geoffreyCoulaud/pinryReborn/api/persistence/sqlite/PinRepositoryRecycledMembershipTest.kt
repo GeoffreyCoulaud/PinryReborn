@@ -4,10 +4,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.BoardRepository
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
-import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -19,37 +15,14 @@ import java.util.UUID.randomUUID
  * halves of that contract, split from `PinRepositoryTest` to keep it under detekt's `LargeClass`
  * threshold (mirrors `PinRepositoryPaginationTest`'s precedent for the same split).
  */
-class PinRepositoryRecycledMembershipTest : RepositoryTest() {
-    private val pinRepository = PinRepository(persistor)
+class PinRepositoryRecycledMembershipTest : PinRepositoryFixtures() {
     private val boardRepository = BoardRepository(persistor)
-    private val userRepository = UserRepository(persistor)
-
-    private fun createAndSaveUser(): User =
-        userRepository.saveUser(
-            User(
-                id = randomUUID(),
-                name = createRandomString(),
-                createdAt = storableNow(),
-            ),
-        )
-
-    private fun createAndSaveBoard(user: User): Board =
-        boardRepository.saveBoard(
-            Board(
-                id = randomUUID(),
-                author = user,
-                name = createRandomString(),
-                description = "",
-                createdAt = storableNow(),
-                updatedAt = storableNow(),
-            ),
-        )
 
     private fun createAndSavePinInBoard(
         user: User,
         board: Board,
     ): Pin =
-        pinRepository.savePin(
+        repository.savePin(
             Pin(
                 id = randomUUID(),
                 author = user,
@@ -72,10 +45,10 @@ class PinRepositoryRecycledMembershipTest : RepositoryTest() {
         boardRepository.softDeleteBoard(board, storableNow())
 
         // When
-        val boards = pinRepository.findBoardsForPinIncludingRecycled(pin.id)
+        val boards = repository.findBoardsForPinIncludingRecycled(pin.id)
 
         // Then
         assertEquals(listOf(board.id), boards.map { it.id })
-        assertTrue(pinRepository.findPinById(pin.id)!!.boards.isEmpty(), "the API view still filters")
+        assertTrue(repository.findPinById(pin.id)!!.boards.isEmpty(), "the API view still filters")
     }
 }

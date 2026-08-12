@@ -5,10 +5,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Page
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
-import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -21,37 +17,10 @@ import java.util.UUID.randomUUID
  * These tests drain the pages with a hard page budget: an unfixed strategy blows the budget instead
  * of hanging the suite.
  */
-class PinRepositoryPaginationTest : RepositoryTest() {
-    private val repository = PinRepository(persistor)
-    private val userRepository = UserRepository(persistor)
-
+class PinRepositoryPaginationTest : PinRepositoryFixtures() {
     private val tiedPinCount = 5
     private val pageSize = 2
     private val maxPages = 10
-
-    private fun createAndSaveUser(): User =
-        userRepository.saveUser(
-            User(
-                id = randomUUID(),
-                name = createRandomString(),
-                createdAt = storableNow(),
-            ),
-        )
-
-    private fun createAndSavePin(author: User): Pin =
-        repository.savePin(
-            Pin(
-                id = randomUUID(),
-                author = author,
-                sourceContextUrl = "https://example.com",
-                sourceMediaUrl = "https://example.com/image.jpeg",
-                description = "Something",
-                tags = emptyList(),
-                boards = emptyList(),
-                createdAt = storableNow(),
-                updatedAt = storableNow(),
-            ),
-        )
 
     /**
      * `@WhenCreated` and the soft-deletion instant are written by the persistence layer, so the

@@ -1,19 +1,10 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.BoardModelMapper.toModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.BoardModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.PinModel
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.TagRepository
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
-import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -25,82 +16,7 @@ import java.util.UUID.randomUUID
 
 @Suppress("LargeClass") // Core pin repository suite; feature slices live in sibling classes
 // (PinRepositoryPaginationTest, PinRepositoryRecycledMembershipTest, PinModelSortStrategyTest).
-class PinRepositoryTest : RepositoryTest() {
-    private val repository = PinRepository(persistor)
-    private val userRepository = UserRepository(persistor)
-    private val tagRepository = TagRepository(persistor)
-
-    private fun createAndSaveUser(): User =
-        userRepository.saveUser(
-            User(
-                id = randomUUID(),
-                name = createRandomString(),
-                createdAt = storableNow(),
-            ),
-        )
-
-    private fun createAndSaveTag(
-        name: String,
-        user: User,
-    ): Tag =
-        tagRepository.saveTag(
-            Tag(
-                id = randomUUID(),
-                author = user,
-                name = name,
-                createdAt = storableNow(),
-            ),
-        )
-
-    private fun createAndSaveBoard(
-        name: String,
-        user: User,
-    ): Board {
-        val board = Board(
-            id = randomUUID(),
-            author = user,
-            name = name,
-            description = "",
-            createdAt = storableNow(),
-            updatedAt = storableNow(),
-        )
-        database.save(board.toModel())
-        return board
-    }
-
-    private fun softDeleteBoardModel(board: Board) {
-        val model = database.find(BoardModel::class.java, board.id)!!
-        model.softDeletedAt = storableNow()
-        database.save(model)
-    }
-
-    private fun restoreBoardModel(board: Board) {
-        val model = database.find(BoardModel::class.java, board.id)!!
-        model.softDeletedAt = null
-        database.save(model)
-    }
-
-    private fun createPin(): Pin =
-        Pin(
-            id = randomUUID(),
-            author = createAndSaveUser(),
-            sourceContextUrl = "https://example.com",
-            sourceMediaUrl = "https://example.com/image.jpeg",
-            description = "Something",
-            tags = emptyList(),
-            boards = emptyList(),
-            createdAt = storableNow(),
-            updatedAt = storableNow(),
-        )
-
-    private fun createPinWithTags(vararg tags: Tag): Pin =
-        createPin()
-            .copy(tags = tags.toList())
-
-    private fun createPinWithBoards(vararg boards: Board): Pin =
-        createPin()
-            .copy(boards = boards.toList())
-
+class PinRepositoryTest : PinRepositoryFixtures() {
     @Test
     fun `When saving a new pin, then should create it`() {
         // Given
@@ -260,39 +176,14 @@ class PinRepositoryTest : RepositoryTest() {
         repository.savePin(updatedPin)
 
         // Then
-        // Compared by id only: `board2`/`board3` come from this file's own `createAndSaveBoard`
-        // helper, which saves the model directly and returns the original in-memory Board (its
-        // createdAt/updatedAt stay null), unlike `actual`'s boards which are freshly read.
+        // Compared by id only: `createAndSaveBoard` returns the in-memory Board it saved, not the
+        // one a fresh read yields.
         val actual = repository.findPinById(pin.id)
         assertNotNull(actual)
         assertEquals(setOf(board2.id, board3.id), actual!!.boards.map { it.id }.toSet())
     }
 
     // --- Soft delete tests ---
-
-    private fun createAndSavePin(
-        author: User,
-        createdAt: Instant = storableNow(),
-    ): Pin {
-        val pin = Pin(
-            id = randomUUID(),
-            author = author,
-            sourceContextUrl = "https://example.com",
-            sourceMediaUrl = "https://example.com/image.jpeg",
-            description = "Something",
-            tags = emptyList(),
-            boards = emptyList(),
-            createdAt = createdAt,
-            updatedAt = createdAt,
-        )
-        return repository.savePin(pin)
-    }
-
-    // Cursor pagination breaks ties on the id, which is random, so a test asserting a
-    // deterministic order stamps the pins itself rather than hoping two saves land on
-    // different milliseconds.
-    private val firstInstant = Instant.parse("2026-01-01T00:00:00Z")
-    private val secondInstant = firstInstant.plusSeconds(1)
 
     @Test
     fun `Given soft-deleted pin, Then findPinsForUser excludes it`() {
