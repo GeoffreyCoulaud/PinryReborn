@@ -89,7 +89,7 @@ class UserDataExportRepository(
     override fun findPendingForUser(userId: UUID): UserDataExport? =
         QUserDataExportModel()
             .user.id.equalTo(userId)
-            .state.equalTo(UserDataExportState.PENDING.name)
+            .state.isIn(PartialUniqueIndexStates.pendingExportStates)
             .findOne()
             ?.toDomain()
 

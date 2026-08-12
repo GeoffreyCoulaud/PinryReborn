@@ -77,7 +77,7 @@ class EbeanTaskQueue(
     private fun findLiveTaskWithDedupKey(dedupKey: String): TaskModel? =
         QTaskModel()
             .dedupKey.equalTo(dedupKey)
-            .state.isIn(TaskState.PENDING.name, TaskState.RUNNING.name)
+            .state.isIn(PartialUniqueIndexStates.liveTaskStates)
             .findOne()
 
     private fun insert(task: NewTask): Task {
