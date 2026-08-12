@@ -16,8 +16,7 @@ import java.util.UUID
 // Without it the sweep is a full scan over a table that accumulates terminal rows forever
 // (spec 2026-07-27-periodic-gc.md section 11, D6).
 @Index(columnNames = ["state", "terminal_state_at"])
-// The three below already exist in every database, created by `1.3.sql:23,25,27`. Each is partial,
-// so only `definition` can carry its `where` clause; declaring them here puts them in the model.
+// Already created by `1.3.sql:23,25,27`, declared here to model them; partial, so `definition` carries the `where`.
 @Index(
     name = "ix_tasks_claim",
     definition = "create index ix_tasks_claim " +

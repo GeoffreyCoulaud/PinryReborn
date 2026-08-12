@@ -19,17 +19,14 @@ import java.io.File
  * The no-op rule below catches a related failure: a migration Ebean cannot render is written as
  * `-- not supported: ...` and applies silently, enforcing nothing.
  *
- * Pairing is not content: a model file can exist and still record none of its migration's indexes,
- * which is what `1.3.model.xml` did for the three `ix_tasks_*` indexes `1.3.sql` creates. The
- * index-model rule below closes that gap and admits no exemption
- * (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
+ * Pairing is not content: a model file can exist and record none of its migration's indexes, which is
+ * what `1.3.model.xml` did. The index-model rule below closes that gap.
  */
 class DbMigrationModelCoverageTest {
     private val migrationDirectory = File("src/main/resources/dbmigration")
 
-    // Empty, and meant to stay so: `1.2` was the last entry and its model file now exists. Writing
-    // one rewrites no `.sql`, so the checksum argument the entry rested on never applied
-    // (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
+    // Empty, and meant to stay so: writing a model file rewrites no `.sql`, so the checksum argument
+    // `1.2` rested on never applied (`docs/adr/0009-unique-index-named-outcomes.md`, decision 5).
     private val handWritten = emptySet<String>()
 
     private val sqlScripts: List<File> =
@@ -108,15 +105,13 @@ class DbMigrationModelCoverageTest {
 
     @Test
     fun `Given the migration scripts, Then they create at least one index`() {
-        // Guards the assertion above against a silent pass: a regex that stops matching leaves an
-        // empty set, which is trivially recorded in full.
+        // Guards the assertion above: a regex that stops matching leaves an empty set, trivially recorded in full.
         assertNotEquals(emptySet<String>(), createdIndexNames)
     }
 
     @Test
     fun `Given the migration scripts, Then the extraction reads every line that creates an index`() {
-        // The guard above only proves the extraction is non-empty: an extractor blind to one form
-        // still matches the others. Compared both ways, so a loose probe that narrows fails too.
+        // The guard above only proves non-emptiness: an extractor blind to one form still matches the others.
 
         // Given
         val extracted = locationsMatching(createIndexStatement)
@@ -147,10 +142,8 @@ class DbMigrationModelCoverageTest {
             }
 
     /**
-     * [file]'s text with its SQL line comments blanked, keeping every newline so a locator still names
-     * the line it came from. A commented-out `create index` is prose about the schema, not schema, and
-     * reading it as schema would demand a model entry for an index nobody created. The `-- not
-     * supported` assertion above deliberately keeps reading the raw text: its subject is the comment.
+     * [file]'s text with SQL line comments blanked, newlines kept so a locator still names the right line. The
+     * `-- not supported` assertion above deliberately reads the raw text: its subject is the comment.
      */
     private fun schemaOnly(file: File): String = file.readText().replace(lineComment, "")
 }

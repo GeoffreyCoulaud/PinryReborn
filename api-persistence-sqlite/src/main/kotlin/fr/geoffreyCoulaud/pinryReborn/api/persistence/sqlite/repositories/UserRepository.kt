@@ -50,8 +50,7 @@ class UserRepository(
         try {
             sqlRepository.saveAndReturn(user.toModel()).toDomain()
         } catch (error: PersistenceException) {
-            // ix_users_name_nocase is the only unique index on users, so a unique violation here is
-            // always a taken name.
+            // ix_users_name_nocase is the only unique index on users, so a violation is a taken name.
             SqliteConstraintViolations.translateUniqueConstraint(error) {
                 UsernameAlreadyTakenException(cause = it)
             }

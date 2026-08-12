@@ -63,8 +63,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
 
     @Test
     fun `Given a dedup key whose only task is terminal, Then enqueue creates a new task`() {
-        // Given: the sole row under this key has settled, so ux_tasks_dedup no longer covers it
-        // (`1.3.sql:27` indexes PENDING and RUNNING only) and the dedup read must not either
+        // Given: ux_tasks_dedup covers PENDING and RUNNING only (`1.3.sql:27`), so a settled row is not a duplicate
         val dedupKey = createRandomString()
         val settled = queue.enqueue(newTask(dedupKey = dedupKey))
         val claimed = requireNotNull(queue.claimNext(now, Duration.ofMinutes(1)))
@@ -108,7 +107,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // When: no ambient transaction, so enqueue opens and commits its own
         val converged = racingQueue.enqueue(newTask(dedupKey = dedupKey))
 
-        // Then: the losing path answers what the winning one does, the task the key already names
+        // Then
         assertEquals(conflict.id, converged.id)
         assertEquals(1, queue.countByState(TaskState.PENDING))
     }
@@ -120,8 +119,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val conflict = liveTaskModel(dedupKey)
         val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionControl)
 
-        // When: the caller owns the transaction, so enqueue joins it and the commit below is the
-        // caller's own. It is also what shows the caught violation left it usable (ADR 0009, fact 2).
+        // When: the caller owns the transaction, so committing it shows the caught violation left it usable
         val converged =
             transactionControl.beginTransaction().use { transaction ->
                 val task = racingQueue.enqueue(newTask(dedupKey = dedupKey))
@@ -136,8 +134,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
 
     @Test
     fun `Given a non-unique failure on the dedup insert, Then enqueue propagates it`() {
-        // Given: a live task is there to converge on, so the only thing keeping the caller from being
-        // handed it is the discriminator in SqliteConstraintViolations
+        // Given: a live task is there to converge on, so only the discriminator stops it being handed over
         val dedupKey = createRandomString()
         val conflict = liveTaskModel(dedupKey)
         val violation = notNullConstraintViolation()
@@ -154,8 +151,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
 
     @Test
     fun `Given a dedup violation with no live task behind it, Then enqueue propagates the violation`() {
-        // Given: the violation carries no row to converge on, so "returns that existing task" has no
-        // answer and a 500 is the honest one
+        // Given: the violation carries no row to converge on, so propagating it is the honest answer
         val violation = uniqueConstraintViolation()
         val racingQueue = EbeanTaskQueue(NoConflictRowPersistor(persistor, violation), transactionControl)
 
@@ -202,12 +198,9 @@ class EbeanTaskQueueTest : RepositoryTest() {
         )
 
     /**
-     * Turns the first task insert into a lost dedup race: writes [conflict] through the real
-     * persistor, so the insert that follows violates `ux_tasks_dedup`. The race itself does not
-     * reproduce while `enqueue` holds its check and its insert in one transaction, which is what
-     * serialises the pair (400 attempts, no violation: ADR 0009, findings from the experiment), so
-     * the situation it would leave behind is created instead and driven through enqueue's public
-     * surface.
+     * Stages a lost dedup race by writing [conflict] just before the insert: the real race does not reproduce
+     * while `enqueue` holds its check and its insert in one transaction
+     * (`docs/adr/0009-unique-index-named-outcomes.md`, findings).
      */
     private class LosingDedupRacePersistor(
         private val delegate: Persistor,
@@ -224,10 +217,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         }
     }
 
-    /**
-     * Writes [conflict], then fails the insert with [violation]: convergence has an answer to give,
-     * and only the unique-constraint discriminator stops it being given for the wrong failure.
-     */
+    /** Writes [conflict], then fails the insert with [violation]: only the discriminator stops convergence. */
     private class ForeignFailurePersistor(
         private val delegate: Persistor,
         private val conflict: TaskModel,
