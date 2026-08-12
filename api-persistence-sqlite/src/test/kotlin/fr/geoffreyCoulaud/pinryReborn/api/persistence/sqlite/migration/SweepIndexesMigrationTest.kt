@@ -2,7 +2,6 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.migration
 
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.io.File
 
 /**
  * The periodic garbage collection cutoff sweeps filter on columns that accumulate with activity, so the spec
@@ -15,8 +14,6 @@ import java.io.File
  * table and column set.
  */
 class SweepIndexesMigrationTest {
-    private val migrationDirectory = File("src/main/resources/dbmigration")
-
     private val sessionTokenExpiresAtIndex =
         Regex(
             """create\s+(unique\s+)?index\s+\S+\s+on\s+session_tokens\s*\(\s*expires_at\s*\)""",
@@ -59,13 +56,10 @@ class SweepIndexesMigrationTest {
     fun `Given the migration directory, Then it is where this test expects it`() {
         // Guards against a silent pass if the working directory or the layout ever moves: an empty
         // listing would make the assertions above trivially pass.
-        assertTrue(migrationDirectory.isDirectory, "${migrationDirectory.path} must be a directory")
+        assertTrue(MigrationDirectory.root.isDirectory, "${MigrationDirectory.root.path} must be a directory")
     }
 
+    // Comments blanked, so a commented-out create index does not read as the index this test requires.
     private fun readAllMigrations(): String =
-        migrationDirectory
-            .listFiles()
-            .orEmpty()
-            .filter { it.isFile && it.name.endsWith(".sql") }
-            .joinToString(separator = "\n") { it.readText() }
+        MigrationDirectory.sqlScripts.joinToString(separator = "\n") { MigrationDirectory.schemaOnly(it) }
 }
