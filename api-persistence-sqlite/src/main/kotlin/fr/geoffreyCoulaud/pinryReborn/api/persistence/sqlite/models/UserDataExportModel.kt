@@ -11,10 +11,8 @@ import java.util.UUID
 @Suppress("LongParameterList")
 @Entity
 @Table(name = "user_data_exports")
-// Enforces "at most one PENDING export per user" in the database. A plain unique index on user_id
-// would forbid a second export forever, so the index must be partial; `definition` carries the raw
-// DDL Ebean cannot express with columnNames alone, while `columnNames` keeps the index in the
-// migration model so a later diff drops and recreates it correctly.
+// Enforces "at most one PENDING export per user": a plain unique index on user_id would forbid a
+// second export forever, so the index is partial, which only `definition` can spell.
 @Index(
     name = "uq_user_data_exports_pending",
     columnNames = ["user_id"],
