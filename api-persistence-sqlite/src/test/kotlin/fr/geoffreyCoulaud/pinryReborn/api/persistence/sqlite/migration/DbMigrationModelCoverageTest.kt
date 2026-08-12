@@ -21,6 +21,10 @@ import java.io.File
  *
  * Pairing is not content: a model file can exist and record none of its migration's indexes, which is
  * what `1.3.model.xml` did. The index-model rule below closes that gap.
+ *
+ * A name is not the DDL either. Ebean harvests a model from the annotations, so its `definition` and
+ * those annotations agree by construction and neither is compared to the statement the `.sql` ran. The
+ * definition rule below is what ties the three together.
  */
 class DbMigrationModelCoverageTest {
     // Empty, and meant to stay so: writing a model file rewrites no `.sql`, so the checksum argument
@@ -32,17 +36,45 @@ class DbMigrationModelCoverageTest {
 
     // Anchored on the element, not on the attribute: `<dropIndex indexName="..."/>` takes the index
     // back out of the prior model, so a name whose only record is its removal is not recorded at all.
-    private val modelCreateIndexElement =
-        Regex("""<createIndex\b[^>]*\bindexName="([^"]+)"""")
+    private val modelCreateIndexElement = Regex("""<createIndex\b[^>]*>""")
 
-    // The loose probe for the extraction above, in the sense MigrationDirectory.locationsMatching describes.
+    // Read from the whole element rather than in one pattern, so the pairing does not turn on the
+    // order the generator happens to write the attributes in.
+    private val indexNameAttribute = Regex("""\bindexName="([^"]+)"""")
+    private val definitionAttribute = Regex("""\bdefinition="([^"]+)"""")
+
+    // The loose probes for the extractions above, in the sense MigrationDirectory.locationsMatching describes.
     private val looseIndexCreation = Regex("""create\b.*\bindex\b""", RegexOption.IGNORE_CASE)
+    private val looseDefinitionAttribute = Regex("""definition="""")
 
-    private val createdIndexNames: Set<String> =
-        namesMatching(createIndexStatement, MigrationDirectory.sqlScripts, MigrationDirectory::schemaOnly)
+    private val whitespaceRun = Regex("""\s+""")
 
-    private val modelledIndexNames: Set<String> =
-        namesMatching(modelCreateIndexElement, MigrationDirectory.modelFiles, MigrationDirectory::textWithComments)
+    /** The create-index statements each `.sql` applies, keyed by migration version then by index name. */
+    private val appliedIndexStatements: Map<String, Map<String, String>> =
+        MigrationDirectory.sqlScripts.associate { file ->
+            file.name.removeSuffix(".sql") to createIndexStatementsIn(file)
+        }
+
+    /** Every `<createIndex>` the model files declare, in reading order. */
+    private val modelIndexes: List<ModelIndex> =
+        MigrationDirectory.modelFiles.flatMap { file ->
+            val version = file.name.removeSuffix(".model.xml")
+            modelCreateIndexElement
+                .findAll(MigrationDirectory.textWithComments(file))
+                .map { element ->
+                    ModelIndex(
+                        version = version,
+                        name = indexNameAttribute.find(element.value)?.groupValues?.get(1).orEmpty(),
+                        definition = definitionAttribute.find(element.value)?.groupValues?.get(1),
+                    )
+                }.toList()
+        }
+
+    private val createdIndexNames: Set<String> = appliedIndexStatements.values.flatMap { it.keys }.toSet()
+
+    private val modelledIndexNames: Set<String> = modelIndexes.map { it.name }.toSet()
+
+    private val definedIndexCount: Int = modelIndexes.count { it.definition != null }
 
     @Test
     fun `Given the migration scripts, Then each one is backed by a generated model or documented here`() {
@@ -101,12 +133,69 @@ class DbMigrationModelCoverageTest {
         assertEquals(MigrationDirectory.locationsMatching(looseIndexCreation), extracted)
     }
 
-    private fun namesMatching(
-        pattern: Regex,
-        files: List<File>,
-        read: (File) -> String,
-    ): Set<String> =
-        files
-            .flatMap { file -> pattern.findAll(read(file)).map { it.groupValues[1] } }
-            .toSet()
+    @Test
+    fun `Given a model index definition, Then it repeats the statement its own migration applied`() {
+        // Given
+        val disagreeing =
+            modelIndexes
+                .mapNotNull { index ->
+                    val definition = index.definition ?: return@mapNotNull null
+                    val applied = appliedIndexStatements[index.version]?.get(index.name)
+                    if (applied != null && normalised(applied) == normalised(definition)) {
+                        null
+                    } else {
+                        "${index.version}.model.xml declares ${index.name} as [$definition], " +
+                            "${index.version}.sql applies [${applied ?: "nothing"}]"
+                    }
+                }.sorted()
+
+        // Then
+        assertEquals(emptyList<String>(), disagreeing)
+    }
+
+    @Test
+    fun `Given the migration models, Then at least one of them carries an index definition`() {
+        // Guards the assertion above: an extraction that reads no definition pairs nothing and passes.
+        assertNotEquals(0, definedIndexCount)
+    }
+
+    @Test
+    fun `Given the migration models, Then the extraction reads every definition attribute they carry`() {
+        // Given
+        val loosely =
+            MigrationDirectory.modelFiles.sumOf { file ->
+                looseDefinitionAttribute.findAll(MigrationDirectory.textWithComments(file)).count()
+            }
+
+        // Then
+        assertEquals(loosely, definedIndexCount)
+    }
+
+    /**
+     * The create-index statements [file] applies, keyed by index name: each runs from the `create`
+     * keyword to its terminator, which is the text a model's `definition` has to answer to.
+     */
+    private fun createIndexStatementsIn(file: File): Map<String, String> {
+        val schema = MigrationDirectory.schemaOnly(file)
+        return createIndexStatement
+            .findAll(schema)
+            .associate { match ->
+                val terminator = schema.indexOf(';', match.range.first)
+                val end = if (terminator < 0) schema.length else terminator
+                match.groupValues[1] to schema.substring(match.range.first, end)
+            }
+    }
+
+    /**
+     * Whitespace runs and the statement terminator are the only differences forgiven. Case is not: SQLite
+     * compares string literals case-sensitively, so a `'PENDING'` predicate is not a `'pending'` one.
+     */
+    private fun normalised(statement: String): String =
+        statement.replace(whitespaceRun, " ").trim().removeSuffix(";").trim()
+
+    private data class ModelIndex(
+        val version: String,
+        val name: String,
+        val definition: String?,
+    )
 }
