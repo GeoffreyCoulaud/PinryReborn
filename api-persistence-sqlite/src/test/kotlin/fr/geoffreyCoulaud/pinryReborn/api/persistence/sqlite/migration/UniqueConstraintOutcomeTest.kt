@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test
  * (`docs/adr/0009-unique-index-named-outcomes.md`, decision 1).
  *
  * It enforces that an outcome is named, not that it is true: a wrong entry passes.
+ *
+ * It reads the whole history rather than the current schema, deliberately: an outcome named for a constraint a
+ * later migration dropped costs a stale table entry, where an unnamed one costs an unanswered question.
  */
 class UniqueConstraintOutcomeTest {
     private val namedOutcomes =

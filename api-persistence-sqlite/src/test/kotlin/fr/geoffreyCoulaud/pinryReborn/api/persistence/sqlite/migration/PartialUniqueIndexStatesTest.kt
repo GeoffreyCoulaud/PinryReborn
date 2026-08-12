@@ -11,9 +11,9 @@ import java.io.File
  * predicate the current schema gives the index, so a narrowing or a widening of either side fails here rather
  * than leaving the two disagreeing (spec `docs/specs/2026-08-12-p2-debt-triage.md:142-155`).
  *
- * The history is append-only, so an index is whatever the last migration that touched it left: [currentIndexes]
- * replays every declaration and removal in version order, which is what keeps a drop-and-recreate pair from
- * reading as two live indexes with two predicates to satisfy at once.
+ * The history is append-only, so an index is whatever the last migration that touched it left: this guard reads
+ * `MigrationDirectory.currentIndexes`, which replays every creation and removal in version order and keeps a
+ * drop-and-recreate pair from reading as two live indexes with two predicates to satisfy at once.
  *
  * Unique indexes only: a partial index that is not unique is a plan hint, so a query naming other states than
  * its predicate is slower, while the same disagreement on a unique one is a wrong answer.

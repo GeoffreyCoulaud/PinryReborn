@@ -316,6 +316,14 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   set down and ends on `assertEmpty()` passes just as well when the filter matches nothing at all, so
   a green run is not evidence that it holds anything (settled 2026-07-29: four such checks shipped in
   one branch, three of them caught by mutating the code and watching them fail).
+- **A guard over `dbmigration` says which of the two readings it takes** (settled 2026-08-12). The
+  history is append-only, so "some migration once created this" and "the schema holds this today" are
+  different questions, and `MigrationDirectory` answers each by name: `currentIndexes` replays
+  creations and removals in version order, `allIndexCreations` is everything the history carried. A
+  guard reading the whole history as if it were the current schema passes forever: three did, and
+  `SweepIndexesMigrationTest` had been demanding an index `1.15.sql:6` dropped, green the whole time.
+  `UniqueConstraintOutcomeTest` deliberately reads the history, because an outcome named for a
+  constraint that once existed is not wrong; it says so in its KDoc, which is the observable.
 - **Test names** use backticks and the `Given..., Then...` form, with no "when" in the name:
   `` fun `Given duplicate username, Then throws UserCreationError`() ``.
 - **Test bodies** follow Given-When-Then with explicit `// Given`, `// When` and `// Then` comments.
@@ -327,6 +335,11 @@ Claims the old `AGENTS.md` made that the code disproved, recorded rather than de
   `api-domain/repositories/`; persistence repositories convert through `mappers/`; use cases throw
   domain-specific exceptions (`UserCreationError`, `BoardCreationError`); controllers use the DTOs in
   `dtos/`.
+- **A dated document does not put a number on a living file** (settled 2026-08-12): it records what it
+  did, and the count is read where it lives. A spec, an ADR and the backlog all announced three P2
+  items on the day the band held five, because two arrived after the sentence was written and a frozen
+  document cannot follow. Say "the items this lot leaves open are 1, 2 and 14", never "the band holds
+  three".
 - **A comment holds in two lines.** Past that it is documentation, and it goes where documentation
   lives: a spec for a design, an ADR for a decision, the backlog for a defect, a handoff for what was
   learned. The comment keeps the one sentence that says why, and the reader who wants the rest follows
