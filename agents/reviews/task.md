@@ -1,5 +1,3 @@
-<!-- agents-baseline v3.4.0 | generic file, identical in every project | do not edit in place -->
-
 # Review mandate: task
 
 You are reviewing **one completed task**. You did not write it and you have not seen the reasoning
