@@ -1,6 +1,6 @@
 # 0010. A review finding has four exits, and the backlog is banded by nature
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-12
 Specification: `docs/specs/2026-08-12-p2-debt-triage.md`
 Related: `docs/adr/0001-adopt-agents-baseline.md` (the workflow whose Wrap phase feeds the backlog),
