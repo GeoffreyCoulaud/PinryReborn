@@ -17,6 +17,15 @@ import java.io.File
  *
  * Unique indexes only: a partial index that is not unique is a plan hint, so a query naming other states than
  * its predicate is slower, while the same disagreement on a unique one is a wrong answer.
+ *
+ * What it does not check, deliberately:
+ * - It reads the literals the `state` comparison names, not what the predicate means, so
+ *   `not (state in ('PENDING','RUNNING'))` passes on the set whose complement it selects.
+ * - Its reach is a predicate quoting a literal, so a partial index on `where soft_deleted_at is null` is
+ *   extracted and then dropped by that filter, and demands no Kotlin set.
+ * - Nothing stops a query from re-inlining the literals, since the comparison is between the named set and the
+ *   DDL and never between the named set and what the query reads.
+ * - That `findOne()` returns at most one row rests on the index's uniqueness columns, which it does not read.
  */
 class PartialUniqueIndexStatesTest {
     private val namedStates =
