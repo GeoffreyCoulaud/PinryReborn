@@ -14,6 +14,9 @@ import java.util.UUID.randomUUID
  * `softDeleteBoard` keeps the join row. The export needs the unfiltered read; this suite pins both
  * halves of that contract, split from `PinRepositoryTest` to keep it under detekt's `LargeClass`
  * threshold (mirrors `PinRepositoryPaginationTest`'s precedent for the same split).
+ *
+ * Its board is inserted as a raw model by the shared fixtures rather than through `BoardRepository.saveBoard`,
+ * which is `merge` and not `save`: the arrangement needs an active row and its id, not the production write.
  */
 class PinRepositoryRecycledMembershipTest : PinRepositoryFixtures() {
     private val boardRepository = BoardRepository(persistor)
