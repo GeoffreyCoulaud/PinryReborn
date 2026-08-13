@@ -7,11 +7,14 @@ import java.io.File
 /**
  * Nothing else holds these keys: the producer loads them from this file, and no integration test can read
  * production's copy of it (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`).
- * A missing one fails silently: migrations that never run, or a pool above one connection.
+ * A missing one fails silently (migrations that never run, a pool above one connection) or, for the
+ * credentials, loudly at a boot no test performed until the image smoke check.
  */
 class ProductionDatasourceDeclarationTest {
     private val requiredKeys =
         mapOf(
+            "datasource.db.username" to "pinry",
+            "datasource.db.password" to "",
             "datasource.db.minConnections" to "1",
             "datasource.db.maxConnections" to "1",
             "ebean.migration.run" to "true",
