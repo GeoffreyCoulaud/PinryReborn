@@ -166,6 +166,9 @@ How to decide. The decisions already taken for this project are under Design inv
   several related fixes or a workaround. Propose it to the human; the human arbitrates, the ADR
   records the decision. Never refactor inline without being asked.
 - **Never move or rename something to escape a constraint**: satisfy it or report a blocker.
+- **A guard is loosened only against the threat it would let through**, named and measured. Symmetry
+  with a neighbouring rule is not an argument: the sibling may be judging something this guard cannot
+  see. _Observable: the case the loosened guard now allows, run and pasted, before the change lands._
 - **A setting that should not exist is not fixed by a good default**: say it should not be there.
 
 ## Workflow
