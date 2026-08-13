@@ -6,8 +6,9 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 Last reviewed: 2026-08-13 (the agent-instruction consolidation,
 `docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
 merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
-eleven were fixed inside the lot and one became a known limit. The P2 item below is what the last of those fixes
-left standing rather than a finding of its own: the guard was corrected, and it still has no test.
+eleven were fixed inside the lot and one became a known limit. A fourth review, of those fixes, sent one of them
+back and found four pre-existing holes in the evidence guard; the operator asked for all of them, so they are
+closed here too, and the guard now has a test table the gate runs.
 The reviewed-band accounting of the previous lot, `docs/adr/0010-review-finding-dispositions.md`, is what routed
 them).
 
@@ -106,21 +107,6 @@ them).
   applied in `db_migration` after the `.sql` is deleted. **This is a candidate cause for the
   `SQLITE_BUSY` that the 2026-08-12 triage closed as unreproduced.** Surfaced by the T6 review and
   confirmed independently by the T6 task review, 2026-08-12.
-- **The evidence guard lets four kinds of write through, and its own tests now say where to start.**
-  All four are pre-existing, all four are measured, and none was caused or closed by the lot that
-  found them (`docs/specs/2026-08-12-consolidate-agents-instructions.md`, section 7); the file now has
-  a test table (`.claude/hooks/test_evidence_guard.py`) so each fix arrives with its case. First,
-  `is_disposable` prefix-tests an absolute path without normalising it, so `/tmp/..` walks back into
-  the working tree: `echo hi > /tmp/../<repo>/AGENTS.md` is allowed, and the relative branch of the
-  same function does call `normpath`, so the fix is to normalise before the prefix test rather than
-  after the join. It is the widest of the four, reaching redirection, `tee` and the truncating
-  commands at once. Second, in-place detection matches only `-i`, `-i.` and `--in-place` for sed,
-  because the cluster pattern is disabled there to spare `-Ilib`, so `sed -ni`, `sed -in` and
-  `sed -ibak` rewrite a tracked file unnoticed (verified against GNU sed 4.10). Third,
-  `xargs -I{} sed -i 's/a/b/' {}` is allowed, because the token after a wrapper is taken as the
-  command and `-I{}` claims that slot. Fourth, `check_truncating` does not skip a flag's value, so it
-  reads `truncate -s 0 file` as writing to `0`. New 2026-08-13, from the task review of the guard
-  fixes.
 
 ## Known limits
 

@@ -100,7 +100,12 @@ script carries its own write capability. Its task review measured `sed -i -e '1w
 being allowed while it rewrites a tracked file. The behaviour is back to refusing these editors by
 command name, and what the original complaint really found is now in the function's docstring: the
 code was right and said nothing about why, so `cwd` looked forgotten rather than deliberately unused.
-The same review found four pre-existing holes, which the backlog now carries.
+
+The same review found four pre-existing holes, and the operator asked for those too. They went in
+red-green, which the test table made possible: six failing cases committed alone, then the fixes. The
+widest was `is_disposable` comparing a path by prefix without normalising it, so a disposable prefix
+followed by `..` walked back into the working tree, for redirection and `tee` as much as for the
+editors.
 
 ## Suggested next step
 
@@ -108,7 +113,9 @@ Use the file. The next lot of any size is the real test of whether the merge hel
 phase is where a section that turned out to be hard to find should be moved rather than
 cross-referenced.
 
-If instead the next session wants to close what this one opened, the backlog item on the evidence
-guard is well specified and small, but its first question is not the two faults: it is how a Python
-file under `.claude/` gets a safety net at all, given that the gate perimeter is decided by location
-and that location is outside it.
+This lot leaves no open item of its own: the guard entry it filed was pulled back in and closed. What
+it leaves instead is a shape to reuse. `checkEvidenceGuard` is the first thing in the gate that is
+neither Gradle nor Kotlin, and it took one `Exec` task and a `dependsOn`. Anything else in this
+repository that runs outside a module, starting with `.githooks/`, can now be reached the same way,
+and the argument that the coverage perimeter is decided by location no longer doubles as an argument
+that such a file cannot be tested at all.

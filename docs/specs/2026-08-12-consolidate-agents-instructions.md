@@ -177,6 +177,29 @@ table failed at once when the behaviour went back, which is the table catching a
 than a mutation staged to prove a point. And a Gradle `Exec` fails the build on a non-zero exit,
 measured, so a red test is a red gate.
 
+**Then the four pre-existing holes, on the operator's call, in red-green.** The task review of the
+revert had measured them and they were on the backlog; the cases went in first and failed, six at
+once, and the fixes followed.
+
+- `is_disposable` prefix-tested a path without normalising it, so `/tmp/..` walked back into the
+  working tree and `echo hi > /tmp/../<repo>/AGENTS.md` was allowed. It normalises first now, which
+  closes the same hole for redirection, `tee` and the truncating commands together, since all four
+  ask that one function.
+- In-place detection matched only `-i`, `-i.` and `--in-place` for sed, whose short flags cluster and
+  whose suffix attaches, so `sed -ni`, `sed -in` and `sed -ibak` rewrote a tracked file unnoticed.
+  A sed-specific pattern replaces that: no other short sed flag carries an `i`.
+- `xargs -I{} sed -i 's/a/b/' {}` was allowed, because the token after a wrapper was taken as the
+  command and `-I{}` claimed the slot. A wrapper's own flags and the placeholder are skipped now, and
+  an in-place editor is judged wherever its name appears, since a wrapper this guard does not know
+  still runs what sits behind it.
+- `check_truncating` did not skip a flag's value and read `truncate -s 0 file` as writing to `0`. It
+  blocked either way, so this one was a wrong reason rather than a hole, and the message now names
+  the file.
+
+Non-regression is measured the same way as before: the 59-payload corpus against the version that
+opened this branch. Two verdicts move, the crash and that corrected `truncate` message; the eight
+in-place cases are identical.
+
 ## Target structure
 
 One file, sections in this order. Every bullet moves intact; what changes is section titles, the

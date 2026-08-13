@@ -68,7 +68,16 @@ INPLACE_EDITORS = {"sed", "perl", "ruby"}
 # Short perl and ruby flag clusters only, so that -Ilib is not read as in-place.
 INPLACE_CLUSTER = re.compile(r"\A-[pnealwsi]*i[pnealwsi]*\Z")
 INPLACE_LONG = re.compile(r"\A--in-place(=.*)?\Z")
+# sed clusters -i with its other short flags and takes its suffix attached, so
+# -ni, -in and -ibak all rewrite the file. No short sed flag carries an i but
+# that one.
+SED_INPLACE = re.compile(r"\A-[A-Za-z]*i")
 TRUNCATING = {"truncate", "dd", "install"}
+# Flags whose value is the next token, which is a size or a mode, not a file.
+TRUNCATING_VALUE_FLAGS = {
+    "-s", "-m", "-o", "-g", "-r", "-S",
+    "--size", "--mode", "--owner", "--group", "--reference", "--suffix",
+}
 
 ONELINER_FLAGS = {"-c", "-e"}
 ONELINER_HOSTS = {"python", "python3", "node", "nodejs", "deno", "bun"}
@@ -126,7 +135,10 @@ def basename(token: str) -> str:
 
 
 def is_disposable(target: str, cwd: str | None = None) -> bool:
-    if target in DISPOSABLE_EXACT or target.startswith(DISPOSABLE_PREFIXES):
+    # Normalised before the prefix test, or `/tmp/..` walks straight back out of
+    # the allow-list and into the working tree.
+    normalised = os.path.normpath(target) if target else target
+    if normalised in DISPOSABLE_EXACT or normalised.startswith(DISPOSABLE_PREFIXES):
         return True
     # A relative target is disposable only when the session itself sits in a
     # disposable directory, which is the scratchpad case. With no cwd, refuse.
@@ -157,6 +169,10 @@ def command_positions(tokens: list[str]) -> set[int]:
             skip = True
             continue
         if expect:
+            # A wrapper's own flags, and xargs' placeholder, are not the command:
+            # `xargs -I{} sed -i ...` would otherwise hand the slot to `-I{}`.
+            if token.startswith("-") or token == "{}":
+                continue
             found.add(index)
         expect = basename(token) in WRAPPERS or token in WRAPPERS
     return found
@@ -205,16 +221,19 @@ def check_inplace(tokens, commands, cwd):
     buy nothing, so `cwd` goes unused here on purpose.
     """
     for index, token in enumerate(tokens):
-        if index not in commands or basename(token) not in INPLACE_EDITORS:
+        name = basename(token)
+        # Judged wherever the name appears, not only where a command may start:
+        # a wrapper this guard does not know still runs the editor behind it.
+        if name not in INPLACE_EDITORS:
             continue
         for argument in arguments_after(tokens, index):
             if (
-                argument == "-i"
-                or argument.startswith("-i.")
-                or INPLACE_LONG.match(argument)
-                or (basename(token) != "sed" and INPLACE_CLUSTER.match(argument))
+                INPLACE_LONG.match(argument)
+                or (name == "sed" and SED_INPLACE.match(argument))
+                or (name != "sed" and (argument == "-i" or argument.startswith("-i.")
+                                       or INPLACE_CLUSTER.match(argument)))
             ):
-                return f"in-place edit by {basename(token)}"
+                return f"in-place edit by {name}"
     return None
 
 
@@ -223,8 +242,15 @@ def check_truncating(tokens, commands, cwd):
         name = basename(token)
         if index not in commands or name not in TRUNCATING:
             continue
+        skip_value = False
         for argument in arguments_after(tokens, index):
-            if argument.startswith("-") or argument.startswith("if="):
+            if skip_value:
+                skip_value = False
+                continue
+            if argument.startswith("-"):
+                skip_value = argument in TRUNCATING_VALUE_FLAGS
+                continue
+            if argument.startswith("if="):
                 continue
             target = argument[3:] if argument.startswith("of=") else argument
             if not is_disposable(target, cwd):
