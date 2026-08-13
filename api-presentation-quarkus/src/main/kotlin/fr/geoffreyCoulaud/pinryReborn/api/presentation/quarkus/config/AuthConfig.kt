@@ -17,4 +17,17 @@ interface AuthConfig {
 
     @WithDefault("0.75")
     fun renewThreshold(): Double
+
+    @WithDefault("5")
+    fun attemptLimitThreshold(): Int
+
+    /** Block duration per step, saturating on the last one. */
+    @WithDefault("PT30S,PT2M,PT10M")
+    fun attemptLimitBackoff(): List<Duration>
+
+    @WithDefault("PT15M")
+    fun attemptLimitForgetAfter(): Duration
+
+    @WithDefault("10000")
+    fun attemptLimitMaxTrackedKeys(): Int
 }
