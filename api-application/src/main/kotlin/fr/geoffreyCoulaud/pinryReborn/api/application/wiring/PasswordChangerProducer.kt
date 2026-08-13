@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRe
 import fr.geoffreyCoulaud.pinryReborn.api.domain.security.PasswordHasher
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.AuthConfig
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.AuthenticationAttemptLimiter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PasswordChanger
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.SessionRevoker
 import jakarta.enterprise.context.ApplicationScoped
@@ -26,6 +27,7 @@ class PasswordChangerProducer {
         sessionRevoker: SessionRevoker,
         transactionRunner: TransactionRunner,
         clock: Clock,
+        attemptLimiter: AuthenticationAttemptLimiter,
         config: AuthConfig,
     ): PasswordChanger =
         PasswordChanger(
@@ -34,6 +36,7 @@ class PasswordChangerProducer {
             sessionRevoker,
             transactionRunner,
             clock,
+            attemptLimiter,
             minimumInterval = config.passwordChangeMinimumInterval(),
         )
 }

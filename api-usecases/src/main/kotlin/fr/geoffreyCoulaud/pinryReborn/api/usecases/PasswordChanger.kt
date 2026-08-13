@@ -20,14 +20,24 @@ class PasswordChanger(
     private val sessionRevoker: SessionRevoker,
     private val transactionRunner: TransactionRunner,
     private val clock: Clock,
+    private val attemptLimiter: AuthenticationAttemptLimiter,
     private val minimumInterval: Duration,
 ) {
     // Each throw is a distinct domain refusal (bad reauth, too soon, reused, concurrent collision);
     // collapsing them would hide the rule, so the count is intentional.
     @Suppress("ThrowsCount")
     fun changePassword(user: User, currentPassword: String, newPassword: String) {
+        // The counter Reauthenticator shares: it is the same secret (spec D4).
+        val attemptKey = AuthenticationAttemptKey.forUser(user.id)
+        attemptLimiter.check(attemptKey)
         val current = userPasswordRepository.findCurrentPasswordHash(user)
-        if (current == null || !passwordHasher.matches(currentPassword, current)) throw ReauthenticationError()
+        if (current == null || !passwordHasher.matches(currentPassword, current)) {
+            attemptLimiter.recordFailure(attemptKey)
+            throw ReauthenticationError()
+        }
+        // Cleared here rather than at the end: the counter limits password guesses, and a change
+        // refused by a rule below was not one.
+        attemptLimiter.recordSuccess(attemptKey)
         val now = clock.now()
         val earliest = now.minus(minimumInterval)
         if (current.createdAt.isAfter(earliest)) {
