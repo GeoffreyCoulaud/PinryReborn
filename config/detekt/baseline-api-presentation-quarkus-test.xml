@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:ContentDispositionFileNameTest.kt:ContentDispositionFileNameTest$@Test fun `Given a username with path traversal, Then no slash survives`</ID>
+  </CurrentIssues>
+</SmellBaseline>

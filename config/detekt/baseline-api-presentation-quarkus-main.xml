@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:ApiConfig.kt:ApiConfig.Cors$fun origins: String</ID>
+    <ID>CommentCarriesDocumentation:Base64JsonSerializer.kt:Base64JsonSerializer : StdSerializer</ID>
+    <ID>CommentCarriesDocumentation:Base64ParamConverter.kt:Base64Json</ID>
+    <ID>CommentCarriesDocumentation:Base64ParamConverter.kt:Base64JsonParamConverter&lt;T&gt; : ParamConverter</ID>
+    <ID>CommentCarriesDocumentation:Base64ParamConverter.kt:Base64JsonParamConverterProvider : ParamConverterProvider</ID>
+    <ID>CommentCarriesDocumentation:BearerTokenIdentityProvider.kt:BearerTokenIdentityProvider$override fun authenticate: Uni&lt;SecurityIdentity&gt;</ID>
+    <ID>CommentCarriesDocumentation:ContentDispositionFileName.kt:ContentDispositionFileName</ID>
+    <ID>CommentCarriesDocumentation:ImageController.kt:ImageController$@GET @Path("/{pinId}/image") fun getImage: RestResponse&lt;StreamingOutput&gt;</ID>
+    <ID>CommentCarriesDocumentation:MeExportController.kt:MeExportController</ID>
+    <ID>CommentCarriesDocumentation:MeExportController.kt:MeExportController$private fun copyBounded</ID>
+    <ID>CommentCarriesDocumentation:OpenApiApplication.kt:OpenApiApplication : Application</ID>
+    <ID>CommentCarriesDocumentation:ProblemResponses.kt:fun problemResponse: Response.ResponseBuilder</ID>
+    <ID>CommentCarriesDocumentation:RangeHeader.kt:RangeHeader</ID>
+    <ID>CommentCarriesDocumentation:RangeNotSatisfiableException.kt:RangeNotSatisfiableException : RuntimeException</ID>
+    <ID>CommentCarriesDocumentation:SessionCreationInputDto.kt:SessionCreationInputDto</ID>
+    <ID>CommentCarriesDocumentation:UserDataExportOutputDto.kt:UserDataExportOutputDto</ID>
+  </CurrentIssues>
+</SmellBaseline>

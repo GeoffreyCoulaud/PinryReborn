@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:ActiveUserModels.kt:ActiveUserModels</ID>
+    <ID>CommentCarriesDocumentation:EbeanDatabaseProducer.kt:EbeanDatabaseProducer$@Produces @Singleton fun produceDatabase: Database</ID>
+    <ID>CommentCarriesDocumentation:EbeanTaskQueue.kt:EbeanTaskQueue : TaskQueueInterface</ID>
+    <ID>CommentCarriesDocumentation:PartialUniqueIndexStates.kt:PartialUniqueIndexStates</ID>
+    <ID>CommentCarriesDocumentation:Persistor.kt:Persistor</ID>
+    <ID>CommentCarriesDocumentation:PinBoardQueries.kt:fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.PinBoardQueries.kt</ID>
+    <ID>CommentCarriesDocumentation:PinModelSortStrategy.kt:PinModelSortStrategy : ModelSortStrategy</ID>
+    <ID>CommentCarriesDocumentation:PinRepository.kt:PinRepository : PinRepositoryInterface</ID>
+    <ID>CommentCarriesDocumentation:SoftDeletableModel.kt:SoftDeletableModel</ID>
+    <ID>CommentCarriesDocumentation:SoftDeletableQueries.kt:SoftDeletableQueries&lt;M : SoftDeletableModel, Q : QueryBean&lt;M, Q&gt;&gt;</ID>
+    <ID>CommentCarriesDocumentation:SqliteConstraintViolations.kt:SqliteConstraintViolations</ID>
+    <ID>CommentCarriesDocumentation:SqliteConstraintViolations.kt:SqliteConstraintViolations$fun &lt;T&gt; onUniqueConstraint: T</ID>
+    <ID>CommentCarriesDocumentation:TaskModel.kt:TaskModel : BaseModel</ID>
+    <ID>CommentCarriesDocumentation:TransactionControl.kt:TransactionControl</ID>
+    <ID>CommentCarriesDocumentation:UserDataExportModelSortStrategy.kt:UserDataExportModelSortStrategy : ModelSortStrategy</ID>
+    <ID>CommentCarriesDocumentation:UserDataExportRepository.kt:UserDataExportRepository$override fun save: UserDataExport</ID>
+    <ID>CommentCarriesDocumentation:UserQueries.kt:UserQueries$fun tombstonedBefore: QUserModel</ID>
+    <ID>CommentCarriesDocumentation:UserRepository.kt:UserRepository : UserRepositoryInterface</ID>
+    <ID>CyclomaticComplexMethod:ModelPaginationHelper.kt:ModelPaginationHelper$fun &lt;M : BaseModel, Q : QueryBean&lt;M, Q&gt;&gt; getPage: ModelPage&lt;M&gt;</ID>
+  </CurrentIssues>
+</SmellBaseline>

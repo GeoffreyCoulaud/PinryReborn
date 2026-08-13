@@ -887,3 +887,9 @@ pinry-reborn:
     # roots an unfiltered read without the confined instance. Applies to every module's production
     # sources; tests are exempt because RepositoryTest legitimately calls DB.getDefault().
     excludes: ['**/test/**', '**/testFixtures/**']
+  CommentCarriesDocumentation:
+    active: true
+    # Four lines, tests included: a long comment in a test is the same duplication as anywhere else.
+    # The rule cannot judge the reason that justifies a long comment, so the threshold sits where prose
+    # has clearly moved in rather than at the two lines agents/writing.md asks for.
+    allowedLines: 4

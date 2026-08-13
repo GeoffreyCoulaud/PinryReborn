@@ -11,7 +11,6 @@
     <ID>CommentCarriesDocumentation:ExportContent.kt:ExportedPin</ID>
     <ID>CommentCarriesDocumentation:ExportContent.kt:ExportedRef</ID>
     <ID>CommentCarriesDocumentation:ExportContent.kt:fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportContent.kt</ID>
-    <ID>CommentCarriesDocumentation:ExportContentGoldenJsonTest.kt:ExportContentGoldenJsonTest</ID>
     <ID>CommentCarriesDocumentation:ExportImageExtension.kt:ExportImageExtension</ID>
     <ID>CommentCarriesDocumentation:ExportReadme.kt:ExportReadme</ID>
     <ID>CommentCarriesDocumentation:GetPinImageRendition.kt:GetPinImageRendition$Companion</ID>
@@ -43,7 +42,6 @@
     <ID>CommentCarriesDocumentation:UserDataExportBuilder.kt:UserDataExportBuilder$private fun exportedImage: ExportedImage?</ID>
     <ID>CommentCarriesDocumentation:UserDataExportBuilder.kt:UserDataExportBuilder$private fun pinSequence</ID>
     <ID>CommentCarriesDocumentation:UserDataExportBuilder.kt:UserDataExportBuilder$private fun publish</ID>
-    <ID>CommentCarriesDocumentation:UserDataExportBuilderTest.kt:RecordingSink : ArchiveSink</ID>
     <ID>CommentCarriesDocumentation:UserDataExportDeleter.kt:UserDataExportDeleter</ID>
     <ID>CommentCarriesDocumentation:UserDataExportDeleter.kt:UserDataExportDeleter$fun delete</ID>
     <ID>CommentCarriesDocumentation:UserDataExportDownloader.kt:UserDataExportDownloader</ID>

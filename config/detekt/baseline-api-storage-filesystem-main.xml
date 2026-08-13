@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:CountingDigestOutputStream.kt:CountingDigestOutputStream : FilterOutputStream</ID>
+    <ID>CommentCarriesDocumentation:DataDirPaths.kt:DataDirPaths$fun atomicMove</ID>
+    <ID>CommentCarriesDocumentation:DataDirPaths.kt:DataDirPaths$fun resolveWithinRoot: Path</ID>
+    <ID>CommentCarriesDocumentation:FilesystemImageStore.kt:FilesystemImageStore : ImageStore</ID>
+    <ID>CommentCarriesDocumentation:FilesystemImageStore.kt:FilesystemImageStore$@Suppress("TooGenericExceptionCaught") override fun stage: StagedFile</ID>
+    <ID>CommentCarriesDocumentation:FilesystemImageStore.kt:FilesystemImageStore$private fun writeAndDigest: Pair&lt;Long, ByteArray&gt;</ID>
+    <ID>CommentCarriesDocumentation:FilesystemRenditionCache.kt:FilesystemRenditionCache : RenditionCache</ID>
+    <ID>CommentCarriesDocumentation:FilesystemRenditionCache.kt:FilesystemRenditionCache$@Suppress("TooGenericExceptionCaught") override fun store</ID>
+    <ID>CommentCarriesDocumentation:FilesystemZipExportArchiveStore.kt:FilesystemZipExportArchiveStore : ExportArchiveStore</ID>
+    <ID>CommentCarriesDocumentation:FilesystemZipExportArchiveStore.kt:FilesystemZipExportArchiveStore$@Suppress("TooGenericExceptionCaught") override fun stage: StagedFile</ID>
+    <ID>CommentCarriesDocumentation:ZipArchiveSink.kt:ZipArchiveSink : ArchiveSink</ID>
+  </CurrentIssues>
+</SmellBaseline>

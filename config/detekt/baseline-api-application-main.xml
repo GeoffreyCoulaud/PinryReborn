@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:ExportProducers.kt:ExportProducers</ID>
+    <ID>CommentCarriesDocumentation:FetchAdapterProducers.kt:FetchAdapterProducers</ID>
+    <ID>CommentCarriesDocumentation:GarbageCollectionProducers.kt:GarbageCollectionProducers</ID>
+    <ID>CommentCarriesDocumentation:ImageAdapterProducers.kt:ImageAdapterProducers</ID>
+    <ID>CommentCarriesDocumentation:PasswordChangerProducer.kt:PasswordChangerProducer</ID>
+    <ID>CommentCarriesDocumentation:SchedulerProducers.kt:SchedulerProducers</ID>
+    <ID>CommentCarriesDocumentation:TaskHandlerProducers.kt:TaskHandlerProducers</ID>
+    <ID>UtilityClassWithPublicConstructor:Application.kt:Application</ID>
+  </CurrentIssues>
+</SmellBaseline>

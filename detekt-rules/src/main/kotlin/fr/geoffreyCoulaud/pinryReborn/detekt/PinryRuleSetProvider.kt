@@ -23,6 +23,7 @@ class PinryRuleSetProvider : RuleSetProvider {
                 ::SoftDeleteStateFilteredOutsideQueries,
                 ::WallClockRead,
                 ::DatabaseStaticFacadeCall,
+                ::CommentCarriesDocumentation,
             ),
         )
 

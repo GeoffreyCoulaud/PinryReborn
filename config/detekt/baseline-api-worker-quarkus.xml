@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:ExportRetentionLifecycle.kt:ExportRetentionLifecycle</ID>
+    <ID>CommentCarriesDocumentation:GarbageCollectionLifecycle.kt:GarbageCollectionLifecycle</ID>
+    <ID>CommentCarriesDocumentation:PeriodicScheduler.kt:PeriodicScheduler</ID>
+    <ID>CommentCarriesDocumentation:TaskDispatcher.kt:TaskDispatcher</ID>
+    <ID>CommentCarriesDocumentation:TaskWorkerLifecycle.kt:TaskWorkerLifecycle</ID>
+  </CurrentIssues>
+</SmellBaseline>
