@@ -261,6 +261,10 @@ and a second list doubles what the reviewer walks. "Confirm X is not premature" 
 review itself; a whole plan named has ten tasks read to review one. _Observable: no instruction
 begins with "confirm", "verify" or "check that", and every document named carries a line range._
 
+**The brief says how the report comes back.** A subagent working in the background signals
+availability without carrying anything, so the brief asks for `SendMessage` to `main` with the
+findings in the message body. _Observable: the report arrives without being asked for a second time._
+
 ## Engineering norms
 
 - **Clean architecture.** The domain is pure (no I/O, framework, clock, environment); I/O lives in
