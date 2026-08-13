@@ -158,9 +158,10 @@ class PasswordChangerTest : BaseTest() {
         every { hasher.matches("bad", current) } returns false
         assertThrows<ReauthenticationError> { changer.changePassword(user, "bad", "new") }
         verify(exactly = 0) { passwords.saveUserPasswordHash(any(), any()) }
-        // Then: the interval is still measured from `current`'s createdAt (outside the interval),
-        // so a correct change afterwards still succeeds. This is D10: the limit counts successful
-        // changes, not attempts.
+        // Then: the interval is still measured from `current`'s createdAt (outside the interval), so
+        // a correct change afterwards still succeeds. This is D10 of the older
+        // docs/specs/2026-07-31-current-password-determinism.md, not this lot's: the limit counts
+        // successful changes, not attempts.
         every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
         every { hasher.matches("old", current) } returns true
         every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current)

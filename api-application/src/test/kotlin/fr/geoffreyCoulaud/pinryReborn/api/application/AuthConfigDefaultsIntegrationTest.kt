@@ -8,9 +8,8 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 
 /**
- * Pins the attempt-limiting policy the application ships with, and the assumption under it: a
+ * Pins the attempt-limiting policy `application.properties` ships, and the assumption under it: a
  * comma-separated string maps to `List<Duration>` (`docs/specs/2026-08-13-auth-attempt-limiting.md`).
- * The values come from `application.properties`, which restates each one and so shadows `@WithDefault`.
  */
 @QuarkusTest
 class AuthConfigDefaultsIntegrationTest {
