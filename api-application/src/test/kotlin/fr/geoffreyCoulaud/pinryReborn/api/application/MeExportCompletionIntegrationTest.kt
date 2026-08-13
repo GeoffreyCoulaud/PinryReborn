@@ -112,6 +112,18 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         return false
     }
 
+    /**
+     * Bounded poll until [path] is gone. The bytes go after the cleaner's transaction commits
+     * (`AccountDeletionCleaner.kt:67`), so the row's disappearance does not mean the file's.
+     */
+    private fun pollUntilFileGone(path: Path): Boolean {
+        repeat(POLL_ATTEMPTS) {
+            if (!Files.exists(path)) return true
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        return false
+    }
+
     private fun downloadBytes(auth: IntegrationTest.AuthenticatedUser, exportId: UUID): ByteArray =
         given()
             .authenticatedAs(auth)
@@ -299,7 +311,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
 
         // Then
         assertTrue(pollUntilExportGone(exportId), "the export row should be erased by the deletion worker")
-        assertFalse(Files.exists(archivePath), "the archive file should be removed from disk")
+        assertTrue(pollUntilFileGone(archivePath), "the archive file should be removed from disk")
     }
 
     // --- Purge: driven directly through the injected ReapExpiredUserDataExports bean ---
