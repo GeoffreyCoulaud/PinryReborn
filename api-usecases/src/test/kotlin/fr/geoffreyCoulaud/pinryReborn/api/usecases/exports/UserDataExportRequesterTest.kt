@@ -155,6 +155,21 @@ class UserDataExportRequesterTest : BaseTest() {
     }
 
     @Test
+    fun `Given a fraction of a second left on the minimum interval, Then the retry delay rounds up`() {
+        // Given: an hour of interval, the last request thirty minutes and half a second ago
+        stubTransactionPassthrough()
+        every { reauthenticator.reauthenticate(user, factor) } just runs
+        every { clock.now() } returns now
+        every { repository.findPendingForUser(user.id) } returns null
+        every { repository.findLastRequestedAtForUser(user.id) } returns
+            now.minus(Duration.ofMinutes(30)).plusMillis(500)
+
+        // When / Then: rounded up, where a truncation would retry a second early and collect a second 429
+        val error = assertThrows(ExportTooSoonError::class.java) { requester.request(user, factor) }
+        assertEquals(Duration.ofMinutes(30).seconds + 1, error.retryAfterSeconds)
+    }
+
+    @Test
     fun `Given a pending export inside the minimum interval, Then the in-progress refusal wins`() {
         // Given: both refusals apply, since a live PENDING row also counts towards the minimum interval
         stubTransactionPassthrough()
