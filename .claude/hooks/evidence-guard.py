@@ -9,9 +9,10 @@ Two rules, applied by blocking the tool call before it runs:
 Writing is judged by its target, not by the command's name: a redirection is
 allowed only into an explicitly disposable location. That allow-list is what
 makes the guard survive `/add-dir`, worktrees and monorepos without knowing
-anything about the layout of the working tree. In-place editors are the
-exception and are judged by name, because their script can write somewhere the
-operand never mentions; see check_inplace.
+anything about the layout of the working tree. Three checks judge by name
+instead, because their target is not in the command: in-place editors, whose
+script can write where the operand never says, patch application and scripts
+read from stdin.
 
 There is no shebang on purpose. The hook is invoked as `python3 <path>`, so a
 copy that drops the executable bit cannot silently disable it.
@@ -370,11 +371,13 @@ def main() -> int:
         return 0
     tool_input = payload.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    cwd = payload.get("cwd")
-    # A member of the wrong type is input the guard cannot read, like the above.
-    if not isinstance(command, str) or not isinstance(cwd, (str, type(None))):
+    # No command to read is nothing to judge, which is the door above.
+    if not isinstance(command, str):
         return 0
-    verdict = evaluate(command, cwd)
+    # A cwd of the wrong type is read as absent instead, never as permission:
+    # dropping the call would let a relative target through on a bad member.
+    cwd = payload.get("cwd")
+    verdict = evaluate(command, cwd if isinstance(cwd, str) else None)
     if verdict is None:
         return 0
     reason, advice = verdict
