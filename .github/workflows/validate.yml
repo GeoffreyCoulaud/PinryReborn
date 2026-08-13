@@ -108,6 +108,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The suite never reads production's application.properties: the test resources share its
+      # name and win by classpath order. So nothing here started what ships until this step, and a
+      # datasource declaration that Ebean rejects survived a lot and a half of green builds.
+      - name: Load the amd64 image locally
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: pinry-reborn-api:smoke
+          cache-from: type=gha
+      - name: The image starts and reports healthy
+        run: |
+          docker run -d --name smoke -p 8080:8080 pinry-reborn-api:smoke
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/q/health > /dev/null 2>&1; then
+              echo "healthy after ${i}s"
+              docker rm -f smoke
+              exit 0
+            fi
+            if [ -z "$(docker ps -q -f name=smoke)" ]; then
+              echo "::error::the container exited before answering"
+              docker logs smoke
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::no healthy answer within 60s"
+          docker logs smoke
+          exit 1
+
       # --- SBOM generation and signed attestations (release path only) ---
       # Everything below runs only when push=true: there is no pushed image to
       # attest on PRs. GHCR/OCI refs must be lowercase, but github.repository
