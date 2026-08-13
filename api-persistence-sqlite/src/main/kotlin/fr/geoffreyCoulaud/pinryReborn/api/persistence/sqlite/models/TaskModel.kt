@@ -16,16 +16,16 @@ import java.util.UUID
 // Without it the sweep is a full scan over a table that accumulates terminal rows forever
 // (spec 2026-07-27-periodic-gc.md section 11, D6).
 @Index(columnNames = ["state", "terminal_state_at"])
-// Already created by `1.3.sql:23,25,27`, declared here to model them; partial, so `definition` carries the `where`.
+// Serves `claimNext`: `state` leads so the bound equality can use the index, and the three sort columns
+// follow in the order and direction the query asks for, which is what removes the temp B-tree.
+// Not partial: SQLite skips a partial index when the value its predicate tests arrives as a bound
+// parameter, and Ebean binds. `definition` rather than `columnNames` because the desc/asc tokens carry
+// the result: an all-ascending index cannot serve this mixed ORDER BY.
 @Index(
     name = "ix_tasks_claim",
-    definition = "create index ix_tasks_claim " +
-        "on tasks (priority desc, available_at asc, id asc) where state = 'PENDING'",
+    definition = "create index ix_tasks_claim on tasks (state, priority desc, available_at asc, id asc)",
 )
-@Index(
-    name = "ix_tasks_lease",
-    definition = "create index ix_tasks_lease on tasks (lease_expires_at) where state = 'RUNNING'",
-)
+// Partial, so `definition` carries the `where`.
 @Index(
     name = "ux_tasks_dedup",
     definition = "create unique index ux_tasks_dedup on tasks (dedup_key) " +
