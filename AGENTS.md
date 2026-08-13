@@ -269,8 +269,9 @@ begins with "confirm", "verify" or "check that", and every document named carrie
   write the minimal implementation, then refactor with tests green (part of the cycle, not an afterthought).
 - **The failing test is committed alone, before its implementation**, as `test(scope): <behaviour>`,
   **its message body carrying the red**: the command run and the failure it produced, pasted from
-  that run and never retyped. _Observable: `git log -1 --format=%b` on the test commit shows the
-  command and its failure._
+  that run and never retyped. The red comes from the run that produced the committed file, never
+  from an intermediate state: `git show` on the test commit reproduces it. _Observable:
+  `git log -1 --format=%b` on the test commit shows the command and its failure._
 - **Review judges the tests before the code.** A test that passes against a wrong implementation is a
   defect of the same rank as the bug it missed.
 - **100% branch coverage, verified after the fact**: the audit of the TDD cycle. Uncovered code is a
