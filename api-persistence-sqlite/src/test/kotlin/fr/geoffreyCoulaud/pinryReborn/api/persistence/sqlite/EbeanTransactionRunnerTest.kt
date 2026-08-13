@@ -96,4 +96,16 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
         val saved = runner.inTransaction { images.save(imageFor(pin.id)) }
         assertEquals(saved, images.findByPinId(pin.id))
     }
+
+    @Test
+    fun `Given a rolled-back transaction, Then an image saved within it is discarded`() {
+        val pin = savedPin()
+        assertThrows(IllegalStateException::class.java) {
+            runner.inTransaction {
+                images.save(imageFor(pin.id))
+                error("boom")
+            }
+        }
+        assertNull(images.findByPinId(pin.id))
+    }
 }

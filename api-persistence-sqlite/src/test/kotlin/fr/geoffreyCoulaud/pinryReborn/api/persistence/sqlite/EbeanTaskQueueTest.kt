@@ -95,6 +95,25 @@ class EbeanTaskQueueTest : RepositoryTest() {
         assertNull(stored)
     }
 
+    /**
+     * The envelope, not the ambient-transaction check: `enqueue` must hold its dedup check and its insert in
+     * one transaction even when nothing above it opened one, or the pair races as two autocommit statements
+     * (`agents/engineering.md`, design invariant "One connection", which names this method). A refactor that
+     * drops the envelope along with the redundant check leaves every other test green.
+     */
+    @Test
+    fun `Given no ambient transaction, Then enqueue still inserts inside one`() {
+        // Given
+        val witness = TransactionWitnessPersistor(persistor, transactionControl)
+        val witnessedQueue = EbeanTaskQueue(witness, transactionControl)
+
+        // When: nothing above opened a transaction
+        witnessedQueue.enqueue(newTask())
+
+        // Then
+        assertEquals(true, witness.sawTransactionOnTaskInsert)
+    }
+
     // --- enqueue: the dedup insert loses the race ---
 
     @Test
@@ -196,6 +215,22 @@ class EbeanTaskQueueTest : RepositoryTest() {
                 SQLiteErrorCode.SQLITE_CONSTRAINT_NOTNULL,
             ),
         )
+
+    /** Records whether a transaction was open on the thread when the insert reached the store. */
+    private class TransactionWitnessPersistor(
+        private val delegate: Persistor,
+        private val transactionControl: TransactionControl,
+    ) : Persistor by delegate {
+        var sawTransactionOnTaskInsert: Boolean? = null
+            private set
+
+        override fun save(bean: Any) {
+            if (bean is TaskModel && sawTransactionOnTaskInsert == null) {
+                sawTransactionOnTaskInsert = transactionControl.currentTransaction() != null
+            }
+            delegate.save(bean)
+        }
+    }
 
     /**
      * Stages a lost dedup race by writing [conflict] just before the insert: the real race does not reproduce
