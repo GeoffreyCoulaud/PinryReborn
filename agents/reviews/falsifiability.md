@@ -21,8 +21,9 @@ nothing.
    the generator reports no change on an untouched tree too.
 3. **Does the observable discriminate?** A criterion can be checkable, run green, and still not
    distinguish the intended outcome from a wrong one. Ask what other state produces the same
-   observation. This has shipped here too: an assertion meant to require that a migration **creates**
-   an index was satisfied by a migration that **drops** it, because both mention the name.
+   observation. This has shipped here too: an assertion meant to require that a migration
+   **creates** an index was satisfied by a migration that **drops** it, because both mention the
+   name.
 4. **Does the criterion name the observable, or the instrument?** "The repository test passes" names
    an instrument; "a second insert with the same pin id is rejected" names an observable. An
    instrument-named criterion silently moves whenever the instrument is edited, which makes the test

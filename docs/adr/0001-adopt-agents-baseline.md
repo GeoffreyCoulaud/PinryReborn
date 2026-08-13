@@ -1,6 +1,8 @@
 # 0001. Adopt agents-baseline v2.1.0
 
-Status: Accepted
+Status: Accepted, review regime amended by `0014-review-budget-upstream.md`. The three reviews
+stand, in fresh subagents, never editing; what `0014` changes is their count, their placement and
+their timing, on measurements this ADR did not take.
 Date: 2026-07-23
 
 ## Context
