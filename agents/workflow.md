@@ -96,18 +96,31 @@ anything irreversible. Wrap and Improve run in every tier.
 
 1. **Discuss.** Open `docs/backlog.md`, then plain conversation: no code, no plan, no files.
 2. **Spec.** Goal, acceptance criteria, explicit out-of-scope. Simple work inline; structured
-   work in `docs/specs/<ISO date>-<slug>.md`. Approved by the user before any plan or code.
-   **A criterion names the observable, never the instrument.**
+   work in `docs/specs/<ISO date>-<slug>.md`. **A criterion names the observable, never the
+   instrument.**
    Record an ADR in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles no
    architectural question (state the one-line justification for its absence). A delivered ADR is
    never rewritten; only its `Status` field may change.
+   **The spec angles run before the user reads it**, their findings are closed, and the corrected
+   document is what goes for approval: the user's attention is spent on what only they can decide,
+   not on defects an angle finds. Approval ends the phase and gates the plan and the code.
 3. **Plan.** Ordered, independently checkable tasks in `docs/plans/<ISO date>-<slug>.md`, each
-   with acceptance criteria, files and tests. Reviewed by a fresh subagent before any dispatch.
+   with acceptance criteria, files and tests. Written after the spec is approved, never before.
+   **Reviewed by the plan angles and by nothing else**: no user approval gates a plan, which derives
+   from an approved spec, so what it needs is a check that the derivation is faithful and complete.
+   The plan also groups its tasks into blocks, which is what Act dispatches and what block review
+   reads: a block ends where a later task first depends on an earlier task's result.
    **A task owns the tests that pin the behaviour it delivers.** Collecting them into a later
    "write the tests" task makes them arrive green, with no red they could have been written from,
    and mutation after the fact is what is left to show they hold.
-4. **Act.** Subagent-driven by default; inline only for a one-file, one-edit change. Each task is
-   reviewed by a fresh subagent on completion; the implementer never reviews its own task.
+4. **Act.** Subagent-driven by default; inline only for a one-file, one-edit change. In tier Plan,
+   **a completed block is reviewed by a fresh subagent while the next block is being built**: the
+   implementer never reviews its own work, and the review never blocks it either. Findings are
+   arbitrated at the next block boundary, before the block after it is dispatched. A CRITICAL
+   finding is the one interruption, because letting a block build on a broken base is what makes
+   the rework expensive. The reviewer reads the block's frozen commit range, never the working
+   tree. Tiers Direct and Spec run no block review: their diff is the branch diff the holistic
+   review reads in Verify.
 5. **Verify.** Run the full gate (run, not described), then a holistic review by a fresh subagent
    over the whole branch diff, never skipped.
 6. **Wrap.** Runs to completion before Improve. (a) Update the backlog in the branch. (b) Write
@@ -115,7 +128,8 @@ anything irreversible. Wrap and Improve run in every tier.
    built, pitfalls, what is not validated, next step. (c) Integrate through a PR (rebase only, no
    local-merge exemption); a PR is merged only after the human has reviewed it, approval never
    assumed. (d) Tag if the spec called for a release. (e) Clean up the branch or worktree.
-   (f) Report what was done and the friction points: this report is the input to Improve.
+   (f) Report what was done and the friction points, including any angle excluded from a review
+   pass and the reason given: this report is the input to Improve.
 7. **Improve.** Begins only once Wrap has fully completed. Never skipped. The question: what
    should the gate have caught? Opens as a discussion: state the failures met and the remedy
    proposed for each, then wait. Each retained remedy takes the cheapest durable form: an agents
@@ -130,9 +144,17 @@ the reasoning that produced them. Reviewers report findings and never edit.
 
 | Review | When | Mandate |
 | --- | --- | --- |
-| Plan | Before any task is dispatched | `agents/reviews/plan.md` |
-| Task | When each task completes | `agents/reviews/task.md` |
+| Spec angles | On the draft spec, before the user reads it | `evidence`, `falsifiability`, `precedent`, `security`, `operations`, `testability` |
+| Plan angles | On the plan, before any task is dispatched | `plan`, `evidence`, `testability` |
+| Block | When a block completes, alongside the next one (tier Plan only) | `agents/reviews/block.md` |
 | Holistic | In Verify, after the gate is green | `agents/reviews/holistic.md` |
+
+All mandates are files in `agents/reviews/`. Angles dispatch in parallel, so a pass costs the
+slowest angle, not their sum.
+
+**Run every angle that declares the artefact under review.** Excluding one is allowed and requires
+a stated reason in the brief, which Wrap reports. "It seemed unlikely to find anything" is not a
+reason; "this lot adds no runtime behaviour, so `operations` has no artefact" is.
 
 **Do not read the mandate files**: pass the path and let the subagent read its own mandate. Only
 exception: work whose subject is a mandate itself.

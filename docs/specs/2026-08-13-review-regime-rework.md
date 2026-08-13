@@ -155,7 +155,9 @@ review, its mandate and its place in Verify are untouched. The four exits of a r
    stating the artefact it reviews and reporting in the `SEVERITY | file:line | issue | suggested
    fix` format the other mandates use.
 4. Every angle mandate states at least one criterion whose motivating defect is traceable to a
-   handoff, and no angle restates a criterion `agents/reviews/holistic.md` already carries.
+   handoff, and every criterion is phrased as a question about the document under review.
+   `agents/reviews/holistic.md` asks its questions of a diff; an angle asking the same question of a
+   spec is the point of this lot, so overlap of subject is expected and copied wording is not.
 5. `agents/workflow.md` states that excluding an angle requires a reason in the brief and that wrap
    reports the exclusions.
 6. `agents/workflow.md`'s phase 2 places operator approval after the spec angles have reported and
