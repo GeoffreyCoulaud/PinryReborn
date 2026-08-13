@@ -100,6 +100,19 @@ class PasswordChangerTest : BaseTest() {
     }
 
     @Test
+    fun `Given a fraction of a second left on the interval, Then the retry delay rounds up`() {
+        // Given: 30 s interval, 9.5 s elapsed -> 20.5 s remaining
+        val recent =
+            HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = now.minusSeconds(10).plusMillis(500))
+        every { passwords.findCurrentPasswordHash(user) } returns recent
+        every { hasher.matches("old", recent) } returns true
+        every { clock.now() } returns now
+        // When / Then: rounded up, where a truncation would answer twenty and retry a second early
+        val error = assertThrows<PasswordChangedTooSoonError> { changer.changePassword(user, "old", "new") }
+        assertEquals(21, error.retryAfterSeconds)
+    }
+
+    @Test
     fun `Given a change at the interval boundary, Then it succeeds`() {
         // Given: createdAt exactly `interval` ago is allowed (the refusal is strictly inside)
         every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
