@@ -71,8 +71,9 @@ password guess, and the refusal is served before the bcrypt call rather than aft
 - **D4. Authenticated re-verification is keyed by user id**, in a key space distinct from the login
   one. Re-authentication and password change share that counter: it is the same secret.
 - **D5. No hard lockout, an escalating backoff.** A blocked key becomes usable again on its own,
-  after the current step. This is what keeps a third party from locking someone out of their
-  account by failing on their behalf.
+  after the current step, so nothing the limiter does to an account is permanent. It does not stop a
+  third party from holding an account's login closed by failing on its behalf: that costs about 150
+  requests a day, and is an accepted limit rather than a defect (ADR 0013, decision 3).
 - **D6. The check runs before the password verification**, so a blocked key costs no bcrypt. Without
   this, the limiter would still leave the CPU exhaustion path open.
 - **D7. The refusal is a 429 with `Retry-After`**, through the existing `ThrottledError` marker

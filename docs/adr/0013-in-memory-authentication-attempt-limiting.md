@@ -75,10 +75,11 @@ saturates on the last one. A success clears the counter, and an idle counter is 
 configured interval.
 
 The usual shape, N failures then a fixed lockout window, hands anyone a free denial of service of
-that window's length against any account whose name they know. The backoff makes the same attack
-cost the attacker a sustained stream of requests to hold, and lets the legitimate owner back in as
-soon as they stop, at a cost that starts at 30 seconds. Against brute force the two shapes are
-equivalent: both cap the guess rate far below what a password search needs.
+that window's length against any account whose name they know. The backoff does not remove that
+attack. It makes it recurring: the block always expires, so holding it means landing one more failure
+each time it lapses, and the legitimate owner is back in as soon as the attacker stops, at a cost
+that starts at 30 seconds. Against brute force the two shapes are equivalent: both cap the guess rate
+far below what a password search needs.
 
 The check runs before the password verification. A limiter placed after it would still let a flood
 of guesses pay for a bcrypt hash each, which is the CPU exhaustion half of the same problem.
@@ -92,6 +93,34 @@ Accepted limit: **grouping is wider than the database's.** Kotlin's `lowercase` 
 the `collate nocase` index folds ASCII only, so two accounts SQLite considers distinct can share one
 counter. Wider grouping is the safe direction for brute force and marginally widens decision 2's
 limit.
+
+Accepted limit: **holding an account's login closed is cheap, and a name is all it takes.** Driving
+the limiter over a simulated day on the shipped policy (threshold 5, steps PT30S, PT2M and PT10M,
+forget-after PT15M): 150 wrong passwords hold `POST /api/v1/sessions` closed for that name for 24
+hours, and the owner's correct password gets through on 4 seconds out of 86401, all four before the
+fifth failure lands. In steady state that is one request every ten minutes, for as long as the
+attacker cares to keep paying it, and the owner's only opening is whatever slack the attacker leaves
+between the block lapsing and their next request.
+
+The mechanism is an interaction between two settings rather than a property of either.
+`forget_after` is longer than the last backoff step, so an entry outlives the block it carries: when
+the block lapses the counter is still there and still saturated, and the next single failure buys
+another full step. The failure count never walks back down. The limiter validates each setting on its
+own (spec D10) and nothing looks at the pair, so a policy sound property by property still yields
+this. The same probe with `forget_after` at PT5M, below the last step, costs the same attacker 805
+requests and still leaves the owner 460 seconds of the day, because the counter dies between blocks
+and has to be rebuilt from the threshold each time.
+
+Two changes were considered and rejected. Clearing the failure count when a block expires would end
+the saturation, and would also hand a patient attacker a clean slate every ten minutes, which is the
+slow brute force this lot exists to stop. Pushing `forget_after` under the last step buys that same
+trade through configuration instead of code, at the same price. The policy stays as it is.
+
+What survives is the half decision 3 was chosen for: this is a hold, not a lockout. The attacker pays
+for every ten minutes they want, and the account works again one step after they stop. The rest is
+the residue of decision 2. Any limiter keyed by identity buys resistance to brute force with targeted
+denial of service against a name someone knows; keying by network origin, which does not have this
+shape, was rejected there for reasons that have not changed. Recorded here rather than removed.
 
 ## Decision 4: the tracked keys are bounded in number and in width
 
