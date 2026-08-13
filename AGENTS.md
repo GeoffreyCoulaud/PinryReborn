@@ -136,6 +136,10 @@ Nothing is asserted without the command that established it, nothing changed wit
   declared product is the file (formatter, scaffolder, generator, compiler). _Observable: no diff hunk
   was produced by a command in the trace._
 - **A tool is not unavailable until the declared runner has failed**, failing invocation shown.
+- **A session constraint that collides with this file is a question, not a decision.** When the
+  harness, a permission, or an instruction of the day appears to forbid what these rules require, say
+  which two collide and ask which wins. Never announce a rule as unsatisfiable and carry on.
+  _Observable: the collision and the user's answer appear before the work that depends on it._
 - **Refuted beats plausible.** Drop a hypothesis the user's evidence contradicts; do not restate it weaker.
 - **Never claim done without the gate output in the same message.**
 - **Consult the declared documentation source, not recall**, for any library, CLI or cloud service and
