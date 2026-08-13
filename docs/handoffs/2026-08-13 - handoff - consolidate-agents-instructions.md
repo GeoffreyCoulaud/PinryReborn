@@ -66,7 +66,8 @@ section inside `AGENTS.md` would be loaded into every session and would destroy 
 - **The hook has no automated test and cannot get one where it lives.** `.claude/` is outside the
   gate perimeter by location, and the perimeter is decided by location on purpose. Every claim about
   the guard in this lot rests on hand-run invocations, including the 59-payload differential. Nothing
-  will catch the next regression.
+  will catch the next regression, and two fixes went into the file after that sentence was first
+  written, on the operator's call, still with no test behind them.
 - **Nobody has worked a real task through the merged file yet.** The reviews read it; no session has
   used it to build something. Whether one file of 820 lines is easier or harder to work from than
   four is untested, and the two pairs of near-homonymous sections (Design against Design invariants,
@@ -80,14 +81,21 @@ section inside `AGENTS.md` would be loaded into every session and would destroy 
 
 ## Where each review finding went
 
-Twelve findings across three reviews. Ten fixed inside the lot: the misleading sentence about what
+Twelve findings across three reviews. Eleven fixed inside the lot: the misleading sentence about what
 the guard enforces, the amendment guard against Simultaneity, the departure count and the narrowing
 vocabulary, the regime-table renvoi, the dead `docs/project.md` reference in
 `ArchitectureKonsistTest`, the two cross-references between homonymous sections, the `.gitignore` hole
-for `__pycache__`, and three spec amendments (the closed list, the blind spot of criterion 1, the
-prose the merge adds). One became a backlog item: the two faults in the evidence guard. One became a
-known limit: the matcher fires the guard on more tools than it inspects, deliberately, because
-narrowing it would make a future edit-inspecting rule fail silently.
+for `__pycache__`, three spec amendments (the closed list, the blind spot of criterion 1, the prose
+the merge adds), and the two faults in the evidence guard. One became a known limit: the matcher
+fires the guard on more tools than it inspects, deliberately, because narrowing it would make a
+future edit-inspecting rule fail silently.
+
+The guard faults were filed to the backlog first and pulled back in at the operator's request, read
+on the pull request. The alternative was put and declined: give the file a safety net first, a Gradle
+task running `python3 -m unittest` hung off `gate`. They are therefore fixed without one, which is
+the most fragile thing this lot ships. What replaces the test is the holistic reviewer's 59-payload
+corpus replayed against both versions plus eight cases aimed at the fixes, and the backlog keeps the
+safety net itself as an open item.
 
 ## Suggested next step
 
