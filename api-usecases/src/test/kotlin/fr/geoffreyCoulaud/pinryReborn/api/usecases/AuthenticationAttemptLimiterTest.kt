@@ -38,14 +38,36 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
         every { clock.now() } answers { now }
     }
 
-    private fun limiterWith(forgetAfter: Duration, maxTrackedKeys: Int) =
-        AuthenticationAttemptLimiter(clock, threshold, backoffSteps, forgetAfter, maxTrackedKeys)
+    private fun limiterWith(
+        threshold: Int = this.threshold,
+        backoffSteps: List<Duration> = this.backoffSteps,
+        forgetAfter: Duration = this.forgetAfter,
+        maxTrackedKeys: Int = 100,
+    ) = AuthenticationAttemptLimiter(clock, threshold, backoffSteps, forgetAfter, maxTrackedKeys)
 
     private fun failTimes(limiter: AuthenticationAttemptLimiter, key: AuthenticationAttemptKey, count: Int) =
         repeat(count) { limiter.recordFailure(key) }
 
     private fun refusalFor(limiter: AuthenticationAttemptLimiter, key: AuthenticationAttemptKey) =
         assertThrows<TooManyAuthenticationAttemptsError> { limiter.check(key) }
+
+    @Test
+    fun `Given a threshold below one, Then the limiter refuses to be built`() {
+        // Then: a threshold of zero would refuse a key that never failed
+        assertThrows<IllegalArgumentException> { limiterWith(threshold = 0) }
+    }
+
+    @Test
+    fun `Given no backoff step, Then the limiter refuses to be built`() {
+        // Then: there would be no block to serve once the threshold is reached
+        assertThrows<IllegalArgumentException> { limiterWith(backoffSteps = emptyList()) }
+    }
+
+    @Test
+    fun `Given a bound below one key, Then the limiter refuses to be built`() {
+        // Then: every insertion would exceed the bound and evict itself, an off switch spec D10 denies
+        assertThrows<IllegalArgumentException> { limiterWith(maxTrackedKeys = 0) }
+    }
 
     @Test
     fun `Given no recorded failure, Then the check passes`() {
@@ -117,6 +139,16 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
     }
 
     @Test
+    fun `Given whole seconds and a fraction are left on the block, Then the retry delay rounds up`() {
+        // Given
+        failTimes(limiter, key, threshold)
+        // When: twenty-nine seconds and a half are left of the thirty
+        now = start.plusMillis(500)
+        // Then: rounded up, where a truncation would answer twenty-nine
+        assertEquals(30, refusalFor(limiter, key).retryAfterSeconds)
+    }
+
+    @Test
     fun `Given a success, Then the counter starts over`() {
         // Given: one failure short of the threshold, then a success
         failTimes(limiter, key, threshold - 1)
@@ -157,6 +189,9 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
         now = start.plusSeconds(10)
         // Then
         assertEquals(20, refusalFor(shortMemory, key).retryAfterSeconds)
+        // And: the failures survived too, so the next one walks up instead of starting over
+        failTimes(shortMemory, key, 1)
+        assertEquals(120, refusalFor(shortMemory, key).retryAfterSeconds)
     }
 
     @Test
@@ -167,6 +202,23 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
         failTimes(limiter, AuthenticationAttemptKey.forLogin("aLICE"), 1)
         // Then
         refusalFor(limiter, AuthenticationAttemptKey.forLogin("alice"))
+    }
+
+    @Test
+    fun `Given the threshold is reached on a user key, Then the check is refused`() {
+        // Given: re-authentication and password change share this counter (D4)
+        val userKey = AuthenticationAttemptKey.forUser(randomUUID())
+        failTimes(limiter, userKey, threshold)
+        // Then
+        assertEquals(30, refusalFor(limiter, userKey).retryAfterSeconds)
+    }
+
+    @Test
+    fun `Given one user is blocked, Then another user's check passes`() {
+        // Given
+        failTimes(limiter, AuthenticationAttemptKey.forUser(randomUUID()), threshold)
+        // Then: the counter is keyed by the user, not shared by every user
+        assertDoesNotThrow { limiter.check(AuthenticationAttemptKey.forUser(randomUUID())) }
     }
 
     @Test
