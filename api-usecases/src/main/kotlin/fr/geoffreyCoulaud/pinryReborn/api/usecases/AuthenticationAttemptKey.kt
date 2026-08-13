@@ -10,10 +10,11 @@ enum class AuthenticationAttemptKeySpace {
 }
 
 /**
- * One failure counter's identity. Built through the factories, which own the normalisation
- * (`docs/specs/2026-08-13-auth-attempt-limiting.md`, D3 and D4).
+ * One failure counter's identity. The constructor and [copy] are closed: the factories below own
+ * the normalisation (`docs/specs/2026-08-13-auth-attempt-limiting.md`, D3 and D4).
  */
-data class AuthenticationAttemptKey(
+@ConsistentCopyVisibility
+data class AuthenticationAttemptKey private constructor(
     val space: AuthenticationAttemptKeySpace,
     val value: String,
 ) {

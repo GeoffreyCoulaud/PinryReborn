@@ -4,7 +4,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.TooManyAuthenticationAttemptsError
 import java.time.Duration
 import java.time.Instant
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -20,13 +19,22 @@ class AuthenticationAttemptLimiter(
 ) {
     private val states = ConcurrentHashMap<AuthenticationAttemptKey, AttemptState>()
 
-    private val byExpiry: Comparator<Map.Entry<AuthenticationAttemptKey, AttemptState>> =
-        Comparator.comparing { it.value.expiresAt }
+    // No policy value may turn the limiter off (spec D10): each bound below excludes a value at
+    // which it stops limiting, silently and with nothing to see in a log.
+    init {
+        require(threshold >= 1) { "threshold must be at least 1, was $threshold" }
+        require(backoffSteps.isNotEmpty()) { "backoffSteps must hold at least one step" }
+        require(backoffSteps.all { it > Duration.ZERO }) { "every backoff step must be positive, was $backoffSteps" }
+        require(forgetAfter > Duration.ZERO) { "forgetAfter must be positive, was $forgetAfter" }
+        require(maxTrackedKeys >= 1) { "maxTrackedKeys must be at least 1, was $maxTrackedKeys" }
+    }
 
     /** Called before the password is verified, so a blocked key costs no hashing. */
     fun check(key: AuthenticationAttemptKey) {
         val now = clock.now()
-        val blockedUntil = liveState(key, now)?.blockedUntil
+        // An entry outlives the block it carries, so an expired one is never still blocked: this
+        // read needs no expiry test of its own. The failure count reads the expiry, in nextState.
+        val blockedUntil = states[key]?.blockedUntil
         if (blockedUntil != null && blockedUntil.isAfter(now)) {
             throw TooManyAuthenticationAttemptsError(wholeSecondsBetween(now, blockedUntil))
         }
@@ -56,22 +64,12 @@ class AuthenticationAttemptLimiter(
     /** The step earned by [failures], the last one saturating. */
     private fun backoffStep(failures: Int): Duration = backoffSteps[minOf(failures - threshold, backoffSteps.lastIndex)]
 
-    /** The entry for [key] while it is still live; an expired one reads as absent and is purged. */
-    private fun liveState(key: AuthenticationAttemptKey, now: Instant): AttemptState? {
-        val stored = states[key]
-        if (stored != null && !stored.isLiveAt(now)) {
-            states.remove(key, stored)
-            return null
-        }
-        return stored
-    }
-
     /** The login key is attacker-supplied and unbounded in cardinality, so the map is bounded and evicts. */
     private fun boundTrackedKeys(now: Instant) {
         if (states.size <= maxTrackedKeys) return
         states.entries.removeIf { !it.value.isLiveAt(now) }
         if (states.size <= maxTrackedKeys) return
-        val closestToExpiry = Collections.min(states.entries, byExpiry)
+        val closestToExpiry = states.entries.minBy { it.value.expiresAt }
         states.remove(closestToExpiry.key, closestToExpiry.value)
     }
 

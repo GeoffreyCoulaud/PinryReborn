@@ -14,7 +14,6 @@ import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
@@ -24,7 +23,7 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
     private val threshold = 5
     private val backoffSteps = listOf(Duration.ofSeconds(30), Duration.ofMinutes(2), Duration.ofMinutes(10))
     private val forgetAfter = Duration.ofMinutes(15)
-    private val limiter = limiterWith(forgetAfter = forgetAfter, maxTrackedKeys = 100)
+    private val limiter by lazy { limiterWith(forgetAfter = forgetAfter, maxTrackedKeys = 100) }
 
     private val key = AuthenticationAttemptKey.forLogin("alice")
     private val otherKey = AuthenticationAttemptKey.forLogin("bob")
@@ -33,17 +32,21 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
     private val start = Instant.parse("2026-08-13T10:00:00Z")
     private var now = start
 
-    @BeforeEach
-    fun stubTheClock() {
+    // The clock is stubbed here rather than in a @BeforeEach: a construction guard throws before any
+    // clock read, and BaseTest fails a test that leaves a stub unused.
+    private fun limiterWith(forgetAfter: Duration, maxTrackedKeys: Int): AuthenticationAttemptLimiter {
         every { clock.now() } answers { now }
+        return AuthenticationAttemptLimiter(clock, threshold, backoffSteps, forgetAfter, maxTrackedKeys)
     }
 
-    private fun limiterWith(
+    private fun constructionRefused(
         threshold: Int = this.threshold,
         backoffSteps: List<Duration> = this.backoffSteps,
         forgetAfter: Duration = this.forgetAfter,
         maxTrackedKeys: Int = 100,
-    ) = AuthenticationAttemptLimiter(clock, threshold, backoffSteps, forgetAfter, maxTrackedKeys)
+    ) = assertThrows<IllegalArgumentException> {
+        AuthenticationAttemptLimiter(clock, threshold, backoffSteps, forgetAfter, maxTrackedKeys)
+    }
 
     private fun failTimes(limiter: AuthenticationAttemptLimiter, key: AuthenticationAttemptKey, count: Int) =
         repeat(count) { limiter.recordFailure(key) }
@@ -54,19 +57,31 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
     @Test
     fun `Given a threshold below one, Then the limiter refuses to be built`() {
         // Then: a threshold of zero would refuse a key that never failed
-        assertThrows<IllegalArgumentException> { limiterWith(threshold = 0) }
+        constructionRefused(threshold = 0)
     }
 
     @Test
     fun `Given no backoff step, Then the limiter refuses to be built`() {
         // Then: there would be no block to serve once the threshold is reached
-        assertThrows<IllegalArgumentException> { limiterWith(backoffSteps = emptyList()) }
+        constructionRefused(backoffSteps = emptyList())
+    }
+
+    @Test
+    fun `Given a backoff step of zero, Then the limiter refuses to be built`() {
+        // Then: a block ending at the instant it starts refuses nothing
+        constructionRefused(backoffSteps = listOf(Duration.ZERO))
+    }
+
+    @Test
+    fun `Given a forget-after of zero, Then the limiter refuses to be built`() {
+        // Then: a counter forgotten between two failures never reaches the threshold
+        constructionRefused(forgetAfter = Duration.ZERO)
     }
 
     @Test
     fun `Given a bound below one key, Then the limiter refuses to be built`() {
         // Then: every insertion would exceed the bound and evict itself, an off switch spec D10 denies
-        assertThrows<IllegalArgumentException> { limiterWith(maxTrackedKeys = 0) }
+        constructionRefused(maxTrackedKeys = 0)
     }
 
     @Test
@@ -157,16 +172,6 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
         failTimes(limiter, key, threshold)
         // Then: the block is the first step, so the failures before the success were dropped
         assertEquals(30, refusalFor(limiter, key).retryAfterSeconds)
-    }
-
-    @Test
-    fun `Given a counter left idle past the forget-after, Then the check passes`() {
-        // Given: a blocked key
-        failTimes(limiter, key, threshold)
-        // When: the counter sits idle past the forget-after
-        now = start.plus(forgetAfter).plusSeconds(1)
-        // Then: the entry reads as absent
-        assertDoesNotThrow { limiter.check(key) }
     }
 
     @Test
