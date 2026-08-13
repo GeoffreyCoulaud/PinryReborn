@@ -1,12 +1,12 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.Task
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.TransactionControl
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.TaskModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TaskModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QTaskModel
@@ -26,9 +26,10 @@ import java.util.UUID.randomUUID
  * on the same row.
  *
  * [enqueue]'s dedup check-then-insert and [claimNext]'s select-then-update are each wrapped in a
- * single explicit [io.ebean.Transaction] (`transactionControl.beginTransaction()`), so on the
- * single-connection SQLite datasource the whole read+write pair serializes atomically instead of
- * racing across two separate auto-commit statements.
+ * single [TransactionRunner.inTransaction] block, so on the single-connection SQLite datasource the
+ * whole read+write pair serializes atomically instead of racing across two separate auto-commit
+ * statements. The block joins an ambient transaction when the caller already opened one, which is
+ * Ebean's REQUIRED semantics and not a decision this class makes.
  */
 @ApplicationScoped
 // TaskQueueInterface itself has exactly 11 methods (the port's minimal surface); a full,
@@ -38,22 +39,9 @@ import java.util.UUID.randomUUID
 @Suppress("TooManyFunctions")
 class EbeanTaskQueue(
     private val persistor: Persistor,
-    private val transactionControl: TransactionControl,
+    private val transactionRunner: TransactionRunner,
 ) : TaskQueueInterface {
-    // Ambient-transaction-aware: when a TransactionRunner already opened a transaction on this thread,
-    // join it (so the enqueue commits atomically with the caller's other writes) instead of opening
-    // (and committing) our own. Only when there is no ambient transaction do we open our own, so the
-    // dedup check-then-insert still serializes atomically on the single-connection SQLite datasource.
-    override fun enqueue(task: NewTask): Task =
-        if (transactionControl.currentTransaction() != null) {
-            enqueueWithin(task)
-        } else {
-            transactionControl.beginTransaction().use { transaction ->
-                val result = enqueueWithin(task)
-                transaction.commit()
-                result
-            }
-        }
+    override fun enqueue(task: NewTask): Task = transactionRunner.inTransaction { enqueueWithin(task) }
 
     private fun enqueueWithin(task: NewTask): Task {
         val dedupKey = task.dedupKey
@@ -105,7 +93,7 @@ class EbeanTaskQueue(
         now: Instant,
         leaseDuration: Duration,
     ): ClaimedTask? =
-        transactionControl.beginTransaction().use { transaction ->
+        transactionRunner.inTransaction {
             val model =
                 QTaskModel()
                     .state.equalTo(TaskState.PENDING.name)
@@ -114,8 +102,7 @@ class EbeanTaskQueue(
                     .setMaxRows(1)
                     .findOne()
             if (model == null) {
-                transaction.commit()
-                return@use null
+                return@inTransaction null
             }
             // A task whose handler never returns is never settled, so its attempts are only ever
             // spent by the reaper putting it back to PENDING. Without this guard such a task is
@@ -128,8 +115,7 @@ class EbeanTaskQueue(
                 model.leaseExpiresAt = null
                 model.terminalStateAt = now
                 persistor.save(model)
-                transaction.commit()
-                return@use null
+                return@inTransaction null
             }
             val leaseId = randomUUID().toString()
             model.state = TaskState.RUNNING.name
@@ -137,7 +123,6 @@ class EbeanTaskQueue(
             model.leaseExpiresAt = now.plus(leaseDuration)
             model.attempts += 1
             persistor.save(model)
-            transaction.commit()
             ClaimedTask(
                 id = model.id,
                 kind = model.kind,

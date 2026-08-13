@@ -3,13 +3,11 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
-import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanImageDownloadRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanImageRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanTaskQueue
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanTransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
@@ -23,10 +21,10 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 class EbeanTransactionRunnerTest : RepositoryTest() {
-    private val runner: TransactionRunner = EbeanTransactionRunner(transactionControl)
-    private val queue = EbeanTaskQueue(persistor, transactionControl)
+    private val runner = transactionRunner
+    private val queue = EbeanTaskQueue(persistor, transactionRunner)
     private val downloads = EbeanImageDownloadRepository(persistor)
-    private val images = EbeanImageRepository(persistor, transactionControl)
+    private val images = EbeanImageRepository(persistor, transactionRunner)
     private val userRepository = UserRepository(persistor)
     private val pinRepository = PinRepository(persistor)
     private val now = Instant.parse("2026-07-10T00:00:00Z")
