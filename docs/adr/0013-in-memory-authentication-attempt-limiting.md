@@ -113,6 +113,9 @@ login endpoint that this lot does not change.
 - No migration, so the beta-time migration flattening (`docs/backlog.md`) is not affected.
 - 429 responses gain a third source, all three rendered by one marker interface: the arrangement
   D23 of `docs/specs/2026-07-31-current-password-determinism.md` set up pays off again.
+- `Retry-After` now rounds up at all three sources, through `ThrottledError.wholeSecondsBetween`:
+  the two older ones truncated, which sent a client back a second early into a second 429. Operator
+  decision, taken during this lot; the earlier documents describe the floor they shipped with.
 - `PasswordChanger` keeps verifying the current password itself rather than calling
   `Reauthenticator`. Both now call the limiter with the same key, so the duplication costs one more
   call site than the refactor would; removing it stays available and stays out of this lot.

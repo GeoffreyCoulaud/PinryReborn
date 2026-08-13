@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.Reauthenticator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportAlreadyInProgressError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportTooSoonError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ThrottledError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.UserDataExportTask
 import java.time.Duration
@@ -59,7 +60,7 @@ class UserDataExportRequester(
         val last = repository.findLastRequestedAtForUser(user.id)
         val earliest = now.minus(minimumInterval)
         if (last != null && last.isAfter(earliest)) {
-            throw ExportTooSoonError(Duration.between(earliest, last).seconds.coerceAtLeast(1))
+            throw ExportTooSoonError(ThrottledError.wholeSecondsBetween(earliest, last))
         }
         val ready = repository.findReadyForUser(user.id)
         ready?.let { repository.save(it.copy(state = UserDataExportState.SUPERSEDED, storageKey = null)) }

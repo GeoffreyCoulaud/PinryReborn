@@ -10,6 +10,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordChangedToo
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordChangeCollisionError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordPreviouslyUsedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ReauthenticationError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ThrottledError
 import java.time.Duration
 
 @Suppress("LongParameterList")
@@ -28,10 +29,9 @@ class PasswordChanger(
         val current = userPasswordRepository.findCurrentPasswordHash(user)
         if (current == null || !passwordHasher.matches(currentPassword, current)) throw ReauthenticationError()
         val now = clock.now()
-        if (current.createdAt.isAfter(now.minus(minimumInterval))) {
-            val retryAfterSeconds =
-                Duration.between(now.minus(minimumInterval), current.createdAt).seconds.coerceAtLeast(1)
-            throw PasswordChangedTooSoonError(retryAfterSeconds)
+        val earliest = now.minus(minimumInterval)
+        if (current.createdAt.isAfter(earliest)) {
+            throw PasswordChangedTooSoonError(ThrottledError.wholeSecondsBetween(earliest, current.createdAt))
         }
         val history = userPasswordRepository.findAllPasswordHashesForUser(user)
         if (history.any { passwordHasher.matches(newPassword, it) }) throw PasswordPreviouslyUsedError()

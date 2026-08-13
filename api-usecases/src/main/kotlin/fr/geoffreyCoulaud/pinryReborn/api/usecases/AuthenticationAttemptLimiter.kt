@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ThrottledError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.TooManyAuthenticationAttemptsError
 import java.time.Duration
 import java.time.Instant
@@ -36,7 +37,7 @@ class AuthenticationAttemptLimiter(
         // read needs no expiry test of its own. The failure count reads the expiry, in nextState.
         val blockedUntil = states[key]?.blockedUntil
         if (blockedUntil != null && blockedUntil.isAfter(now)) {
-            throw TooManyAuthenticationAttemptsError(wholeSecondsBetween(now, blockedUntil))
+            throw TooManyAuthenticationAttemptsError(ThrottledError.wholeSecondsBetween(now, blockedUntil))
         }
     }
 
@@ -71,12 +72,6 @@ class AuthenticationAttemptLimiter(
         if (states.size <= maxTrackedKeys) return
         val closestToExpiry = states.entries.minBy { it.value.expiresAt }
         states.remove(closestToExpiry.key, closestToExpiry.value)
-    }
-
-    /** Whole seconds, rounded up: a fraction of a second still costs the caller a whole one. */
-    private fun wholeSecondsBetween(from: Instant, to: Instant): Long {
-        val remaining = Duration.between(from, to)
-        return if (remaining.nano == 0) remaining.seconds else remaining.seconds + 1
     }
 
     private fun AttemptState.isLiveAt(now: Instant) = expiresAt.isAfter(now)
