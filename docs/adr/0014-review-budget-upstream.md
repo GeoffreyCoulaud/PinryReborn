@@ -3,8 +3,12 @@
 Status: Proposed
 Date: 2026-08-13
 Specification: `docs/specs/2026-08-13-review-regime-rework.md`
-Related: `docs/adr/0001-adopt-agents-baseline.md` (the workflow that introduced the three reviews),
-`docs/adr/0010-review-finding-dispositions.md` (the four exits a finding takes, unchanged here).
+Amends: `docs/adr/0001-adopt-agents-baseline.md`, whose review regime this changes. The three
+reviews still exist, still run in fresh subagents and still never edit; their count, placement and
+timing move.
+Related: `docs/adr/0010-review-finding-dispositions.md` (the four exits a finding takes, unchanged
+here; its context paragraph describes the per-task regime this ADR replaces, and stands as the
+dated record of what was true on 2026-08-12).
 
 ## Context
 
@@ -15,16 +19,19 @@ never true of when they run or how many there are, and neither ADR measured eith
 Both were measurable. The session transcripts hold every subagent's token usage and timestamps, and
 338 subagents across 17 lots between 2026-07-15 and 2026-08-13 say this:
 
-- Task review is the second largest subagent line: 100 reviews plus 14 fixup agents, 67.5 Mtok
-  normalised to input-token equivalents, against 27.1 Mtok for 19 holistic reviews and 5 fixups.
+- Task review is the second largest subagent line: 100 reviews at 46.0 Mtok normalised to
+  input-token equivalents, plus 14 fixup agents at 21.6, against 19 holistic reviews at 19.4 plus
+  5 fixups at 7.7. The counts below are of reviews only: an agent applying findings does not
+  produce them, and counting it as a review flatters both rates.
 - The parallelism factor is 1.0 on every session. No review ever overlaps another, and none overlaps
   an implementer. Reviews are serial by construction of the workflow, not by necessity.
 - Between consecutive implementers, 33.2 hours build nothing, of which 16.1 hours are windows
   holding a task review. The reviews themselves are 7.1 of those hours; the other 9 are the main
   loop writing briefs and arbitrating reports. Implementation itself is 20.9 hours. The task-review
   cycle is therefore 44 % of the time the work moves forward.
-- Per serious finding, upstream review costs 0.58 Mtok, holistic 2.46 and task 2.11. Task review is
-  not less efficient than holistic review. There are 4.75 times more of it.
+- Per serious finding (CRITICAL or MAJOR), upstream review costs 0.58 Mtok, holistic 1.76 and task
+  1.48. Task review is not the less efficient of the two; it is marginally the cheaper. There are
+  5.26 times more of it.
 
 The last number is the one that decides. The cheapest place to find a defect is the document that
 has not been implemented yet, and the repository's own history says so twice over: the plan review
@@ -49,7 +56,9 @@ moving it to the other.
 2. **Block review runs one block behind the work.** Block N+1 starts as soon as block N is complete;
    the review of block N runs alongside it and its findings are arbitrated at the next boundary,
    before N+2 is dispatched. A CRITICAL finding interrupts the block in flight. The reviewer reads a
-   frozen commit range, never the working tree.
+   frozen commit range, never the working tree. The last block has no next boundary, so Act does not
+   end until its review has reported. A finding whose fix touches work built after the block it
+   concerns is arbitrated as work, not as a correction: a task in the next block, or a backlog item.
 
 3. **The upstream pass is a set of angles, and each angle is a mandate.** Seven files in
    `agents/reviews/`, flat beside the existing mandates, each declaring the artefact it reviews:
@@ -58,7 +67,7 @@ moving it to the other.
    unless it states a reason to exclude one, and wrap reports the exclusions. Angles dispatch in
    parallel, so the pass costs the slowest angle in wall-clock, about twelve minutes.
 
-4. **The angles report before the operator reads, and the plan is agent-reviewed only.** The five
+4. **The angles report before the operator reads, and the plan is agent-reviewed only.** The six
    spec angles run on the draft, their findings are closed, and the corrected spec is what goes for
    approval: the operator's attention is spent on what only they can decide, not on defects an agent
    finds. The plan is written after that approval and reviewed by the three plan angles alone, with
@@ -72,18 +81,27 @@ moving it to the other.
 ## Consequences
 
 - **A defect can now be built upon before it is reported.** That is the price of decision 2, and it
-  was accepted with the rate in hand: 0.28 serious findings per review means about one block in four
-  carries something worth acting on. The compensating control is the CRITICAL interruption and the
-  frozen commit range.
-- **The rework rate is the number to watch, and nothing measures it.** If block review starts
-  reporting findings whose fix touches work done after the block, decision 2 is costing more than it
-  saves. Wrap is the place that would see it, since it already states each finding's exit.
-- **Tier Direct now has exactly one review.** A one-file change is read once, by the holistic
-  reviewer, after the gate. If a Direct lot ever ships a defect that a task review would have caught,
-  that is the case against this part of the decision, and it should be recorded rather than argued.
-- **Seven mandates are seven files to keep true.** Each was derived from defects the handoffs
-  record, and an angle whose criteria stop matching what lots actually get wrong is dead weight the
-  next Improve phase should cut.
+  was accepted with the rate in hand: 0.31 serious findings per review means about one block in
+  three carries something worth acting on, and one in seventeen a CRITICAL. The compensating
+  controls are the CRITICAL interruption and the frozen commit range.
+- **The rework rate is the number to watch.** If block review starts reporting findings whose fix
+  touches work done after the block, decision 2 is costing more than it saves. Wrap now counts them
+  as its own line, beside the exits it already states.
+- **Tier Direct now has exactly one review, and that review had to be repaired to bear it.** A
+  one-file change is read once, by the holistic reviewer, after the gate. That mandate assumed three
+  things this decision makes false: that earlier passes had judged the tasks, that a spec exists to
+  read the diff against, and that somebody else had checked the test-only commit carried its red.
+  All three are now stated in `agents/reviews/holistic.md`, the third as a new criterion, because
+  the red-before-green norm in `agents/engineering.md` otherwise lost its only enforcement in two
+  tiers out of three: no hook and no gate task checks commit order. If a Direct lot ever ships a
+  defect that a task review would have caught, that is the case against this part of the decision,
+  and it should be recorded rather than argued.
+- **Seven mandates are seven files to keep true, and they are not disjoint.** Each was derived from
+  defects the handoffs record, and an angle whose criteria stop matching what lots actually get
+  wrong is dead weight the next Improve phase should cut. Three questions are asked twice in the
+  plan pass; `plan.md` cedes them in one sentence rather than the four mandates being re-cut, which
+  is a bet that coverage matters more than exclusivity. If arbitration starts spending its time
+  merging duplicate findings, re-partitioning the seven is the answer, and it is Improve's.
 - **The operator no longer gates the plan.** Decision 4 makes that explicit where the workflow was
   merely silent, and it means a plan can be wrong in a way no human saw until Act produces something
   odd. Three plan angles plus the block review are what stands in that place. The operator can still

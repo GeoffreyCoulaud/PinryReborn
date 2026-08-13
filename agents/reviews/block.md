@@ -41,10 +41,10 @@ them is worth reviewing.
    asserted, or only the happy path?
 6. **Red before green.** Run `git log --oneline` over the block's commits: for each task, a
    test-only commit (`test(scope): ...`) precedes its implementation commit, and its message body
-   carries the red it produced. Take that output as the evidence. Where the body is empty or the history was squashed,
-   run the test yourself from a detached worktree on the test commit, never by checking it out in
-   the shared tree, and report the gap as a finding against the process rather than against the
-   code. Never infer compliance from the absence of evidence.
+   carries the red it produced. Take that output as the evidence. Where the body is empty or the
+   history was squashed, run the test yourself from a detached worktree on the test commit, never
+   by checking it out in the shared tree, and report the gap as a finding against the process
+   rather than against the code. Never infer compliance from the absence of evidence.
 
 **State a verdict on the tests before continuing.** If Part A produced a CRITICAL finding, say so
 explicitly: the implementation review below is provisional until the tests are fixed.
