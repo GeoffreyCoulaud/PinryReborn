@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <dropIndex indexName="ix_tasks_claim" tableName="tasks"/>
+        <createIndex indexName="ix_tasks_claim" tableName="tasks" columns="" definition="create index ix_tasks_claim on tasks (state, priority desc, available_at asc, id asc)"/>
+        <dropIndex indexName="ix_tasks_lease" tableName="tasks"/>
+    </changeSet>
+</migration>
