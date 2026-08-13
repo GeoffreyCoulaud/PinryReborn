@@ -60,9 +60,12 @@ sites upward, and the arithmetic now lives once, in `ThrottledError.wholeSeconds
   they cross test cases within a class. They do not cross a `QuarkusTestProfile` boundary, since
   Quarkus rebuilds the container per profile. Any integration case that submits a wrong credential
   takes an identity of its own; `IntegrationTest`'s KDoc now says so.
-- **`application.properties` restates every configured default**, so `@WithDefault` is no longer
-  what the application reads for the four new properties. Changing a default now means changing both
-  places, which is the convention's standing cost, already true of eleven other properties.
+- **`application.properties` restates every other configured default, and these four are not in it.**
+  The holistic review asked for them on the file's own convention; restating a value the
+  `@WithDefault` already carries makes two sources for one default, and it silently turned
+  `AuthConfigDefaultsIntegrationTest` into a test of the file rather than of the defaults. The four
+  lines went back out on operator review, leaving a comment that names the keys and carries no value.
+  The eleven properties that still do this are a backlog item, not a convention to copy.
 - **A blocked key costs no bcrypt, but only for requests arriving after the block is recorded.**
   `check` and `recordFailure` are two operations; requests already past their check still pay.
 
@@ -72,8 +75,6 @@ sites upward, and the arithmetic now lives once, in `ThrottledError.wholeSeconds
   would cost a catalogue entry on an artifact Quarkus calls internal plus a Quarkus boot per pull
   request. The property is declared in spec D10 and in a comment on the annotation, and it is
   measured in `bfb8c60`'s commit body, not by anything that runs again.
-- **Nothing pins the `@WithDefault` path** for the four properties any more (see above). The
-  `List<Duration>` conversion is still pinned, which was the actual risk.
 - **The concurrency window is reasoned, not measured.** No test drives parallel failures against one
   key; `ConcurrentHashMap.compute` is what serialises the increment.
 

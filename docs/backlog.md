@@ -38,6 +38,19 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
+### P2: Operational debt
+
+- **`application.properties` restates defaults that `@WithDefault` already carries.** Eleven
+  properties repeat, value for value, what `AuthConfig` and `TaskQueueConfig` declare: two sources
+  for one default, silently divergent the day someone edits one side. It also decides what a test
+  can pin, since a configuration read then returns the file rather than the annotation, which is how
+  `AuthConfigDefaultsIntegrationTest` briefly became a test of the wrong thing
+  (`docs/handoffs/2026-08-13 - handoff - auth-attempt-limiting.md`). Decide which side owns a
+  default, then keep in the file only what an operator must override, plus comments naming the keys
+  that have none. The attempt-limiting four were taken out this way on review; these eleven were left
+  because changing the task queue's and the session's configuration is not an authentication lot's
+  business. Surfaced on the PR review of `feat/auth-attempt-limiting`, 2026-08-13.
+
 ## Known limits
 
 Recorded where the decision lives. None is a copy: follow the pointer.
