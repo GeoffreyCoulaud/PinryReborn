@@ -93,17 +93,38 @@ the `collate nocase` index folds ASCII only, so two accounts SQLite considers di
 counter. Wider grouping is the safe direction for brute force and marginally widens decision 2's
 limit.
 
-## Decision 4: the tracked-key count is bounded, with eviction
+## Decision 4: the tracked keys are bounded in number and in width
 
-The login key is attacker-supplied and unbounded in cardinality, so the map is bounded and evicts:
-expired entries first, then the entry closest to expiry.
+The login key is attacker-supplied and unbounded in cardinality, so the map holds at most
+`maxTrackedKeys` entries and evicts to stay there: expired entries first, then the entry closest to
+expiry.
+
+**The entry count is only half the bound.** The submitted name is unbounded in length as well, and
+reaches the limiter whole: `SessionCreationInputDto` carries `@NotBlank` and no length rule of its
+own, and `quarkus.http.limits.max-body-size` is 32M. A count bounds the memory only if an entry has a
+size, and one holding the name has whatever size the caller chose. Measured on a bare
+`ConcurrentHashMap`: sixty entries keyed by a distinct name of a megabyte each retained 58 MB after
+three garbage collections, against nothing measurable for the same sixty entries keyed by a digest.
+At the default bound that is a retained heap on the order of ten thousand times the body limit,
+reachable without credentials, which is the memory exhaustion path the bound was meant to close.
+
+So the key is a SHA-256 digest of the normalised name, and an entry has a fixed width whatever the
+caller sent. Digested rather than truncated: truncation groups names by shared prefix, which would
+let an attacker pick a name starting like a victim's and land in their counter deliberately, while a
+digest groups nothing. Unconditional, on short names too: the cost is one digest against a bcrypt on
+the same request, and a length test would buy that back by adding a second behaviour and a branch.
+The user key needs none of this, a UUID being fixed width already.
 
 Accepted limit: **eviction is a bypass, and a cheap one to describe but not to run.** An attacker who
 floods the map with distinct names can push a victim's entry out, or their own. Every entry they
 create costs the server one bcrypt hash and them one request, so filling a ten thousand entry bound
-means ten thousand hashed attempts. The unbounded alternative is a memory exhaustion path reachable
-without credentials, which is worse, and the CPU cost of the flood is a pre-existing property of the
+means ten thousand hashed attempts. The CPU cost of that flood is a pre-existing property of the
 login endpoint that this lot does not change.
+
+Accepted limit: **nothing purges the map once the flood stops.** The bound is enforced on insertion
+and nowhere else, so entries idle past their forget-after stay until another failure crosses the
+bound. With a fixed-width key the ceiling on that is the bound times an entry, small enough to hold
+indefinitely; without one it would have been the same unbounded heap by another route.
 
 ## Consequences
 
