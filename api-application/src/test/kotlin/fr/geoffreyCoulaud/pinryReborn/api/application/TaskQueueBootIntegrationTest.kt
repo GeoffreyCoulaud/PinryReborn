@@ -7,6 +7,7 @@ import io.ebean.DB
 import io.quarkus.test.junit.QuarkusTest
 import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.TimeUnit
 
@@ -49,10 +50,13 @@ class TaskQueueBootIntegrationTest : IntegrationTest() {
         val attached = database
             .sqlQuery("select name, file from pragma_database_list")
             .findList()
-            .map { it.getString("name") to it.getString("file") }
-        val backedByAFile = attached.filter { (_, file) -> file.isNotEmpty() }
+            .associate { it.getString("name") to it.getString("file") }
+        // Positive anchor first: a filter over an empty list satisfies any "none of them" assertion, and
+        // `main` is the database the application writes to.
+        assertTrue(attached.containsKey("main"), "Expected a main database; pragma_database_list reports $attached")
+        val backedByAFile = attached.filterValues { it.isNotEmpty() }
         assertEquals(
-            emptyList<Pair<String, String>>(),
+            emptyMap<String, String>(),
             backedByAFile,
             "Expected no database on this connection to have a file behind it; pragma_database_list reports $attached",
         )

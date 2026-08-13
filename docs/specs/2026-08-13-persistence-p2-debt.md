@@ -86,12 +86,22 @@ before the change it protects (`test(persistence): pin Ebean's flat transaction 
 
 ### 2.3 The three indexes
 
-Measured and recorded by the T3 review of the 2026-08-12 triage, restated here as the input this
-lot acts on. SQLite does not use a partial index when the value its predicate tests arrives as a
-bound parameter, and Ebean binds: `claimNext` plans as `SCAN tasks` plus
-`USE TEMP B-TREE FOR ORDER BY`, and the dedup lookup as `SCAN`. So of the three partial indexes
-created by `1.3.sql:23,25,27`, two cost writes and buy nothing, and the third enforces its
-uniqueness but does not speed its own lookup.
+SQLite does not use a partial index when the value its predicate tests arrives as a bound parameter,
+and Ebean binds. So of the three partial indexes created by `1.3.sql:23,25,27`, two cost writes and
+buy nothing, and the third enforces its uniqueness but does not speed its own lookup.
+
+Re-measured by this lot against the replayed migration history, which corrects the numbers the T3
+review of the 2026-08-12 triage recorded and this section first repeated:
+
+| Query | Recorded by the triage | Measured here |
+|---|---|---|
+| `claimNext` | `SCAN tasks` plus `USE TEMP B-TREE FOR ORDER BY` | `SEARCH t0 USING INDEX ix_tasks_state_terminal_state_at (state=?)` plus `USE TEMP B-TREE FOR ORDER BY` |
+| `reapExpired` | not measured | `SEARCH tasks USING INDEX ix_tasks_state_terminal_state_at (state=?)` |
+
+The claim query was never a full scan: it already used the composite index `1.15` added, whose
+`state` prefix it shares, so what it paid was the temporary sort and not a scan. And `reapExpired`
+plans through that same index rather than through `ix_tasks_lease`, which is what makes dropping
+that index free rather than a trade. Both plans are pasted in the commit that changes them.
 
 ## 3. What is done
 

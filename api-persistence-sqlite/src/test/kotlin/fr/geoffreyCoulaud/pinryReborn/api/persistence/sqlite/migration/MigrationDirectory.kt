@@ -15,7 +15,7 @@ internal object MigrationDirectory {
     private val indexCreation =
         Regex("""create\s+(?:unique\s+)?index\s+(\w+)[^;]*""", RegexOption.IGNORE_CASE)
 
-    // SQLite's form (sqlite.org/lang_dropindex.html); no migration drops an index yet, so nothing pins it.
+    // SQLite's form (sqlite.org/lang_dropindex.html); exercised by `1.19.sql`, which drops two indexes.
     private val indexRemoval =
         Regex("""drop\s+index\s+(?:if\s+exists\s+)?(\w+)""", RegexOption.IGNORE_CASE)
 
