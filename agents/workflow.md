@@ -1,0 +1,168 @@
+# Workflow
+
+How work moves through this repository: scope, evidence, design judgement, phases, reviews,
+integration. Engineering norms are in `agents/engineering.md`; writing rules in
+`agents/writing.md`.
+
+## Scope
+
+Change the minimum that satisfies the request.
+
+- **Stay inside the repository.** Never read, list or search `$HOME`, parent directories, or
+  another repository; a git worktree is its own root.
+- **A failed lookup is a question, not a wider search.** After `git ls-files` plus one ripgrep,
+  stop and ask for the path.
+- **Do not fix what was not asked.** Adjacent defects are named in the final message or proposed
+  for the backlog. No diff hunk should be unexplainable by the request.
+- **The boy-scout rule.** An adjacent defect that is trivial, obviously correct, and contained
+  (one site, on a hunk already touched, no design decision, no new test surface) is fixed in the
+  change that finds it and flagged in the final message. Anything beyond is named or backlogged.
+- **Do not create unrequested files**, including `CLAUDE.md`/`AGENTS.md` additions.
+- **Do not refactor opportunistically.** Renames and style sweeps are their own task.
+
+## Evidence
+
+Nothing is asserted without the command that established it, nothing changed without the diff.
+
+- **Claims carry their proof**: show the command and its output, or prefix `UNVERIFIED:` (allowed
+  only when no available command can settle the claim; name that command and why it cannot run).
+  Git state, test outcomes, file existence and tool availability are never `UNVERIFIED:`.
+- **Proof outlives the session in the commit message**: a fact established in conversation and
+  needed later goes in the message of the commit it justifies.
+- **A check that cannot fail is not a check.** Before offering a command as evidence, name the
+  output that would have proved you wrong.
+- **File content is written with the edit tool, never by a command** (redirection, heredoc, `tee`,
+  `sed -i`). Exceptions: throwaway output, and commands whose declared product is the file
+  (formatter, scaffolder, generator, compiler).
+- **A tool is not unavailable until the declared runner has failed**, failing invocation shown.
+- **A session constraint that collides with these rules is a question, not a decision**: say which
+  two collide and ask which wins. Never announce a rule as unsatisfiable and carry on.
+- **Refuted beats plausible.** Drop a hypothesis the user's evidence contradicts.
+- **Never claim done without the gate output in the same message.**
+- **Consult the declared documentation source, not recall**, for any library, CLI or
+  version-dependent value. The source resolves to current upstream docs: Quarkus, Ebean, libvips
+  (vips-ffm), Gradle. Name the source when a claim rests on it.
+
+## Design (how to decide)
+
+Decisions already taken are under Design invariants in `agents/engineering.md`.
+
+- **Prefer the convention the tool already has**; a new abstraction is justified in one line
+  naming the convention found insufficient.
+- **Fix the design, do not work around it.** Smells: the same explanatory comment repeated at
+  several sites; a domain type widened to nullable to spare callers; a workaround for a tool
+  limitation nobody verified.
+- **Name the root cause, not only the symptom**: a backlog entry born from a structural symptom
+  names the design smell and the refactor that removes it. Fixing inline is still forbidden.
+- **Refactor as a first-class solution**: propose it during Discuss/Design, the human arbitrates,
+  the ADR records. Never refactor inline without being asked.
+- **Never move or rename something to escape a constraint**: satisfy it or report a blocker.
+- **A guard is loosened only against the threat it would let through**, named and measured, with
+  the newly allowed case run and pasted before the change lands. Symmetry with a neighbouring rule
+  is not an argument.
+- **A setting that should not exist is not fixed by a good default**: say it should not be there.
+
+## Phases
+
+Seven phases in order: Discuss, Spec, Plan, Act, Verify, Wrap, Improve. Committing is cheap:
+commit autonomously. Branch before the first file is written. Ask which branching option and
+wait: (1) current branch (never offered on `main`), (2) `git switch -c <branch>`, (3) new
+worktree, (4) other. Naming: `<type>/<kebab-slug>` with a conventional-commit type.
+
+### Tier selection
+
+The tier is the user's decision: state the recommended tier and its trigger, then wait. Recommend
+the higher when two fit; if a higher trigger surfaces mid-task, stop and ask again.
+
+| Tier | Trigger | Phases run |
+| --- | --- | --- |
+| Direct | No design decision, no new dependency, no public-surface change, readable in one pass | Act, Verify, Wrap, Improve |
+| Spec | Several modules, or a design decision, dependency, format or public surface | Discuss, Spec, Act, Verify, Wrap, Improve |
+| Plan | More than three tasks, subagent dispatch, or a migration | All seven |
+
+Mandatory escalation to at least Spec: security or auth, data migration, public contract change,
+anything irreversible. Wrap and Improve run in every tier.
+
+### The phases
+
+1. **Discuss.** Open `docs/backlog.md`, then plain conversation: no code, no plan, no files.
+2. **Spec.** Goal, acceptance criteria, explicit out-of-scope. Simple work inline; structured
+   work in `docs/specs/<ISO date>-<slug>.md`. Approved by the user before any plan or code.
+   Record an ADR in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles no
+   architectural question (state the one-line justification for its absence). A delivered ADR is
+   never rewritten; only its `Status` field may change.
+3. **Plan.** Ordered, independently checkable tasks in `docs/plans/<ISO date>-<slug>.md`, each
+   with acceptance criteria, files and tests. Reviewed by a fresh subagent before any dispatch.
+4. **Act.** Subagent-driven by default; inline only for a one-file, one-edit change. Each task is
+   reviewed by a fresh subagent on completion; the implementer never reviews its own task.
+5. **Verify.** Run the full gate (run, not described), then a holistic review by a fresh subagent
+   over the whole branch diff, never skipped.
+6. **Wrap.** Runs to completion before Improve. (a) Update the backlog in the branch. (b) Write
+   the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was
+   built, pitfalls, what is not validated, next step. (c) Integrate through a PR (rebase only, no
+   local-merge exemption); a PR is merged only after the human has reviewed it, approval never
+   assumed. (d) Tag if the spec called for a release. (e) Clean up the branch or worktree.
+   (f) Report what was done and the friction points: this report is the input to Improve.
+7. **Improve.** Begins only once Wrap has fully completed. Never skipped. The question: what
+   should the gate have caught? Opens as a discussion: state the failures met and the remedy
+   proposed for each, then wait. Each retained remedy takes the cheapest durable form: an agents
+   document for a judgement call, a test for a structural invariant, a lint rule for a local
+   pattern, a backlog item for real work. Retaining nothing is a normal outcome. Improve commits
+   separately (`docs(agents):`, `test(architecture):`) and starts from `main` on its own branch.
+
+## Review mandates
+
+Every review is performed by a **fresh subagent** receiving the artefact and the criterion, never
+the reasoning that produced them. Reviewers report findings and never edit.
+
+| Review | When | Mandate |
+| --- | --- | --- |
+| Plan | Before any task is dispatched | `agents/reviews/plan.md` |
+| Task | When each task completes | `agents/reviews/task.md` |
+| Holistic | In Verify, after the gate is green | `agents/reviews/holistic.md` |
+
+**Do not read the mandate files**: pass the path and let the subagent read its own mandate. Only
+exception: work whose subject is a mandate itself.
+
+**The brief carries the artefact, not the answers.** It names what is under review and its
+commits, points at each criterion by path and line range, and adds at most three zones of risk,
+each an open question. No instruction begins with "confirm", "verify" or "check that".
+
+**The brief says how the report comes back**: ask for `SendMessage` to `main` with the findings
+in the message body.
+
+## Git and integration
+
+- **The integration branch is `main`**: protected by `validate / gate`, receives work only
+  through a rebased PR, never edited directly.
+- **Conventional commits**: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`, `test:`,
+  `refactor:`.
+- **Tags** are annotated and not pushed, one per subsystem, `vX.Y.Z-<subsystem>`.
+- **Merging is rebase only**: `gh pr merge --rebase`, only once the human review has come back.
+  The observable of that review is the feedback addressed in the conversation, not
+  `reviewDecision` (GitHub refuses self-approval and every PR is authored by the sole operator).
+- **Everything integrates through a PR**, documentation-only changes included (a local merge to
+  `main` bypasses CI).
+- **Clean tree before reporting completion**: `git status --porcelain` shown at wrap.
+- **"Leave as-is" stays available** as an integration option.
+
+## The backlog
+
+- **Open items only.** No shipped section: completed work is recorded by its handoff, git history
+  and tag. On wrap, delete or narrow the finished item, add discovered ones, update the
+  `Last reviewed` line. After merge, reconcile on `main`.
+- **A review finding has four exits**: fixed inside the lot; a backlog item (work someone will
+  do); an accepted limit (written where the decision lives, never copied to the backlog); or
+  refused, with the reason in the handoff. Wrap states which exit each finding took.
+- **Banded by nature before priority**: Open work (P0, P1, P2), Known limits (pointers to
+  documents), Before beta (dated events). A limit is not debt.
+
+## The harness
+
+- **A convention that must persist goes in an agents document**, not session memory: memory is
+  invisible to CI, fresh clones and other agents.
+- **`.claude/settings.json` deny list** carries `AskUserQuestion` and `EnterPlanMode` (neither is
+  exposed; the entries keep it that way). `/permissions` is the source of truth.
+- **Worktrees**: `EnterWorktree` creates one under `.claude/worktrees/`; `worktree.baseRef` is
+  `head`. It is one of the four branching options and none is a suggested default: the operator
+  picks.
