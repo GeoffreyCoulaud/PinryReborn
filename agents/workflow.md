@@ -97,11 +97,15 @@ anything irreversible. Wrap and Improve run in every tier.
 1. **Discuss.** Open `docs/backlog.md`, then plain conversation: no code, no plan, no files.
 2. **Spec.** Goal, acceptance criteria, explicit out-of-scope. Simple work inline; structured
    work in `docs/specs/<ISO date>-<slug>.md`. Approved by the user before any plan or code.
+   **A criterion names the observable, never the instrument.**
    Record an ADR in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles no
    architectural question (state the one-line justification for its absence). A delivered ADR is
    never rewritten; only its `Status` field may change.
 3. **Plan.** Ordered, independently checkable tasks in `docs/plans/<ISO date>-<slug>.md`, each
    with acceptance criteria, files and tests. Reviewed by a fresh subagent before any dispatch.
+   **A task owns the tests that pin the behaviour it delivers.** Collecting them into a later
+   "write the tests" task makes them arrive green, with no red they could have been written from,
+   and mutation after the fact is what is left to show they hold.
 4. **Act.** Subagent-driven by default; inline only for a one-file, one-edit change. Each task is
    reviewed by a fresh subagent on completion; the implementer never reviews its own task.
 5. **Verify.** Run the full gate (run, not described), then a holistic review by a fresh subagent
