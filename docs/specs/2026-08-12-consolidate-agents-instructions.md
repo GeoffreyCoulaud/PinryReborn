@@ -172,10 +172,21 @@ exit code as the verdict. `checkEvidenceGuard` hangs it off `gate` beside `check
 gate reaches a file Kover cannot see, and it needs no new dependency since `python3` is already
 required per clone.
 
-Its red is not simulated. Reverting the allowance is what produced it: three cases in the allowed
-table failed at once when the behaviour went back, which is the table catching a real change rather
-than a mutation staged to prove a point. And a Gradle `Exec` fails the build on a non-zero exit,
-measured, so a red test is a red gate.
+Its red was real and its paste is wrong, which is recorded here because a pushed commit message
+cannot be rewritten. `f1395d7` quotes three failures in the allowed table; they come from an
+intermediate state of the file, never committed, in which those cases were still declared allowed.
+The file it delivers puts them in the blocked table, and one of the three commands quoted is in
+neither. Replayed against the guard as it stood before the revert, the delivered file fails three
+cases in `test_blocked_cases_are_refused` instead. What the paste gets right is that the red came
+from the revert and not from a mutation staged to prove a point; what it gets wrong is which table
+moved, and it omits the command that produced the output. Found by the task review of that commit.
+`db13d94` and `1573aa8` are the shape that was owed: the failing cases committed alone, with the
+command and its output.
+
+A Gradle `Exec` does fail the build on a non-zero exit, measured, so a red test is a red gate. **The
+gate is not the whole story**: `validate.yml` enumerates the gate's parts rather than calling it, so
+`checkEvidenceGuard` had to be added there too. Until it was, the tests ran on no pull request and
+the protected check could not see them.
 
 **Then the four pre-existing holes, on the operator's call, in red-green.** The task review of the
 revert had measured them and they were on the backlog; the cases went in first and failed, six at
@@ -252,8 +263,9 @@ Each one is a command whose failure is defined.
    history and stays, the way any decision keeps its record.
 4. **The hook still guards what it guarded.** Two invocations, output pasted in the commit message:
    a redirection writing into the working tree still exits 2, and an `Edit` on `AGENTS.md`, which
-   exited 2 before this lot, now exits 0. The hook is Python under `.claude/`, outside the gate
-   perimeter, so no automated test covers it and this manual pair is the whole evidence.
+   exited 2 before this lot, now exits 0. Written when the hook had no test; it has one since
+   (section 7), and the manual pair remains the only evidence for the Edit and Write path, which the
+   tables reach only through a payload naming those tools.
 5. **The gate is green.** `./gradlew gate`, which runs `checkNoLongDashes` over every tracked file.
 
 ## Out of scope

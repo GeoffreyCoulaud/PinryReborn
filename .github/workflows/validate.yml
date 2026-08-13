@@ -31,6 +31,8 @@ jobs:
         # CI reproduces the gate's parts rather than calling `gate`, so a check added there is not
         # in CI until it is added here too.
         run: ./gradlew checkNoLongDashes
+      - name: Evidence guard
+        run: ./gradlew checkEvidenceGuard
 
   test:
     runs-on: ubuntu-latest

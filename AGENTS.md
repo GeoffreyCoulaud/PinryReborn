@@ -73,9 +73,11 @@ graph and by `ArchitectureKonsistTest`, not by this table.
 - **THE GATE**: `./gradlew gate` (detekt with type resolution, all tests, the 100% branch coverage
   bound, `checkNoLongDashes` over every tracked file, and `checkEvidenceGuard`, which runs the hook's
   own tests because Kover cannot see a Python file under `.claude/`). The `gate` task in the root `build.gradle.kts`
-  aggregates `check` and `koverVerify` across every module, so it is the single knob: grow the gate by
-  adding `dependsOn` there, not by changing what each caller runs. Measured green on 2026-07-23. **It
-  is not everything CI runs**: `validate.yml` also builds the multi-arch container image and checks
+  aggregates `check` and `koverVerify` across every module, so it is the single knob **locally**: grow
+  the gate by adding `dependsOn` there. **CI is the second place**, and it is not a caller of `gate`:
+  `validate.yml` enumerates the gate's parts, so a check added to `gate` alone runs on no pull
+  request and the protected `validate / gate` never sees it. Measured green on 2026-07-23. **It
+  is not everything CI runs either**: `validate.yml` also builds the multi-arch container image and checks
   that `docs/openapi.json` is in sync, both behind the same `validate / gate` check, and no local
   command covers either. `.githooks/pre-push` runs `./gradlew gate`, so a push runs the gate locally
   once `core.hooksPath` is set.
