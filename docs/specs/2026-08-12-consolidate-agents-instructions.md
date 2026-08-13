@@ -144,30 +144,38 @@ the split had made necessary, or answers a review.
 Listed here on 2026-08-12: the first draft of this document said only titles and section 4 changed,
 which its own diff contradicted, and the holistic review said so.
 
-### 7. Two guard faults fixed here, deliberately without a safety net
+### 7. The guard: one fault fixed, one "fault" that was not, and a test
 
-Both were found by hand while removing the generic-file rule, both predate it, and the first
-disposition was a backlog item, because the file has no test and the perimeter that would give it one
-is decided by location. The operator read that item on the pull request and asked for the fixes now
-rather than later, the alternative having been put and declined: a Gradle task running
-`python3 -m unittest`, hung off `gate` the way `checkNoLongDashes` is. So they land in this lot, and
-the risk is stated rather than hidden, a change to a file no test reaches.
+Both were found by hand while removing the generic-file rule and both predate it. The first
+disposition was a backlog item, because the file had no test; the operator read that item on the
+pull request, asked for the work now, and then asked for a test file beside the hook: two parametric
+tables, nothing more.
 
-- `main()` answered a traceback and exit 1 to a valid JSON payload that was not an object, where its
-  own comment promises never to block on input it cannot read and its docstring defines only 0 and 2.
-  A non-object payload now leaves through the same door as unreadable input.
-- `check_inplace` blocked `sed`, `perl` and `ruby` in place on the command name alone, never calling
-  `is_disposable` although it received `cwd`, where `check_truncating` beside it does call it. It now
-  works out which files the editor would rewrite (not its flags, not the value a flag consumes, not
-  sed's script) and lets the call through only when every one of them is disposable. A token it
-  cannot classify counts as a target, so an unparsed command blocks rather than passes, and a command
-  with no target blocks as before.
+**Fixed, the crash.** `main()` answered a traceback and exit 1 to a valid JSON payload that was not
+an object, where its own comment promises never to block on input it cannot read and its docstring
+defines only 0 and 2. A non-object payload, a `tool_input` that is not an object, a `command` that is
+not a string and a `cwd` that is neither a string nor absent now all leave through that same door.
 
-What stands in for the missing test is the holistic reviewer's 59-payload corpus, replayed against
-the committed guard and the fixed one, plus eight cases aimed at the two fixes. Two corpus verdicts
-move and both are intended; four of the eight move and the four dangerous ones do not. The output is
-in the commit body. The absence of a safety net is not fixed by any of this and stays on the backlog
-as its own item.
+**Reverted, the in-place allowance.** The second change let `sed`, `perl` and `ruby` run in place
+when every operand was disposable. Its task review measured what that opened: an in-place editor's
+script carries its own write capability, so the operand says nothing about where the write lands.
+`sed -i -e '1w AGENTS.md' /tmp/x.md` was allowed by that version and rewrites a tracked file; a
+`perl -e` or `ruby -e` script is arbitrary code and says even less. The allowance is withdrawn. These
+editors are refused by command name, as before, and the reason now sits in the function's docstring,
+where the reader who wonders why `cwd` goes unused will meet it. The original complaint, that the
+check ignores `is_disposable` although it receives `cwd`, was a defect of the documentation and not
+of the behaviour: the code was right and said nothing about why.
+
+**The test**, `.claude/hooks/test_evidence_guard.py`: one table of commands the guard must allow, one
+of commands it must block, each case running the guard the way the harness does, on stdin, with the
+exit code as the verdict. `checkEvidenceGuard` hangs it off `gate` beside `checkNoLongDashes`, so the
+gate reaches a file Kover cannot see, and it needs no new dependency since `python3` is already
+required per clone.
+
+Its red is not simulated. Reverting the allowance is what produced it: three cases in the allowed
+table failed at once when the behaviour went back, which is the table catching a real change rather
+than a mutation staged to prove a point. And a Gradle `Exec` fails the build on a non-zero exit,
+measured, so a red test is a red gate.
 
 ## Target structure
 

@@ -71,7 +71,8 @@ graph and by `ArchitectureKonsistTest`, not by this table.
   generic-file rule was dropped it returns at once on the three edit tools, so what it still
   enforces is over Bash commands. Without `python3` it cannot run and enforces nothing, silently.
 - **THE GATE**: `./gradlew gate` (detekt with type resolution, all tests, the 100% branch coverage
-  bound, and `checkNoLongDashes` over every tracked file). The `gate` task in the root `build.gradle.kts`
+  bound, `checkNoLongDashes` over every tracked file, and `checkEvidenceGuard`, which runs the hook's
+  own tests because Kover cannot see a Python file under `.claude/`). The `gate` task in the root `build.gradle.kts`
   aggregates `check` and `koverVerify` across every module, so it is the single knob: grow the gate by
   adding `dependsOn` there, not by changing what each caller runs. Measured green on 2026-07-23. **It
   is not everything CI runs**: `validate.yml` also builds the multi-arch container image and checks

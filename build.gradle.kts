@@ -217,6 +217,16 @@ tasks.register("checkNoLongDashes") {
     }
 }
 
+// The evidence guard is Python under `.claude/`, so it belongs to no module and Kover cannot see it.
+// The gate reaches it by running its own tests, which need nothing but the `python3` the guard
+// already requires per clone.
+tasks.register<Exec>("checkEvidenceGuard") {
+    group = "verification"
+    description = "Runs the evidence guard's own tests."
+    workingDir = rootDir
+    commandLine("python3", "-m", "unittest", "discover", "--start-directory", ".claude/hooks")
+}
+
 // Single entry point for the local gate, mirroring CI's `validate / gate` check. A root-level
 // `dependsOn("check")` does NOT fan out to subprojects (the name resolves only inside the root
 // project, which has no such task), so the subproject tasks are referenced explicitly. `check`
@@ -227,6 +237,7 @@ tasks.register("gate") {
     group = "verification"
     description = "Full gate: detekt, all tests (check), the 100% branch coverage bound and the prose rules."
     dependsOn("checkNoLongDashes")
+    dependsOn("checkEvidenceGuard")
     dependsOn(subprojects.map { "${it.path}:check" })
     dependsOn(subprojects.filter { it.name != "api-application" }.map { "${it.path}:koverVerify" })
 }

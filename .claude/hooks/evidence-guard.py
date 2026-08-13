@@ -9,7 +9,9 @@ Two rules, applied by blocking the tool call before it runs:
 Writing is judged by its target, not by the command's name: a redirection is
 allowed only into an explicitly disposable location. That allow-list is what
 makes the guard survive `/add-dir`, worktrees and monorepos without knowing
-anything about the layout of the working tree.
+anything about the layout of the working tree. In-place editors are the
+exception and are judged by name, because their script can write somewhere the
+operand never mentions; see check_inplace.
 
 There is no shebang on purpose. The hook is invoked as `python3 <path>`, so a
 copy that drops the executable bit cannot silently disable it.
@@ -63,8 +65,6 @@ NESTED_SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 PATCH_READONLY = {"--check", "--stat", "--summary", "--numstat", "--dry-run"}
 
 INPLACE_EDITORS = {"sed", "perl", "ruby"}
-# Flags carrying the script, so neither they nor their value is a file to rewrite.
-INPLACE_SCRIPT_FLAGS = ("-e", "-f", "--expression", "--file")
 # Short perl and ruby flag clusters only, so that -Ilib is not read as in-place.
 INPLACE_CLUSTER = re.compile(r"\A-[pnealwsi]*i[pnealwsi]*\Z")
 INPLACE_LONG = re.compile(r"\A--in-place(=.*)?\Z")
@@ -196,53 +196,25 @@ def check_tee(tokens, commands, cwd):
     return None
 
 
-def inplace_targets(name: str, arguments: list[str]) -> list[str]:
-    """The files an in-place editor would rewrite.
-
-    Neither its flags, nor the value a flag consumes, nor sed's script when it
-    is given as the first operand rather than through -e. A token this cannot
-    classify is returned as a target, so an unparsed command blocks rather than
-    passes.
-    """
-    targets = []
-    script_pending = name == "sed"
-    skip_value = False
-    for argument in arguments:
-        if skip_value:
-            skip_value = False
-            continue
-        if argument.startswith("-"):
-            if argument in INPLACE_SCRIPT_FLAGS:
-                skip_value = True
-            if argument.startswith(INPLACE_SCRIPT_FLAGS):
-                script_pending = False
-            continue
-        if script_pending:
-            script_pending = False
-            continue
-        targets.append(argument)
-    return targets
-
-
 def check_inplace(tokens, commands, cwd):
+    """In-place editors are judged by the command, not by the target it names.
+
+    Unlike every other write this guard inspects, the operand is not where the
+    write necessarily lands: `sed -e '1w other'` writes to `other`, and a perl
+    or ruby `-e` script is arbitrary code. A disposable operand would therefore
+    buy nothing, so `cwd` goes unused here on purpose.
+    """
     for index, token in enumerate(tokens):
-        name = basename(token)
-        if index not in commands or name not in INPLACE_EDITORS:
+        if index not in commands or basename(token) not in INPLACE_EDITORS:
             continue
-        arguments = arguments_after(tokens, index)
-        in_place = any(
-            argument == "-i"
-            or argument.startswith("-i.")
-            or INPLACE_LONG.match(argument)
-            or (name != "sed" and INPLACE_CLUSTER.match(argument))
-            for argument in arguments
-        )
-        if not in_place:
-            continue
-        targets = inplace_targets(name, arguments)
-        if targets and all(is_disposable(target, cwd) for target in targets):
-            continue
-        return f"in-place edit by {name}"
+        for argument in arguments_after(tokens, index):
+            if (
+                argument == "-i"
+                or argument.startswith("-i.")
+                or INPLACE_LONG.match(argument)
+                or (basename(token) != "sed" and INPLACE_CLUSTER.match(argument))
+            ):
+                return f"in-place edit by {basename(token)}"
     return None
 
 
@@ -370,8 +342,13 @@ def main() -> int:
         return 0
     if payload.get("tool_name") != "Bash":
         return 0
-    command = payload.get("tool_input", {}).get("command", "")
-    verdict = evaluate(command, payload.get("cwd"))
+    tool_input = payload.get("tool_input")
+    command = tool_input.get("command") if isinstance(tool_input, dict) else None
+    cwd = payload.get("cwd")
+    # A member of the wrong type is input the guard cannot read, like the above.
+    if not isinstance(command, str) or not isinstance(cwd, (str, type(None))):
+        return 0
+    verdict = evaluate(command, cwd)
     if verdict is None:
         return 0
     reason, advice = verdict
