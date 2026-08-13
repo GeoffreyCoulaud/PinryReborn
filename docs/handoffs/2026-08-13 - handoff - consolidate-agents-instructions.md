@@ -63,11 +63,11 @@ section inside `AGENTS.md` would be loaded into every session and would destroy 
 
 ## Not validated against real conditions
 
-- **The hook has no automated test and cannot get one where it lives.** `.claude/` is outside the
-  gate perimeter by location, and the perimeter is decided by location on purpose. Every claim about
-  the guard in this lot rests on hand-run invocations, including the 59-payload differential. Nothing
-  will catch the next regression, and two fixes went into the file after that sentence was first
-  written, on the operator's call, still with no test behind them.
+- **The hook's test pins a table, which is not the same as covering the guard.** It has one now, and
+  the gate runs it, which is more than it had. What the table holds is two dozen commands chosen by
+  hand, and nothing measures what it leaves out: the task review of the guard fixes found four kinds
+  of write that get through, none of which the table would have caught. Coverage here is a judgement
+  about which commands matter, made by whoever writes the next case.
 - **Nobody has worked a real task through the merged file yet.** The reviews read it; no session has
   used it to build something. Whether one file of 820 lines is easier or harder to work from than
   four is untested, and the two pairs of near-homonymous sections (Design against Design invariants,
@@ -91,11 +91,16 @@ fires the guard on more tools than it inspects, deliberately, because narrowing 
 future edit-inspecting rule fail silently.
 
 The guard faults were filed to the backlog first and pulled back in at the operator's request, read
-on the pull request. The alternative was put and declined: give the file a safety net first, a Gradle
-task running `python3 -m unittest` hung off `gate`. They are therefore fixed without one, which is
-the most fragile thing this lot ships. What replaces the test is the holistic reviewer's 59-payload
-corpus replayed against both versions plus eight cases aimed at the fixes, and the backlog keeps the
-safety net itself as an open item.
+on the pull request, first without a safety net and then with one: a test file beside the hook, two
+parametric tables, hung off `gate` by `checkEvidenceGuard`.
+
+**One of those two fixes was wrong and is reverted.** Letting an in-place editor run when every
+operand is disposable looked symmetrical with the sibling rule; it is not, because the editor's
+script carries its own write capability. Its task review measured `sed -i -e '1w AGENTS.md' /tmp/x.md`
+being allowed while it rewrites a tracked file. The behaviour is back to refusing these editors by
+command name, and what the original complaint really found is now in the function's docstring: the
+code was right and said nothing about why, so `cwd` looked forgotten rather than deliberately unused.
+The same review found four pre-existing holes, which the backlog now carries.
 
 ## Suggested next step
 

@@ -106,18 +106,21 @@ them).
   applied in `db_migration` after the `.sql` is deleted. **This is a candidate cause for the
   `SQLITE_BUSY` that the 2026-08-12 triage closed as unreproduced.** Surfaced by the T6 review and
   confirmed independently by the T6 task review, 2026-08-12.
-- **Nothing exercises the evidence guard, and two faults reached it that way.**
-  `.claude/hooks/evidence-guard.py` is Python under `.claude/`, outside the coverage perimeter, so no
-  test reaches it and none can while the perimeter is decided by location. Two faults were found by
-  hand there on 2026-08-13 and fixed on the operator's call in the same lot, deliberately without a
-  safety net (`docs/specs/2026-08-12-consolidate-agents-instructions.md`, section 7): a valid JSON
-  payload that was not an object crashed the guard, and in-place editors were blocked on the command
-  name without ever asking whether the target was disposable. What stands is the reason both survived
-  so long, which no fix in that lot addressed: the file has no test and the next regression will
-  arrive the same way. The question to settle is how a Python file under `.claude/` gets a safety net
-  at all. A Gradle task running `python3 -m unittest`, hung off `gate` by `dependsOn` the way
-  `checkNoLongDashes` is, needs no new dependency: `python3` is already required per clone. New
-  2026-08-13.
+- **The evidence guard lets four kinds of write through, and its own tests now say where to start.**
+  All four are pre-existing, all four are measured, and none was caused or closed by the lot that
+  found them (`docs/specs/2026-08-12-consolidate-agents-instructions.md`, section 7); the file now has
+  a test table (`.claude/hooks/test_evidence_guard.py`) so each fix arrives with its case. First,
+  `is_disposable` prefix-tests an absolute path without normalising it, so `/tmp/..` walks back into
+  the working tree: `echo hi > /tmp/../<repo>/AGENTS.md` is allowed, and the relative branch of the
+  same function does call `normpath`, so the fix is to normalise before the prefix test rather than
+  after the join. It is the widest of the four, reaching redirection, `tee` and the truncating
+  commands at once. Second, in-place detection matches only `-i`, `-i.` and `--in-place` for sed,
+  because the cluster pattern is disabled there to spare `-Ilib`, so `sed -ni`, `sed -in` and
+  `sed -ibak` rewrite a tracked file unnoticed (verified against GNU sed 4.10). Third,
+  `xargs -I{} sed -i 's/a/b/' {}` is allowed, because the token after a wrapper is taken as the
+  command and `-I{}` claims that slot. Fourth, `check_truncating` does not skip a flag's value, so it
+  reads `truncate -s 0 file` as writing to `0`. New 2026-08-13, from the task review of the guard
+  fixes.
 
 ## Known limits
 
