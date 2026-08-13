@@ -75,6 +75,21 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
         assertEquals(0, queue.countByState(TaskState.PENDING))
     }
 
+    // Ebean's beginTransaction() carries REQUIRED semantics (io.ebean.Database:475), so a nested
+    // inTransaction joins the outer one instead of committing on its own. The two adapters route
+    // through this port rather than testing for an ambient transaction themselves.
+    @Test
+    fun `Given a write in a nested inTransaction, Then a rollback of the outer block discards it`() {
+        val pinId = randomUUID()
+        assertThrows(IllegalStateException::class.java) {
+            runner.inTransaction {
+                runner.inTransaction { queue.enqueue(newDownloadTask(pinId)) }
+                error("boom")
+            }
+        }
+        assertEquals(0, queue.countByState(TaskState.PENDING))
+    }
+
     @Test
     fun `Given a committed transaction, Then an image saved within it joins and is persisted`() {
         val pin = savedPin()
