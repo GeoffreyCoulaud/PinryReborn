@@ -142,19 +142,23 @@ class AuthAttemptLimitIntegrationTest : IntegrationTest() {
     private fun spelling(name: String, attempt: Int): String =
         if (attempt % 2 == 0) name else name.uppercase(Locale.ROOT)
 
-    private fun login(name: String, password: String = WRONG_PASSWORD): Response =
+    /** Every request this class sends carries the wrong secret: being refused is the point. */
+    private fun login(name: String): Response =
         given().contentType(JSON)
-            .body("""{"name":"$name","password":"$password"}""")
+            .body("""{"name":"$name","password":"$WRONG_PASSWORD"}""")
             .post("/api/v1/sessions")
 
-    private fun changePassword(auth: AuthenticatedUser, current: String = WRONG_PASSWORD): Response =
+    private fun changePassword(auth: AuthenticatedUser): Response =
         given().authenticatedAs(auth).contentType(JSON)
-            .body("""{"currentPassword":"$current","newPassword":"$NEW_PASSWORD"}""")
+            .body("""{"currentPassword":"$WRONG_PASSWORD","newPassword":"$NEW_PASSWORD"}""")
             .put("/api/v1/me/password")
 
-    private fun deleteAccount(auth: AuthenticatedUser, factor: String = WRONG_PASSWORD): Response =
+    private fun deleteAccount(auth: AuthenticatedUser): Response =
         given().authenticatedAs(auth)
-            .header("X-Reauthentication", "password " + Base64.getUrlEncoder().encodeToString(factor.toByteArray()))
+            .header(
+                "X-Reauthentication",
+                "password " + Base64.getUrlEncoder().encodeToString(WRONG_PASSWORD.toByteArray()),
+            )
             .delete("/api/v1/me")
 
     private companion object {
@@ -172,8 +176,8 @@ class AuthAttemptLimitIntegrationTest : IntegrationTest() {
         const val REAUTHENTICATION_FAILED = "REAUTHENTICATION_FAILED"
         const val TOO_MANY_ATTEMPTS = "TOO_MANY_AUTHENTICATION_ATTEMPTS"
 
-        /** Whole seconds, never below 1 while the block is in the future. */
-        const val WHOLE_SECONDS = "\\d+"
+        /** Whole seconds, never below 1 while the block is in the future: `\d+` would accept a 0. */
+        const val WHOLE_SECONDS = "[1-9]\\d*"
 
         const val BLOCK_LIFT_TIMEOUT_SECONDS = 10L
         const val POLL_INTERVAL_MILLIS = 50L
