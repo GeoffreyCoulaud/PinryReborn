@@ -55,21 +55,28 @@ The general form: **a module's `main` resources never carry configuration writte
 tests.** A test-only value in a published resource is not a value in the wrong place, it is a value
 in every consumer of the artefact.
 
-**Each declaration must be complete, because the default `Database` has two creation paths.** The
-CDI producer builds one; avaje-config builds another when a query bean reaches `DB.getDefault()`
-first (a query bean constructed with no argument runs on the default database, and the worker's
-poller does that during boot). Whichever runs first wins, and the loser is discarded in silence
-("Using existing database with name:db"). The two paths read different sources: the producer
-configures the pool in code, avaje-config reads only the properties file. So a property the producer
-sets in code and the properties file omits is set or unset depending on a race.
+**The properties file is the only source, because two things build the default `Database`.** The CDI
+producer builds one; avaje-config builds another when a query bean reaches `DB.getDefault()` first (a
+query bean constructed with no argument runs on the default database, and the worker's startup
+observer does that before anything asks the producer). Whichever runs first wins, and the loser is
+discarded in silence ("Using existing database with name:db").
 
-Deleting `ebean.properties` surfaced this immediately: the suite moved to `:memory:` and the boot
-failed with `no such table: tasks`. Each SQLite connection to `:memory:` gets its own private
-database, so the connection that ran the migrations was not the connection the poller queried. The
-producer pins the pool to one connection; the test properties did not. They do now, for the reason
-`api-persistence-sqlite/src/test/resources/application-test.properties` already recorded for its own
-suite. The shared file had been hiding this: every connection saw the same schema because they all
-opened the same file.
+The first answer was to configure both identically, the producer in code and the file in properties.
+That leaves a race whose harmlessness depends on two declarations being kept in agreement by hand,
+which is the arrangement that produced this defect in the first place. So the producer stops
+configuring anything and loads the same properties instead:
+
+```kotlin
+Database.builder().defaultDatabase(true).loadFromProperties().build()
+```
+
+Now the two paths read one source and the winner does not matter. `sqliteDataSourceConfig` and its
+five unit tests go with it: they pinned a configuration that no longer exists in code.
+
+Deleting `ebean.properties` is what surfaced all of this: the suite moved to `:memory:` and the boot
+failed with `no such table: tasks`, because each SQLite connection to `:memory:` gets its own private
+database and the connection that ran the migrations was not the one the poller queried. The shared
+file had hidden it, every connection opening the same schema.
 
 ## Decision 2: `TransactionRunner.inTransaction` is the only seam, and the library owns the semantics
 

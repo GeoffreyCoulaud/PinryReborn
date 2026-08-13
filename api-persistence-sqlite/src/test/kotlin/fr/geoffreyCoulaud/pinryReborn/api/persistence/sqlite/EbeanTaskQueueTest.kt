@@ -96,10 +96,8 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     /**
-     * The envelope, not the ambient-transaction check: `enqueue` must hold its dedup check and its insert in
-     * one transaction even when nothing above it opened one, or the pair races as two autocommit statements
-     * (`agents/engineering.md`, design invariant "One connection", which names this method). A refactor that
-     * drops the envelope along with the redundant check leaves every other test green.
+     * Without one transaction around the dedup check and the insert, the pair races as two autocommit
+     * statements (`agents/engineering.md`, "One connection"). No other test in this suite notices.
      */
     @Test
     fun `Given no ambient transaction, Then enqueue still inserts inside one`() {

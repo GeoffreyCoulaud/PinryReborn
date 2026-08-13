@@ -11,11 +11,6 @@ interface TransactionControl {
     /** REQUIRED semantics: joins the thread's transaction when there is one (`io.ebean.Database:475`). */
     fun beginTransaction(): Transaction
 
-    /**
-     * No production caller: the adapters state their transaction boundary with `inTransaction { }`
-     * rather than testing for one. Kept as the observation point for the test that pins
-     * `EbeanTaskQueue.enqueue`'s envelope, which no other assertion can see
-     * (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`).
-     */
+    /** No production caller: it is the observation point for the test pinning `enqueue`'s envelope. */
     fun currentTransaction(): Transaction?
 }

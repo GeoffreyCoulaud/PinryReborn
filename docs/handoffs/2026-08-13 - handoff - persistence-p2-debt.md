@@ -37,12 +37,11 @@ and the three documents were corrected before the code changed.
 
 ## Pitfalls, in the order someone will meet them
 
-- **The default `Database` has two creation paths and the race decides which object serves the
-  application.** `EbeanDatabaseProducer` configures one in code; avaje-config builds another from a
-  properties file. The worker's `StartupEvent` observer reaches a query bean, and so
-  `DB.getDefault()`, before anything asks the producer, so avaje-config wins and the producer's
-  configuration is discarded. Every properties file must therefore declare the full set, and
-  `ProductionDatasourceDeclarationTest` pins the production one. This is the lot's one open item.
+- **The default `Database` still has two creation paths, but they now read one source.**
+  `EbeanDatabaseProducer` calls `loadFromProperties()` rather than configuring anything, so whether
+  it or avaje-config wins the race no longer changes what is built. The properties file is therefore
+  the only place datasource configuration exists, and `ProductionDatasourceDeclarationTest` pins the
+  production one, which no integration test can read.
 - **`jdbc:sqlite::memory:` needs the pool pinned to one connection.** Each connection otherwise gets
   its own private database, and the connection that ran the migrations is not the one a query lands
   on. It surfaces as `no such table: tasks` during boot, which reads like a migration failure and is
@@ -72,9 +71,19 @@ and the three documents were corrected before the code changed.
   planner picks, which is what was in question; no timing was taken, and none is meaningful at this
   size.
 
+## The operator's review
+
+Two findings on PR #61, both applied in `refactor(persistence): let the properties own the datasource`:
+
+- A backlog item the lot proposed for the two datasource configurations was refused: "on n'ajoute pas
+  du backlog pour ça, on le traite". The producer now loads the properties instead of duplicating
+  them, which removes the defect rather than documenting it.
+- The lot introduced long comments. Eleven were cut to the sentence that carries the information plus
+  its pointer, the detail already living in this handoff and in ADR 0012.
+
 ## Next step
 
-The PR, then the operator's review. After it merges, `Improve` runs from `main` on its own branch,
-carrying one retained remedy already identified: the rule that a partial index whose predicate tests
-a bound parameter is not used by SQLite belongs in `agents/engineering.md`, and did not ship here
-because this lot does not declare that rule as its subject.
+Merge waits on the operator. After it, `Improve` runs from `main` on its own branch, carrying one
+retained remedy already identified: the rule that a partial index whose predicate tests a bound
+parameter is not used by SQLite belongs in `agents/engineering.md`, and did not ship here because
+this lot does not declare that rule as its subject.

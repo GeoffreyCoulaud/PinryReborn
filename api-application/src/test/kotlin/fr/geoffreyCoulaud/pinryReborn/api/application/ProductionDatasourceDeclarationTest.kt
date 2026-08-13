@@ -5,19 +5,9 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * The production `application.properties` must declare every datasource key the runtime depends on, not only
- * the ones the CDI producer also sets in code.
- *
- * The default `Database` has two creation paths, `EbeanDatabaseProducer` and avaje-config reading that file,
- * and whichever runs first wins. The worker's startup observer reaches a query bean, and so `DB.getDefault()`,
- * before the producer is asked for anything, so avaje-config is the path that wins and it reads only the file.
- * A key present in the producer and absent from the file therefore fails silently in production: migrations
- * that never run against a stale schema, or a pool above one connection on a single-writer database.
- *
- * No integration test can catch this, since the test profile has its own properties file. Deleting
- * `ebean.properties` is what surfaced it: that file used to supply these keys to the avaje-config path, from
- * `main` resources, for every downstream module at once
- * (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`, decision 1).
+ * Nothing else holds these keys: the producer loads them from this file, and no integration test can read
+ * production's copy of it (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`).
+ * A missing one fails silently: migrations that never run, or a pool above one connection.
  */
 class ProductionDatasourceDeclarationTest {
     private val requiredKeys =
@@ -26,6 +16,7 @@ class ProductionDatasourceDeclarationTest {
             "datasource.db.maxConnections" to "1",
             "ebean.migration.run" to "true",
             "ebean.migration.path" to "dbmigration",
+            "ebean.packages" to "fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models",
         )
 
     @Test

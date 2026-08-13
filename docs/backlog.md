@@ -4,11 +4,13 @@
 in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
 Last reviewed: 2026-08-13 (the persistence P2 lot,
-`docs/specs/2026-08-13-persistence-p2-debt.md`. Closed three items: the integration suite running on a file,
-the duplicated ambient-transaction check, and the three partial indexes on `tasks`. Its two reviews filed
-three CRITICAL findings; all three were fixed inside the lot, one of them a regression the lot itself had
-introduced, and the holistic review's remaining question became the one new item below. The `SQLITE_BUSY`
-this file listed as a candidate consequence is not settled: the lot removed a candidate cause, nothing more.
+`docs/specs/2026-08-13-persistence-p2-debt.md`. Closed three items and opened none: the integration suite
+running on a file, the duplicated ambient-transaction check, and the three partial indexes on `tasks`. Its two
+reviews filed three CRITICAL findings, all fixed inside the lot, one of them a regression the lot itself had
+introduced. A fourth defect, two datasource configurations that had to be kept in agreement by hand, was
+proposed here and refused by the operator on the PR: it was treated instead, the producer now loading the same
+properties as avaje-config. The `SQLITE_BUSY` this file listed as a candidate consequence is not settled: the
+lot removed a candidate cause, nothing more.
 Previous entry: the agent-instruction consolidation,
 `docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
 merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
@@ -83,19 +85,6 @@ them).
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27, kept as its own session by the 2026-08-12 triage.
-- **Which creation path builds the default `Database` is decided by a race, and only its loser is
-  configured in code.** `EbeanDatabaseProducer` sets the pool bounds, the migration run and the entity
-  packages programmatically; avaje-config sets whatever the properties file names. Whichever runs first
-  wins, silently ("Using existing database with name:db"), and the winner is avaje-config, because
-  `TaskWorkerLifecycle`'s `StartupEvent` observer reaches a query bean, and so `DB.getDefault()`, before
-  anything asks the producer. The 2026-08-13 lot made each properties file declare the full set and
-  pinned the production one with `ProductionDatasourceDeclarationTest`, so the race no longer decides
-  behaviour, but it still decides which object serves the application. Two ways out to weigh: make the
-  producer win (an eager `@Startup` observer ordered before the worker's, or the worker resolving the
-  `Database` before its first query bean), or drop the producer and let avaje-config own the
-  configuration outright. Today's answer, two paths that must agree by hand, is a standing invitation to
-  a fourth key going missing. Surfaced by the holistic review of the 2026-08-13 persistence lot, whose
-  ADR is `docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`.
 
 ## Known limits
 

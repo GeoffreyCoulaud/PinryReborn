@@ -1,7 +1,5 @@
--- Both dropped indexes were partial (`1.3.sql:23,25`) and SQLite skips a partial index when the value its
--- predicate tests is a bound parameter, which is how Ebean sends it, so neither served its query.
--- ix_tasks_lease gets no replacement: reapExpired already plans through ix_tasks_state_terminal_state_at,
--- and RUNNING rows are bounded by tasks.worker_count.
+-- Both were partial (`1.3.sql:23,25`), so SQLite skipped them: Ebean binds the state they test.
+-- ix_tasks_lease gets no replacement, reapExpired already planning through ix_tasks_state_terminal_state_at.
 -- drop dependencies
 drop index if exists ix_tasks_claim;
 drop index if exists ix_tasks_lease;

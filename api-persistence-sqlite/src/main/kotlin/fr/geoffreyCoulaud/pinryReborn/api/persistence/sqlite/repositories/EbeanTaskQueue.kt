@@ -25,11 +25,9 @@ import java.util.UUID.randomUUID
  * of loading, mutating and saving the entity. This avoids racing with a concurrent claim/settle
  * on the same row.
  *
- * [enqueue]'s dedup check-then-insert and [claimNext]'s select-then-update are each wrapped in a
- * single [TransactionRunner.inTransaction] block, so on the single-connection SQLite datasource the
- * whole read+write pair serializes atomically instead of racing across two separate auto-commit
- * statements. The block joins an ambient transaction when the caller already opened one, which is
- * Ebean's REQUIRED semantics and not a decision this class makes.
+ * [enqueue]'s dedup check-then-insert and [claimNext]'s select-then-update are each wrapped in one
+ * [TransactionRunner.inTransaction] block, so the pair serializes instead of racing across two
+ * auto-commit statements. A caller's transaction is joined, which is Ebean's REQUIRED semantics.
  */
 @ApplicationScoped
 // TaskQueueInterface itself has exactly 11 methods (the port's minimal surface); a full,
