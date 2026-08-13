@@ -62,11 +62,12 @@ password guess, and the refusal is served before the bcrypt call rather than aft
 - **D2. The login key is the submitted name, counted whether or not the user exists.** Counting only
   existing users would turn the 429 into the account-enumeration oracle that
   `UserAuthenticator.kt:26` pays a dummy bcrypt hash to avoid.
-- **D3. The login key is lower-cased with `Locale.ROOT`.** `UserRepository.findUserByName` matches
-  with `ieq` and the unique index is `collate nocase` (`UserModel.kt:16`), so a case-sensitive
-  counter would be bypassed by alternating case. Kotlin's `lowercase` folds more than SQLite's
-  ASCII-only `nocase`, so two distinct accounts can share one counter; grouping wider is safe for
-  brute force and is recorded as a limit in ADR 0013.
+- **D3. The login key is lower-cased with `Locale.ROOT`**, and lower-cased before it is digested (D9),
+  so the folding never depends on the name's length. `UserRepository.findUserByName` matches with
+  `ieq` and the unique index is `collate nocase` (`UserModel.kt:16`), so a case-sensitive counter
+  would be bypassed by alternating case. Kotlin's `lowercase` folds more than SQLite's ASCII-only
+  `nocase`, so two distinct accounts can share one counter; grouping wider is safe for brute force
+  and is recorded as a limit in ADR 0013.
 - **D4. Authenticated re-verification is keyed by user id**, in a key space distinct from the login
   one. Re-authentication and password change share that counter: it is the same secret.
 - **D5. No hard lockout, an escalating backoff.** A blocked key becomes usable again on its own,
@@ -78,8 +79,12 @@ password guess, and the refusal is served before the bcrypt call rather than aft
   rendered by `BaseErrorMapper.kt:34`. Nothing new is needed in the presentation layer.
 - **D8. The new error is not a `UserAuthenticationError`.** `SessionController.kt:39` catches that
   type and rewrites it as a 401, which would swallow the 429.
-- **D9. The tracked-key count is bounded**, since the login key is attacker-supplied and unbounded
-  in cardinality.
+- **D9. The tracked keys are bounded in number and in width.** The login key is attacker-supplied and
+  unbounded in cardinality, so the map holds at most `maxTrackedKeys` entries. It is unbounded in
+  length too, and a count bounds no memory while an entry can hold a megabyte of submitted name, so
+  the key is a SHA-256 digest of the normalised name rather than the name (ADR 0013, decision 4). A
+  digest and not a prefix: truncation would let an attacker land in a victim's counter by choosing a
+  name that starts like theirs.
 - **D10. There is no off switch.** A property that disables brute-force limiting is a setting that
   should not exist (`agents/workflow.md`, Design). The limiter refuses to be built on any value at
   which it stops limiting: a threshold below 1, an empty backoff list, a backoff step of zero or
@@ -114,9 +119,11 @@ With the defaults (threshold 5, steps `PT30S,PT2M,PT10M`):
 `Retry-After` is whole seconds, rounded up: a fraction of a second still costs the caller a whole
 one, so the value is never below 1 while the block is in the future.
 
-**Bounding the map.** After an insertion takes the size past `maxTrackedKeys`, expired entries are
-purged; if the size is still past the bound, the entry with the earliest `expiresAt` is evicted.
-Both passes are linear and run only at the bound.
+**Bounding the map.** An entry is fixed width: `AuthenticationAttemptKey.forLogin` digests the
+normalised name, so the caller's length choice buys no memory (D9). After an insertion takes the size
+past `maxTrackedKeys`, expired entries are purged; if the size is still past the bound, the entry
+with the earliest `expiresAt` is evicted. Both passes are linear and run only at the bound, so
+nothing purges the map once the failures stop; the fixed width is what makes that acceptable.
 
 ## 5. Configuration
 
