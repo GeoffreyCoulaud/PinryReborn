@@ -143,6 +143,10 @@ The failure mode is never one endpoint being wrong: it is one endpoint being **d
 - **Transactions have an explicit boundary, owned by the use case.**
 - **Queries that grow with the data are measured, not assumed**: produce the timing before and
   after optimising.
+- **A partial index is not used when its predicate tests a bound parameter**, and Ebean binds. So a
+  `where state = 'PENDING'` index does nothing for `where state = ?`. Read the plan
+  (`EXPLAIN QUERY PLAN` on what `Query.getGeneratedSql()` returns) rather than the definition:
+  three such indexes shipped on `tasks` and served nothing (`docs/specs/2026-08-13-persistence-p2-debt.md`).
 
 ### Operations
 

@@ -27,6 +27,12 @@ Nothing is asserted without the command that established it, nothing changed wit
 - **Claims carry their proof**: show the command and its output, or prefix `UNVERIFIED:` (allowed
   only when no available command can settle the claim; name that command and why it cannot run).
   Git state, test outcomes, file existence and tool availability are never `UNVERIFIED:`.
+- **This binds a spec, an ADR and a plan exactly as it binds a message.** An approved document is
+  not a lighter regime: a statement about a library's behaviour written there without its
+  measurement is the most expensive kind of unverified claim, since the work is then planned around
+  it.
+- **A measurement an existing document carries is dated, not current**: re-run it before acting on
+  it, and correct the document when the numbers differ.
 - **Proof outlives the session in the commit message**: a fact established in conversation and
   needed later goes in the message of the commit it justifies.
 - **A check that cannot fail is not a check.** Before offering a command as evidence, name the
@@ -34,6 +40,9 @@ Nothing is asserted without the command that established it, nothing changed wit
 - **File content is written with the edit tool, never by a command** (redirection, heredoc, `tee`,
   `sed -i`). Exceptions: throwaway output, and commands whose declared product is the file
   (formatter, scaffolder, generator, compiler).
+- **A commit message carrying pasted output is written to a file and applied with `git commit -F`.**
+  The shell reads backticks and parentheses inside `-m`, so a pasted query plan or stack trace comes
+  out mangled: the proof lands in the history altered, which is worse than no proof at all.
 - **A tool is not unavailable until the declared runner has failed**, failing invocation shown.
 - **A session constraint that collides with these rules is a question, not a decision**: say which
   two collide and ask which wins. Never announce a rule as unsatisfiable and carry on.
