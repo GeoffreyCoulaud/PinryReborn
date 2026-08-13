@@ -27,11 +27,8 @@ class TaskQueueBootIntegrationTest : IntegrationTest() {
     @Inject lateinit var taskQueue: TaskQueueInterface
 
     /**
-     * The suite declares `jdbc:sqlite::memory:` and once ran on a file regardless
-     * (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`). Asserting the
-     * handle alone would not catch that: the avaje-config path resolves to `:memory:` too, so a
-     * second, file-backed instance serving the application would leave this green. Writing through
-     * an injected port and reading the row back through the asserted handle is what ties the two.
+     * The suite declares `:memory:` and once ran on a file regardless (`docs/adr/0012`). The write goes
+     * through an injected port so the asserted handle is provably the one the application uses.
      */
     @Test
     fun `Given a task written through the injected port, Then the handle that reads it is in memory`() {
@@ -51,8 +48,7 @@ class TaskQueueBootIntegrationTest : IntegrationTest() {
             .sqlQuery("select name, file from pragma_database_list")
             .findList()
             .associate { it.getString("name") to it.getString("file") }
-        // Positive anchor first: a filter over an empty list satisfies any "none of them" assertion, and
-        // `main` is the database the application writes to.
+        // Positive anchor first: a filter over an empty list satisfies any "none of them" assertion.
         assertTrue(attached.containsKey("main"), "Expected a main database; pragma_database_list reports $attached")
         val backedByAFile = attached.filterValues { it.isNotEmpty() }
         assertEquals(

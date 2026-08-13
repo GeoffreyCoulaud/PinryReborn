@@ -33,9 +33,8 @@ class SweepIndexesMigrationTest {
             RegexOption.IGNORE_CASE,
         )
 
-    // Unlike the two above, this one is pinned down to its column directions: SQLite serves the mixed
-    // ORDER BY of `claimNext` from an index only when the index carries those directions, and an
-    // all-ascending replacement would silently reintroduce the temp B-tree this index removed.
+    // Pinned down to the column directions, unlike the two above: an all-ascending replacement would
+    // silently reintroduce the temp B-tree that `claimNext`'s mixed ORDER BY needs this index to avoid.
     private val taskClaimIndex =
         Regex(
             """create\s+index\s+ix_tasks_claim\s+on\s+tasks\s*\(\s*state\s*,\s*priority\s+desc\s*,""" +
@@ -58,8 +57,7 @@ class SweepIndexesMigrationTest {
             taskClaimIndex.containsMatchIn(statement),
             "Expected ix_tasks_claim on tasks (state, priority desc, available_at asc, id asc); got:\n$statement",
         )
-        // A `where` clause would make it partial again, and a partial index is skipped when its predicate
-        // tests a bound parameter, which is how Ebean sends the state.
+        // A `where` clause would make it partial again, and so skipped for a bound state.
         assertFalse(
             statement.contains("where", ignoreCase = true),
             "Expected ix_tasks_claim to be non-partial; got:\n$statement",

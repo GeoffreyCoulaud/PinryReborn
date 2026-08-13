@@ -15,9 +15,7 @@ class EbeanImageRepository(
     private val persistor: Persistor,
     private val transactionRunner: TransactionRunner,
 ) : ImageRepositoryInterface {
-    // The delete and the save are one unit: a caller's ambient transaction is joined rather than
-    // nested (Ebean's REQUIRED semantics), so this commits with the caller's other writes when there
-    // is one, and on its own when there is not.
+    // The delete and the save are one unit; a caller's transaction is joined, not nested.
     override fun save(image: Image): Image = transactionRunner.inTransaction { saveWithin(image) }
 
     private fun saveWithin(image: Image): Image {
