@@ -8,9 +8,8 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 
 /**
- * Pins the attempt-limiting defaults, and with them the one assumption the design rests on: a
- * `List<Duration>` config-mapping property resolves its `@WithDefault` from a comma-separated
- * string. See `docs/specs/2026-08-13-auth-attempt-limiting.md` section 5.
+ * Pins the attempt-limiting defaults, and the assumption under them: a `List<Duration>` mapping
+ * resolves `@WithDefault` from a comma-separated string (`docs/specs/2026-08-13-auth-attempt-limiting.md`).
  */
 @QuarkusTest
 class AuthConfigDefaultsIntegrationTest {
