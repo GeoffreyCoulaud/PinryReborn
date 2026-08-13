@@ -38,18 +38,21 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
-### P2: Operational debt
+### P0: The packaged application does not start
 
-- **`application.properties` restates defaults that `@WithDefault` already carries.** Eleven
-  properties repeat, value for value, what `AuthConfig` and `TaskQueueConfig` declare: two sources
-  for one default, silently divergent the day someone edits one side. It also decides what a test
-  can pin, since a configuration read then returns the file rather than the annotation, which is how
-  `AuthConfigDefaultsIntegrationTest` briefly became a test of the wrong thing
-  (`docs/handoffs/2026-08-13 - handoff - auth-attempt-limiting.md`). Decide which side owns a
-  default, then keep in the file only what an operator must override, plus comments naming the keys
-  that have none. The attempt-limiting four were taken out this way on review; these eleven were left
-  because changing the task queue's and the session's configuration is not an authentication lot's
-  business. Surfaced on the PR review of `feat/auth-attempt-limiting`, 2026-08-13.
+- **`datasource.db.username` and `datasource.db.password` are missing from
+  `api-application/src/main/resources/application.properties`**, so the built jar, and therefore the
+  container image, dies at boot: `DataSourceConfigurationException: DataSource user is not set?`,
+  then `DataSource password is null?` once the user is supplied. Measured on `01cb675` (before the
+  attempt-limiting branch) and on the branch, same failure both times; supplying both values boots
+  the application in about a second and `POST /api/v1/sessions` answers 401. The test suite never
+  sees it: `src/test/resources/application.properties` shares the production file's name, wins by
+  classpath order, and declares `username=sa` and an empty `password`. CI does not see it either: it
+  builds the image and never runs it. Probably dates from the deletion of `ebean.properties`
+  (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`, decision 1), which is
+  where those two values used to live. The fix is two lines; the reason it went unnoticed for a lot
+  and a half is that nothing starts the production configuration, which is the part worth designing.
+  Found while verifying an unrelated cleanup, 2026-08-13.
 
 ## Known limits
 

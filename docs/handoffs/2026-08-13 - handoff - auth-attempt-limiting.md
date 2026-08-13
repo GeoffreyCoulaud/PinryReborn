@@ -60,12 +60,14 @@ sites upward, and the arithmetic now lives once, in `ThrottledError.wholeSeconds
   they cross test cases within a class. They do not cross a `QuarkusTestProfile` boundary, since
   Quarkus rebuilds the container per profile. Any integration case that submits a wrong credential
   takes an identity of its own; `IntegrationTest`'s KDoc now says so.
-- **`application.properties` restates every other configured default, and these four are not in it.**
-  The holistic review asked for them on the file's own convention; restating a value the
-  `@WithDefault` already carries makes two sources for one default, and it silently turned
-  `AuthConfigDefaultsIntegrationTest` into a test of the file rather than of the defaults. The four
-  lines went back out on operator review, leaving a comment that names the keys and carries no value.
-  The eleven properties that still do this are a backlog item, not a convention to copy.
+- **`application.properties` no longer restates any `@WithDefault`.** The holistic review asked for
+  the four new properties to be added on the file's own convention; restating a value the annotation
+  already carries makes two sources for one default, and it silently turned
+  `AuthConfigDefaultsIntegrationTest` into a test of the file rather than of the defaults. On
+  operator review the four came out, then the thirty other restatements with them: every one was
+  byte-identical to its annotation, and `garbage-collection.*` was already living outside the file
+  with no ill effect. What is left is what an operator must set (`api.*`, the datasource, the CORS
+  origin) plus a comment naming each prefix and the two traps an interface cannot state on its own.
 - **A blocked key costs no bcrypt, but only for requests arriving after the block is recorded.**
   `check` and `recordFailure` are two operations; requests already past their check still pay.
 
