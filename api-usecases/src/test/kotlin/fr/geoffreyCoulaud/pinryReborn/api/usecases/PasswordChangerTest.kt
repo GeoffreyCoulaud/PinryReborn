@@ -230,6 +230,20 @@ class PasswordChangerTest : BaseTest() {
     }
 
     @Test
+    fun `Given a change refused as too soon, Then that refusal is not counted as a guess`() {
+        // Given: the current password proven, the change refused for landing inside the interval
+        val recent = HashedPassword("h", PasswordHashAlgorithm.BCRYPT, createdAt = now.minusSeconds(10))
+        every { passwords.findCurrentPasswordHash(user) } returns recent
+        every { hasher.matches("old", recent) } returns true
+        every { clock.now() } returns now
+        assertThrows<PasswordChangedTooSoonError> { changer.changePassword(user, "old", "new") }
+        // When / Then: that caller guessed nothing wrong, so a whole threshold of wrong passwords
+        // still answers the ordinary refusal rather than the block
+        every { hasher.matches("bad", recent) } returns false
+        failTimes(threshold)
+    }
+
+    @Test
     fun `Given the threshold reached on re-authentication, Then the password change is refused too`() {
         // Given: both verify the same secret, so they share one counter (spec D4)
         val reauth = Reauthenticator(passwords, hasher, limiter)
