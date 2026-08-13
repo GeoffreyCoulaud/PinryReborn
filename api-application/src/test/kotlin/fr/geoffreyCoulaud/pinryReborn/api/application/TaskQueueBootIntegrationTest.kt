@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
+import io.ebean.DB
 import io.quarkus.test.junit.QuarkusTest
 import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -23,6 +24,34 @@ class TaskQueueBootIntegrationTest : IntegrationTest() {
     @Inject lateinit var enqueueTask: EnqueueTask
 
     @Inject lateinit var taskQueue: TaskQueueInterface
+
+    /**
+     * The suite declares `jdbc:sqlite::memory:` and once ran on a file regardless
+     * (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`). Asserting the
+     * handle alone would not catch that: the avaje-config path resolves to `:memory:` too, so a
+     * second, file-backed instance serving the application would leave this green. Writing through
+     * an injected port and reading the row back through the asserted handle is what ties the two.
+     */
+    @Test
+    fun `Given a task written through the injected port, Then the handle that reads it is in memory`() {
+        // Given: one row, written by the application through its own port
+        enqueueTask.enqueue(kind = "no.handler", payload = "{}", maxAttempts = 1)
+
+        // When: the handle under assertion reads the tasks table
+        val database = DB.getDefault()
+        val taskCount = database
+            .sqlQuery("select count(*) as task_count from tasks")
+            .findOne()
+            ?.getInteger("task_count")
+
+        // Then: that handle sees the write, and has no file behind it
+        assertEquals(1, taskCount, "Expected the handle to read the row the port wrote")
+        val files = database
+            .sqlQuery("select file from pragma_database_list")
+            .findList()
+            .map { it.getString("file") }
+        assertEquals(listOf(""), files, "Expected an in-memory datasource; pragma_database_list reports $files")
+    }
 
     @Test
     fun `Given an enqueued task with no handler, Then the runtime settles it to DEAD`() {
