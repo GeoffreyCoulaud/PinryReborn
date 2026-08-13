@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:HttpImageFetcher.kt:HttpImageFetcher$@Suppress("ThrowsCount") override fun openStream: InputStream</ID>
+  </CurrentIssues>
+</SmellBaseline>

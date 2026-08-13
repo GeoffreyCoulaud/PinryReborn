@@ -7,14 +7,14 @@ import kotlin.io.path.readLines
 
 class PinryRuleSetProviderTest {
     /**
-     * Two of the four rules earn an activation red against the real sources, which is what proves
+     * Three of the five rules earn an activation red against the real sources, which is what proves
      * they are loaded. `QueryBeanConstructedByQualifiedName` and `DatabaseStaticFacadeCall` cannot:
      * no production source constructs a query bean by qualified name or calls `io.ebean.DB`, so each
      * reports nothing whether it is registered or absent from the rule set entirely, and detekt fails
      * the build for neither. Their registration is asserted here or nowhere.
      */
     @Test
-    fun `Given the provider, Then its rule set carries exactly the four expected rules`() {
+    fun `Given the provider, Then its rule set carries exactly the five expected rules`() {
         // Given
         val provider = PinryRuleSetProvider()
 
@@ -25,6 +25,7 @@ class PinryRuleSetProviderTest {
         assertEquals("pinry-reborn", ruleSet.id.value)
         assertEquals(
             listOf(
+                "CommentCarriesDocumentation",
                 "DatabaseStaticFacadeCall",
                 "QueryBeanConstructedByQualifiedName",
                 "SoftDeleteStateFilteredOutsideQueries",

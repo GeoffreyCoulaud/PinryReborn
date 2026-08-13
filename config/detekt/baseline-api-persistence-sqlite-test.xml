@@ -2,11 +2,8 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CommentCarriesDocumentation:ActiveUserModels.kt:ActiveUserModels</ID>
     <ID>CommentCarriesDocumentation:DbMigrationModelCoverageTest.kt:DbMigrationModelCoverageTest</ID>
     <ID>CommentCarriesDocumentation:DbMigrationModelCoverageTest.kt:DbMigrationModelCoverageTest$@Test fun `Given the migration scripts, Then none carries an Ebean no-op marker`</ID>
-    <ID>CommentCarriesDocumentation:EbeanDatabaseProducer.kt:EbeanDatabaseProducer$@Produces @Singleton fun produceDatabase: Database</ID>
-    <ID>CommentCarriesDocumentation:EbeanTaskQueue.kt:EbeanTaskQueue : TaskQueueInterface</ID>
     <ID>CommentCarriesDocumentation:EbeanTaskQueueConcurrencyTest.kt:EbeanTaskQueueConcurrencyTest : RepositoryTest</ID>
     <ID>CommentCarriesDocumentation:EbeanTaskQueueTest.kt:EbeanTaskQueueTest$@Test fun `Given terminal and non-terminal tasks, Then deleteTerminalBefore deletes only stale terminals`</ID>
     <ID>CommentCarriesDocumentation:EbeanTaskQueueTest.kt:EbeanTaskQueueTest$LosingDedupRacePersistor : Persistor</ID>
@@ -17,12 +14,7 @@
     <ID>CommentCarriesDocumentation:ModelPaginationHelperTest.kt:ModelPaginationHelperTest$private fun seedPins: List&lt;PinModel&gt;</ID>
     <ID>CommentCarriesDocumentation:ModelSortStrategyTest.kt:ModelSortStrategyTest : RepositoryTest</ID>
     <ID>CommentCarriesDocumentation:ModelsPackageArchTest.kt:ModelsPackageArchTest</ID>
-    <ID>CommentCarriesDocumentation:PartialUniqueIndexStates.kt:PartialUniqueIndexStates</ID>
     <ID>CommentCarriesDocumentation:PartialUniqueIndexStatesTest.kt:PartialUniqueIndexStatesTest</ID>
-    <ID>CommentCarriesDocumentation:Persistor.kt:Persistor</ID>
-    <ID>CommentCarriesDocumentation:PinBoardQueries.kt:fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.PinBoardQueries.kt</ID>
-    <ID>CommentCarriesDocumentation:PinModelSortStrategy.kt:PinModelSortStrategy : ModelSortStrategy</ID>
-    <ID>CommentCarriesDocumentation:PinRepository.kt:PinRepository : PinRepositoryInterface</ID>
     <ID>CommentCarriesDocumentation:PinRepositoryFixtures.kt:PinRepositoryFixtures : RepositoryTest</ID>
     <ID>CommentCarriesDocumentation:PinRepositoryPaginationTest.kt:PinRepositoryPaginationTest : PinRepositoryFixtures</ID>
     <ID>CommentCarriesDocumentation:PinRepositoryPaginationTest.kt:PinRepositoryPaginationTest$private fun collapseAllPinInstants</ID>
@@ -31,20 +23,9 @@
     <ID>CommentCarriesDocumentation:PinRepositoryTest.kt:PinRepositoryTest : PinRepositoryFixtures</ID>
     <ID>CommentCarriesDocumentation:RepositoryTest.kt:RepositoryTest$@BeforeEach fun truncateAllTables</ID>
     <ID>CommentCarriesDocumentation:RepositoryTest.kt:RepositoryTest$protected fun storableNow: Instant</ID>
-    <ID>CommentCarriesDocumentation:SoftDeletableModel.kt:SoftDeletableModel</ID>
-    <ID>CommentCarriesDocumentation:SoftDeletableQueries.kt:SoftDeletableQueries&lt;M : SoftDeletableModel, Q : QueryBean&lt;M, Q&gt;&gt;</ID>
     <ID>CommentCarriesDocumentation:SoftDeletableQueriesTest.kt:SoftDeletableQueriesTest : RepositoryTest</ID>
-    <ID>CommentCarriesDocumentation:SqliteConstraintViolations.kt:SqliteConstraintViolations</ID>
-    <ID>CommentCarriesDocumentation:SqliteConstraintViolations.kt:SqliteConstraintViolations$fun &lt;T&gt; onUniqueConstraint: T</ID>
     <ID>CommentCarriesDocumentation:SqliteConstraintViolationsTest.kt:SqliteConstraintViolationsTest</ID>
     <ID>CommentCarriesDocumentation:SweepIndexesMigrationTest.kt:SweepIndexesMigrationTest</ID>
-    <ID>CommentCarriesDocumentation:TaskModel.kt:TaskModel : BaseModel</ID>
-    <ID>CommentCarriesDocumentation:TransactionControl.kt:TransactionControl</ID>
     <ID>CommentCarriesDocumentation:UniqueConstraintOutcomeTest.kt:UniqueConstraintOutcomeTest</ID>
-    <ID>CommentCarriesDocumentation:UserDataExportModelSortStrategy.kt:UserDataExportModelSortStrategy : ModelSortStrategy</ID>
-    <ID>CommentCarriesDocumentation:UserDataExportRepository.kt:UserDataExportRepository$override fun save: UserDataExport</ID>
-    <ID>CommentCarriesDocumentation:UserQueries.kt:UserQueries$fun tombstonedBefore: QUserModel</ID>
-    <ID>CommentCarriesDocumentation:UserRepository.kt:UserRepository : UserRepositoryInterface</ID>
-    <ID>CyclomaticComplexMethod:ModelPaginationHelper.kt:ModelPaginationHelper$fun &lt;M : BaseModel, Q : QueryBean&lt;M, Q&gt;&gt; getPage: ModelPage&lt;M&gt;</ID>
   </CurrentIssues>
 </SmellBaseline>

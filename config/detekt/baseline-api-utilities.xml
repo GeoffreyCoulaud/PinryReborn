@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:TestTime.kt:TestTime</ID>
+  </CurrentIssues>
+</SmellBaseline>

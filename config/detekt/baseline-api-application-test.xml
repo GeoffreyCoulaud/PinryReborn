@@ -4,10 +4,6 @@
   <CurrentIssues>
     <ID>CommentCarriesDocumentation:ArchitectureKonsistTest.kt:ArchitectureKonsistTest</ID>
     <ID>CommentCarriesDocumentation:ArchitectureKonsistTest.kt:ArchitectureKonsistTest$@Test fun `Given production sources, Then none outside queries and pagination names a recyclable query bean`</ID>
-    <ID>CommentCarriesDocumentation:ExportProducers.kt:ExportProducers</ID>
-    <ID>CommentCarriesDocumentation:FetchAdapterProducers.kt:FetchAdapterProducers</ID>
-    <ID>CommentCarriesDocumentation:GarbageCollectionProducers.kt:GarbageCollectionProducers</ID>
-    <ID>CommentCarriesDocumentation:ImageAdapterProducers.kt:ImageAdapterProducers</ID>
     <ID>CommentCarriesDocumentation:ImageHostingIntegrationTest.kt:ImageHostingDataDirTestProfile : QuarkusTestProfile</ID>
     <ID>CommentCarriesDocumentation:ImageHostingIntegrationTest.kt:ImageHostingIntegrationTest : IntegrationTest</ID>
     <ID>CommentCarriesDocumentation:ImageHostingOversizeIntegrationTest.kt:ImageHostingTinyLimitTestProfile : QuarkusTestProfile</ID>
@@ -20,13 +16,9 @@
     <ID>CommentCarriesDocumentation:MeExportTestProfile.kt:MeExportTestProfile : QuarkusTestProfile</ID>
     <ID>CommentCarriesDocumentation:ModeBImageHostingIntegrationTest.kt:ModeBImageHostingIntegrationTest : IntegrationTest</ID>
     <ID>CommentCarriesDocumentation:ModeBImageHostingIntegrationTest.kt:ModeBImageHostingTestProfile : QuarkusTestProfile</ID>
-    <ID>CommentCarriesDocumentation:PasswordChangerProducer.kt:PasswordChangerProducer</ID>
     <ID>CommentCarriesDocumentation:ProductionDatasourceDeclarationTest.kt:ProductionDatasourceDeclarationTest</ID>
     <ID>CommentCarriesDocumentation:RenditionsIntegrationTest.kt:RenditionsIntegrationTest : IntegrationTest</ID>
     <ID>CommentCarriesDocumentation:RenditionsIntegrationTest.kt:RenditionsTestProfile : QuarkusTestProfile</ID>
-    <ID>CommentCarriesDocumentation:SchedulerProducers.kt:SchedulerProducers</ID>
-    <ID>CommentCarriesDocumentation:TaskHandlerProducers.kt:TaskHandlerProducers</ID>
     <ID>CommentCarriesDocumentation:TaskQueueBootIntegrationTest.kt:TaskQueueBootIntegrationTest : IntegrationTest</ID>
-    <ID>UtilityClassWithPublicConstructor:Application.kt:Application</ID>
   </CurrentIssues>
 </SmellBaseline>

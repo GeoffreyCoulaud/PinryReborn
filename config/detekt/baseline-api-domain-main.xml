@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CommentCarriesDocumentation:CursorDirection.kt:CursorDirection</ID>
+    <ID>CommentCarriesDocumentation:CursorDirection.kt:CursorDirection$BACKWARD</ID>
+    <ID>CommentCarriesDocumentation:CursorDirection.kt:CursorDirection$FORWARD</ID>
+    <ID>CommentCarriesDocumentation:ExportAlreadyInProgressException.kt:ExportAlreadyInProgressException : Exception</ID>
+    <ID>CommentCarriesDocumentation:ExportArchiveStore.kt:ExportArchiveStore</ID>
+    <ID>CommentCarriesDocumentation:ExportArchiveStore.kt:ExportArchiveStore$fun forEachStorageKeyOnDisk</ID>
+    <ID>CommentCarriesDocumentation:ImageFetcher.kt:ImageFetcher$fun openStream: InputStream</ID>
+    <ID>CommentCarriesDocumentation:ImageProbeException.kt:ImageTooLargeException : Exception</ID>
+    <ID>CommentCarriesDocumentation:ImageRepositoryInterface.kt:ImageRepositoryInterface$fun findMissingImageIds: Set&lt;UUID&gt;</ID>
+    <ID>CommentCarriesDocumentation:ImageTransformer.kt:ImageTransformer$fun render: StagedFile</ID>
+    <ID>CommentCarriesDocumentation:Login.kt:Login</ID>
+    <ID>CommentCarriesDocumentation:PasswordChangeCollisionException.kt:PasswordChangeCollisionException : Exception</ID>
+    <ID>CommentCarriesDocumentation:PinRepositoryInterface.kt:PinRepositoryInterface$fun findBoardsForPinIncludingRecycled: List&lt;Board&gt;</ID>
+    <ID>CommentCarriesDocumentation:PinRepositoryInterface.kt:PinRepositoryInterface$fun findPinsForUser: Page&lt;Pin&gt;</ID>
+    <ID>CommentCarriesDocumentation:RenditionCache.kt:RenditionCache$fun forEachImageIdOnDisk</ID>
+    <ID>CommentCarriesDocumentation:RenditionCache.kt:RenditionCache$fun store</ID>
+    <ID>CommentCarriesDocumentation:RenditionSpec.kt:RenditionSpec</ID>
+    <ID>CommentCarriesDocumentation:SessionExpiryPolicy.kt:SessionExpiryPolicy</ID>
+    <ID>CommentCarriesDocumentation:StagedFile.kt:StagedFile</ID>
+    <ID>CommentCarriesDocumentation:TaskQueueInterface.kt:TaskQueueInterface$fun deleteTerminalBefore: Int</ID>
+    <ID>CommentCarriesDocumentation:TaskQueueInterface.kt:TaskQueueInterface$fun renewLease: Boolean</ID>
+    <ID>CommentCarriesDocumentation:TransactionRunner.kt:TransactionRunner</ID>
+    <ID>CommentCarriesDocumentation:UserDataExportRepositoryInterface.kt:UserDataExportRepositoryInterface$fun findMissingExportIds: Set&lt;UUID&gt;</ID>
+    <ID>CommentCarriesDocumentation:UserRepositoryInterface.kt:UserRepositoryInterface$fun findTombstonedUsersSoftDeletedBefore: List&lt;User&gt;</ID>
+    <ID>CommentCarriesDocumentation:UserRepositoryInterface.kt:UserRepositoryInterface$fun markPendingDeletion</ID>
+    <ID>CommentCarriesDocumentation:UsernameAlreadyTakenException.kt:UsernameAlreadyTakenException : Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>
