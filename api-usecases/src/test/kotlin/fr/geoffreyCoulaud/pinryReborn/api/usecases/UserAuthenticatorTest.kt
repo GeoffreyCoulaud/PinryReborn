@@ -65,6 +65,15 @@ class UserAuthenticatorTest : BaseTest() {
     private fun failTimes(login: BasicAuthLogin, count: Int) =
         repeat(count) { assertThrows<UserAuthenticationInvalidPasswordError> { useCase.authenticate(login) } }
 
+    private fun givenNoUserForAnyName() {
+        every { userRepository.findUserByName(any()) } returns null
+        every { passwordHasher.hash(any(), any()) } returns dummyHash
+        every { passwordHasher.matches(any(), any()) } returns false
+    }
+
+    private fun failTimesWithoutAUser(login: BasicAuthLogin, count: Int) =
+        repeat(count) { assertThrows<UserAuthenticationUserDoesNotExistError> { useCase.authenticate(login) } }
+
     @Test
     fun `When authenticating with basic auth, then should work`() {
         // Given
@@ -143,14 +152,27 @@ class UserAuthenticatorTest : BaseTest() {
     fun `Given the threshold reached on a name with no user, Then the next attempt is refused`() {
         // Given: a name nobody owns, refused as many times as the threshold
         val login = BasicAuthLogin(createRandomString(), createRandomString())
-        every { userRepository.findUserByName(any()) } returns null
-        every { passwordHasher.hash(any(), any()) } returns dummyHash
-        every { passwordHasher.matches(any(), any()) } returns false
-        repeat(threshold) { assertThrows<UserAuthenticationUserDoesNotExistError> { useCase.authenticate(login) } }
+        givenNoUserForAnyName()
+        failTimesWithoutAUser(login, threshold)
 
         // When, Then: counting only existing names would answer 429 for them and 401 for the rest,
         // the enumeration oracle the dummy hash exists to deny (spec D2)
         assertThrows<TooManyAuthenticationAttemptsError> { useCase.authenticate(login) }
+    }
+
+    @Test
+    fun `Given a blocked name with no user, Then no password reaches the hasher`() {
+        // Given: a name nobody owns, blocked
+        val login = BasicAuthLogin(createRandomString(), createRandomString())
+        givenNoUserForAnyName()
+        failTimesWithoutAUser(login, threshold)
+
+        // When
+        assertThrows<TooManyAuthenticationAttemptsError> { useCase.authenticate(login) }
+
+        // Then: the dummy hash makes this branch cost a bcrypt too, and it is the branch an
+        // attacker reaches without an account, so the check has to precede it (spec D6).
+        verify(exactly = threshold) { passwordHasher.matches(any(), any()) }
     }
 
     @Test
