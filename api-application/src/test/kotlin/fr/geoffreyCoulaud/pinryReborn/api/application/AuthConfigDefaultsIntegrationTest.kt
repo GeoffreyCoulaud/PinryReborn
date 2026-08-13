@@ -8,8 +8,9 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 
 /**
- * Pins the attempt-limiting defaults, and the assumption under them: a `List<Duration>` mapping
- * resolves `@WithDefault` from a comma-separated string (`docs/specs/2026-08-13-auth-attempt-limiting.md`).
+ * Pins the attempt-limiting policy the application ships with, and the assumption under it: a
+ * comma-separated string maps to `List<Duration>` (`docs/specs/2026-08-13-auth-attempt-limiting.md`).
+ * The values come from `application.properties`, which restates each one and so shadows `@WithDefault`.
  */
 @QuarkusTest
 class AuthConfigDefaultsIntegrationTest {
@@ -17,7 +18,7 @@ class AuthConfigDefaultsIntegrationTest {
     lateinit var config: AuthConfig
 
     @Test
-    fun `Given no configuration, Then the attempt-limiting defaults are the specified ones`() {
+    fun `Given no operator override, Then the attempt-limiting policy is the specified one`() {
         assertEquals(5, config.attemptLimitThreshold())
         assertEquals(
             listOf(Duration.ofSeconds(30), Duration.ofMinutes(2), Duration.ofMinutes(10)),
