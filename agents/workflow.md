@@ -159,9 +159,10 @@ reason; "this lot adds no runtime behaviour, so `operations` has no artefact" is
 **Do not read the mandate files**: pass the path and let the subagent read its own mandate. Only
 exception: work whose subject is a mandate itself.
 
-**The brief carries the artefact, not the answers.** It names what is under review and its
-commits, points at each criterion by path and line range, and adds at most three zones of risk,
-each an open question. No instruction begins with "confirm", "verify" or "check that".
+**The brief carries the artefact, not the answers.** It names what is under review and where it
+lives (a commit range for code, a path for a document), points at each criterion by path and line
+range, and adds at most three zones of risk, each an open question. No instruction begins with
+"confirm", "verify" or "check that".
 
 **Dispatch a plain subagent, not a named teammate.** A subagent's final message is its return
 value: it arrives once, in full, when the work ends. Naming an agent turns it into a correspondent
