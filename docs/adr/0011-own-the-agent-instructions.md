@@ -107,3 +107,12 @@ the code, and the authority is whatever the build or a test enforces.
   a convention, not a mechanism. A hook could enforce it later if it turns out not to hold.
 - **`.claude/CLAUDE.md` is unchanged**, and so is every build, CI and git-hook path: none of them
   ever named the merged files.
+- **The hook's matcher stays wider than what the hook inspects, and that is the accepted position.**
+  `.claude/settings.json:17` fires the guard on `Bash`, `Edit`, `Write` and `MultiEdit`; with the
+  generic-file rule gone, `evidence-guard.py:331` returns at once on the three edit tools. The cost
+  is a python process per edit, measured at 20 invocations in 0.329s, about 16ms each. Narrowing the
+  matcher to `Bash` would buy that back and set a worse trap: a rule added later that inspects edits
+  would never fire, and nothing would fail. A matcher wider than the code is inert; one narrower is a
+  false green, the shape of trap this repository already knows from the Gradle daemon caching detekt
+  rules. The harness routes, the code decides. Both reviews proposed narrowing it or filing it as
+  debt; the operator settled on neither on 2026-08-13, so it is a limit and not an item of work.

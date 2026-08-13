@@ -3,10 +3,12 @@
 **Living document.** What is still open, banded by nature first and by priority second. What already shipped lives
 in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-08-12 (the P2 triage lot, `docs/specs/2026-08-12-p2-debt-triage.md`. Sixteen P2 items disposed
-of: eight fixed, two closed by a decision, two moved to Before beta, one to Known limits, three left as open work.
-The lot's own reviews then filed two new ones, so the band ends at five. The bands are new, and so is the rule that
-fills them, `docs/adr/0010-review-finding-dispositions.md`).
+Last reviewed: 2026-08-13 (the agent-instruction consolidation,
+`docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
+merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
+ten were fixed inside the lot, one became the P2 item on the evidence guard below, and one became a known limit.
+The reviewed-band accounting of the previous lot, `docs/adr/0010-review-finding-dispositions.md`, is what routed
+them).
 
 ## How to use this file
 
@@ -103,6 +105,18 @@ fills them, `docs/adr/0010-review-finding-dispositions.md`).
   applied in `db_migration` after the `.sql` is deleted. **This is a candidate cause for the
   `SQLITE_BUSY` that the 2026-08-12 triage closed as unreproduced.** Surfaced by the T6 review and
   confirmed independently by the T6 task review, 2026-08-12.
+- **Two faults in the evidence guard, and nothing exercises it.** `.claude/hooks/evidence-guard.py`
+  is Python under `.claude/`, outside the coverage perimeter, so no test reaches it: both faults were
+  found by hand while removing its generic-file rule, and both predate that removal. First,
+  `main()` (`:326-331`) catches `JSONDecodeError` and `ValueError` under a comment promising never to
+  block on input it cannot read, but a valid JSON payload that is not an object reaches
+  `payload.get` and raises `AttributeError`, exiting 1 with a traceback where the docstring defines
+  only 0 and 2. Second, `check_inplace` (`:234-246`) blocks `sed`, `perl` and `ruby` in place on the
+  command name alone and never calls `is_disposable`, though it receives `cwd` and ignores it, where
+  `check_truncating` (`:258`) does call it: measured, `sed -i 1d /tmp/x.md` is refused although the
+  module docstring says a write to a disposable location is allowed. The two are one session's work,
+  but the first question is how this file gets a safety net at all, since the gate perimeter is
+  decided by location and this location is outside it. New 2026-08-13.
 
 ## Known limits
 
@@ -113,6 +127,9 @@ Recorded where the decision lives. None is a copy: follow the pointer.
   `docs/specs/2026-07-29-single-representation-soft-delete.md` section 4.6.
 - **A unique constraint's named outcome is not checked against what the code does.**
   `docs/adr/0009-unique-index-named-outcomes.md`, decision 1.
+- **The evidence guard is fired on more tools than it inspects**, deliberately, and narrowing it
+  would set a worse trap than the cost it saves.
+  `docs/adr/0011-own-the-agent-instructions.md`, consequences.
 - **The partial-index state guard has a declared reach**, and one part of it is a correctness gap
   rather than a documentation one: it pins the predicate, not the uniqueness columns that make
   `findOne()` return at most one row. `PartialUniqueIndexStates` and
