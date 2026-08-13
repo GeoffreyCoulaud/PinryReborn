@@ -197,6 +197,11 @@ class BaseErrorMapperTest {
     }
 
     @Test
+    fun `Given TOO_MANY_AUTHENTICATION_ATTEMPTS, Then status is TOO_MANY_REQUESTS`() {
+        assertEquals(Response.Status.TOO_MANY_REQUESTS, statusFor(ErrorCode.TOO_MANY_AUTHENTICATION_ATTEMPTS))
+    }
+
+    @Test
     fun `Given a ThrottledError, Then the response carries a numeric Retry-After header`() {
         // Given
         val exception = ExportTooSoonError(retryAfterSeconds = 42)
