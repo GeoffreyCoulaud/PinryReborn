@@ -27,6 +27,8 @@ ALLOWED = (
     "./gradlew gate 2>&1",
     "git apply --check change.patch",
     "python3 -c 'import sys; sys.exit(0)'",
+    # The size is the value of -s, not a file called 0.
+    "truncate -s 0 /tmp/scratch",
 )
 
 BLOCKED = (
@@ -45,6 +47,14 @@ BLOCKED = (
     "dd of=AGENTS.md",
     "git apply change.patch",
     "python3 -c 'print(1)'",
+    # A disposable prefix that walks back out of itself is not disposable.
+    f"echo hi > /tmp/..{REPOSITORY}/AGENTS.md",
+    f"echo hi | tee /tmp/..{REPOSITORY}/AGENTS.md",
+    # -i still rewrites the file when clustered, or carrying its suffix.
+    "sed -ni s/x/y/p AGENTS.md",
+    "sed -ibak s/x/y/ AGENTS.md",
+    # The editor is the command here, whatever option the wrapper took first.
+    "git ls-files | xargs -I{} sed -i s/a/b/ {}",
 )
 
 
