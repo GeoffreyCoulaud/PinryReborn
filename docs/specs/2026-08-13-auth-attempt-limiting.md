@@ -85,7 +85,9 @@ password guess, and the refusal is served before the bcrypt call rather than aft
   which it stops limiting: a threshold below 1, an empty backoff list, a backoff step of zero or
   less, a forget-after of zero or less, and a `maxTrackedKeys` below 1. The bound is the one that
   hides best: at 0, every insertion exceeds it and evicts the entry just written, so nothing is ever
-  counted and nothing says so.
+  counted and nothing says so. **The refusal lands at boot**: the producer is `@Startup`, because a
+  lazily built limiter throws on first use, caches nothing, and replays that 500 on every
+  authentication, password change, account deletion and export for as long as the process runs.
 
 ## 4. The policy
 
