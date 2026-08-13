@@ -210,6 +210,15 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
     }
 
     @Test
+    fun `Given a login name the size of an accepted body, Then the key it makes is a fixed-width digest`() {
+        // Given: the submitted name carries @NotBlank alone, so one this long reaches the limiter whole
+        val oversizedName = "a".repeat(OVERSIZED_NAME_LENGTH)
+        // Then: the map retains a digest, so the bound on the entry count is a bound on the memory
+        assertEquals(DIGEST_WIDTH, AuthenticationAttemptKey.forLogin(oversizedName).value.length)
+        assertEquals(DIGEST_WIDTH, AuthenticationAttemptKey.forLogin("alice").value.length)
+    }
+
+    @Test
     fun `Given the threshold is reached on a user key, Then the check is refused`() {
         // Given: re-authentication and password change share this counter (D4)
         val userKey = AuthenticationAttemptKey.forUser(randomUUID())
@@ -263,5 +272,13 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
         // Then: the earliest-expiring counter was evicted, and the other one is untouched
         assertDoesNotThrow { bounded.check(key) }
         refusalFor(bounded, otherKey)
+    }
+
+    private companion object {
+        /** The width of a SHA-256 digest in lowercase hexadecimal. */
+        const val DIGEST_WIDTH = 64
+
+        /** A megabyte of name: `quarkus.http.limits.max-body-size` is 32M and nothing narrower applies. */
+        const val OVERSIZED_NAME_LENGTH = 1_000_000
     }
 }
