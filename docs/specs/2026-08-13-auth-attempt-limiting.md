@@ -81,17 +81,22 @@ password guess, and the refusal is served before the bcrypt call rather than aft
 - **D9. The tracked-key count is bounded**, since the login key is attacker-supplied and unbounded
   in cardinality.
 - **D10. There is no off switch.** A property that disables brute-force limiting is a setting that
-  should not exist (`agents/workflow.md`, Design). The configuration validates that the threshold is
-  at least 1 and that the backoff list is not empty.
+  should not exist (`agents/workflow.md`, Design). The limiter refuses to be built on any value at
+  which it stops limiting: a threshold below 1, an empty backoff list, a backoff step of zero or
+  less, a forget-after of zero or less, and a `maxTrackedKeys` below 1. The bound is the one that
+  hides best: at 0, every insertion exceeds it and evicts the entry just written, so nothing is ever
+  counted and nothing says so.
 
 ## 4. The policy
 
 State per key: `failures` (Int), `blockedUntil` (Instant, nullable), `expiresAt` (Instant). An entry
-whose `expiresAt` has passed is read as absent and purged.
+whose `expiresAt` has passed counts as absent: the next failure starts the count over, and the entry
+is dropped when the bound is crossed. `check` needs no expiry test of its own, since `expiresAt`
+never falls before `blockedUntil` and an expired entry is therefore never still blocked.
 
 | Operation | Effect |
 |---|---|
-| `check(key)` | If a live entry has `blockedUntil` in the future, throw `TooManyAuthenticationAttemptsError` with the remaining seconds. Otherwise return. |
+| `check(key)` | If the entry has `blockedUntil` in the future, throw `TooManyAuthenticationAttemptsError` with the remaining seconds. Otherwise return. |
 | `recordFailure(key)` | `failures` becomes the live entry's `failures` plus 1 (1 when absent). When `failures` is at least `threshold`, `blockedUntil` becomes `now + steps[min(failures - threshold, steps.lastIndex)]`. `expiresAt` becomes the later of `now + forgetAfter` and `blockedUntil`. |
 | `recordSuccess(key)` | Remove the entry. |
 
@@ -104,8 +109,8 @@ With the defaults (threshold 5, steps `PT30S,PT2M,PT10M`):
 | 6 | blocked 2 minutes |
 | 7 and beyond | blocked 10 minutes |
 
-`Retry-After` is whole seconds, rounded up, never below 1 (the `PasswordChangedTooSoonError`
-precedent, `PasswordChanger.kt:33`).
+`Retry-After` is whole seconds, rounded up: a fraction of a second still costs the caller a whole
+one, so the value is never below 1 while the block is in the future.
 
 **Bounding the map.** After an insertion takes the size past `maxTrackedKeys`, expired entries are
 purged; if the size is still past the bound, the entry with the earliest `expiresAt` is evicted.

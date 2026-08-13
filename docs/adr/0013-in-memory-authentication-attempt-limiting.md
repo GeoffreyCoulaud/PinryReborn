@@ -83,6 +83,11 @@ equivalent: both cap the guess rate far below what a password search needs.
 The check runs before the password verification. A limiter placed after it would still let a flood
 of guesses pay for a bcrypt hash each, which is the CPU exhaustion half of the same problem.
 
+Accepted limit: **the check and the record are two operations**, so a request already past its check
+when the blocking failure lands still pays for its bcrypt hash. The ceiling on hashes per key is the
+threshold plus whatever is in flight, and the "no bcrypt for a blocked key" rule holds for requests
+arriving after the block is recorded, not for those already inside.
+
 Accepted limit: **grouping is wider than the database's.** Kotlin's `lowercase` folds Unicode, while
 the `collate nocase` index folds ASCII only, so two accounts SQLite considers distinct can share one
 counter. Wider grouping is the safe direction for brute force and marginally widens decision 2's
