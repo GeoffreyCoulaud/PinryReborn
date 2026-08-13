@@ -3,30 +3,6 @@
 **Living document.** What is still open, banded by nature first and by priority second. What already shipped lives
 in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-08-13 (the persistence P2 lot,
-`docs/specs/2026-08-13-persistence-p2-debt.md`. Closed three items and opened none: the integration suite
-running on a file, the duplicated ambient-transaction check, and the three partial indexes on `tasks`. Its two
-reviews filed three CRITICAL findings, all fixed inside the lot, one of them a regression the lot itself had
-introduced. A fourth defect, two datasource configurations that had to be kept in agreement by hand, was
-proposed here and refused by the operator on the PR: it was treated instead, the producer now loading the same
-properties as avaje-config. The `SQLITE_BUSY` this file listed as a candidate consequence is not settled: the
-lot removed a candidate cause, nothing more.
-Also 2026-08-13, outside any lot: **Periodic maintenance via the task queue** was dropped unworked. The queue has
-no recurrence and none of the three ways to add one is clean; a sweep wants a fixed retry interval, not the
-exponential backoff the queue applies; and neither the poll nor the lease reaper can move into the queue at all
-(the reaper is what repairs a task stuck behind a dead worker), so the whole gain was two schedulers out of three.
-The one benefit that survived, a failing sweep surfacing as a DEAD row, is a Micrometer counter away without any
-of it. Its trigger, should it ever fire: more than one instance, where concurrent schedulers would run the orphan
-scan N times over and the queue's atomic claim becomes the deciding argument.
-Previous entry: the agent-instruction consolidation,
-`docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
-merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
-eleven were fixed inside the lot and one became a known limit. A fourth review, of those fixes, sent one of them
-back and found four pre-existing holes in the evidence guard; the operator asked for all of them, so they are
-closed here too, and the guard now has a test table the gate runs.
-The reviewed-band accounting of the previous lot, `docs/adr/0010-review-finding-dispositions.md`, is what routed
-them).
-
 ## How to use this file
 
 - This file holds **open items only**. Do not keep a "shipped" log here: completed work is recorded by git
@@ -61,24 +37,6 @@ them).
   `tags.jsonl`, `user.json`, `images/`), `formatVersion` is `1`, and every file's `sha256` is in the manifest.
   Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
   re-upload, and how much of the archive to trust (signature / manifest verification).
-
-### P2: Operational debt (flagged in handoffs; not UI blockers)
-
-- **Inverse associations on the persistence models.** The module maps twelve entities and not one
-  `@OneToMany` or `@ManyToMany` among them, so a question about "the boards of a pin" or "the pins of
-  a board" can only be asked from the join table. Two consequences: the soft-delete work needs two
-  extension functions on `QPinBoardModel` that would otherwise be plain `PinQueries` / `BoardQueries`
-  calls, and `savePinTags` / `saveBoards` (`PinRepository.kt:82,113`) synchronise join rows by hand,
-  reading, diffing and deleting, which is what a mapped collection does for you. **The cycle is not the
-  obstacle**, contrary to what `PinBoardModel`'s KDoc suggests: Kotlin compiles type cycles inside a
-  module and the project already has one between `models` and `models.bases`
-  (`AuthoredBaseModel` imports `UserModel`, which extends `BaseModel`). What has to be proven first is
-  Ebean's behaviour on the paths this project uses: `ModelRepository.saveAndReturn` is `merge` on a
-  detached bean, and a detached bean carrying an empty or uninitialised collection is ambiguous
-  (no change, or empty the collection), which every pin save would go through; and whether adding an
-  association flips `BeanDescriptor.isDeleteByStatement`, which decides how delete queries compile
-  (see `docs/adr/0007-single-representation-soft-delete.md`, fact 3). Its own lot, with its own tests.
-  New 2026-07-29.
 
 ## Known limits
 
