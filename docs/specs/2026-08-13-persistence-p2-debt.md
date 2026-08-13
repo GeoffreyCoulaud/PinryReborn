@@ -72,8 +72,17 @@ version (`ebean-api-19.2.0-sources.jar`, `io/ebean/Database.java:582`):
  * }
 ```
 
-`EbeanTransactionRunner.inTransaction` does not use it: it calls `beginTransaction()`, so nesting
-two `inTransaction` blocks today opens two transactions.
+`EbeanTransactionRunner.inTransaction` calls the no-arg `beginTransaction()`, which the same file
+documents as already carrying those semantics (`io/ebean/Database.java:475`, the block closing at
+:550 above the no-arg declaration at :551): "Start a transaction with 'REQUIRED' semantics. With
+REQUIRED semantics if an active transaction already exists that transaction will be used."
+
+Measured, after the plan review asked which way nesting behaves: a task enqueued inside a nested
+`inTransaction` whose outer block throws leaves no PENDING row. The check the two adapters
+hand-roll is therefore redundant, and has been since it was written. This corrects the first
+version of this section, which asserted that nesting two `inTransaction` blocks opens two
+transactions; that claim was never measured and is false. The test that establishes it is committed
+before the change it protects (`test(persistence): pin Ebean's flat transaction nesting`).
 
 ### 2.3 The three indexes
 
@@ -106,9 +115,12 @@ travels.
 1. A full test run creates no `.db` file anywhere in the tree:
    `find . -name '*.db' -o -name '*.db-wal'` is empty after `./gradlew gate`.
 2. A test asserts the running integration database is in memory, so a future reintroduction fails
-   the gate rather than the operator's `ls`. The assertion reads
-   `pragma_database_list` through the `database` already exposed by `IntegrationTest`, and joins an
-   existing `@QuarkusTest` suite rather than adding a boot.
+   the gate rather than the operator's `ls`. The assertion ties the writer to the handle it reads:
+   a row written through an injected port, then read back through the same handle whose
+   `pragma_database_list` it asserts. Asserting the handle alone would stay green if the CDI
+   producer built a separate file-backed instance. It joins an existing `@QuarkusTest` suite rather
+   than adding a boot. (`IntegrationTest.database` is private; the test reads `DB.getDefault()`
+   directly, as `SessionAuthIntegrationTest:127` already does.)
 3. The repository test suite (`api-persistence-sqlite`) still runs, unchanged, on its own
    `application-test.properties`.
 
@@ -119,25 +131,34 @@ is a test defect, and reported as a finding if it is a product defect.
 
 ### 3.2 One transaction seam
 
-`TransactionRunner.inTransaction` becomes the only way an adapter opens a transaction, and it takes
-REQUIRED semantics.
+`TransactionRunner.inTransaction` becomes the only way an adapter opens a transaction. Since the
+measurement above shows the semantics are already REQUIRED, this is a behaviour-preserving refactor,
+not a fix: the TDD exemption on ordering applies (`agents/engineering.md`, "TDD exemptions apply to
+the order only, never the safety net"), and the safety net is the characterisation test committed
+ahead of it plus the guard in criterion 3 below.
 
-- `TransactionControl.beginTransaction()` delegates to `database.beginTransaction(TxScope.required())`.
 - `EbeanTaskQueue` and `EbeanImageRepository` depend on `TransactionRunner` instead of
-  `TransactionControl`, and their `if` disappears; `claimNext`'s explicit commit goes with it.
-- `TransactionControl.currentTransaction()` is deleted if this leaves it without a caller.
+  `TransactionControl`; their `if` and its comment go, along with `claimNext`'s three explicit
+  commits.
+- `TransactionControl` keeps `currentTransaction()`: criterion 3 needs it as an observation point.
+  No production source calls it.
+- No `TxScope` enters the code. The no-arg `beginTransaction()` already means REQUIRED, and naming
+  it explicitly would suggest the default is something else.
 
 **Acceptance criteria.**
 
-1. `currentTransaction()` appears in no production source (it may survive in a test as an
-   observation point only if a test needs it).
-2. A test proves the join: a write issued from inside `inTransaction { }` that then rolls back
-   leaves no row, for `enqueue` and for `ImageRepository.save`.
-3. A test proves nesting is flat: `inTransaction { inTransaction { } }` commits once, and a rollback
-   of the outer block discards the inner write.
-4. Behaviour under no ambient transaction is unchanged: `enqueue`'s dedup check-then-insert and
-   `claimNext`'s select-then-update each still run inside one transaction (design invariant "One
-   connection; a transaction is what serialises a pair of statements").
+1. `currentTransaction()` appears in no production source; it survives on `TransactionControl` for
+   criterion 3.
+2. Rollback discards the joined write, for `enqueue` (already covered:
+   `EbeanTransactionRunnerTest`, "Given a rolled-back transaction") and for `ImageRepository.save`
+   (new).
+3. **The transactional envelope survives the refactor.** With no ambient transaction, `enqueue`
+   still holds one open across its dedup check and its insert. Without this, deleting the `if`
+   correctly and deleting the envelope with it are indistinguishable to the gate, and the invariant
+   "One connection; a transaction is what serialises a pair of statements" breaks silently
+   (`agents/engineering.md`, Design invariants, which names `EbeanTaskQueue.enqueue`). The cheapest
+   form: a `Persistor` fake asserting `currentTransaction() != null` when the insert reaches it.
+   `claimNext`'s half is already guarded by `EbeanTaskQueueConcurrencyTest`.
 
 ### 3.3 The indexes on `tasks`
 
