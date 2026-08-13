@@ -11,6 +11,13 @@ introduced. A fourth defect, two datasource configurations that had to be kept i
 proposed here and refused by the operator on the PR: it was treated instead, the producer now loading the same
 properties as avaje-config. The `SQLITE_BUSY` this file listed as a candidate consequence is not settled: the
 lot removed a candidate cause, nothing more.
+Also 2026-08-13, outside any lot: **Periodic maintenance via the task queue** was dropped unworked. The queue has
+no recurrence and none of the three ways to add one is clean; a sweep wants a fixed retry interval, not the
+exponential backoff the queue applies; and neither the poll nor the lease reaper can move into the queue at all
+(the reaper is what repairs a task stuck behind a dead worker), so the whole gain was two schedulers out of three.
+The one benefit that survived, a failing sweep surfacing as a DEAD row, is a Micrometer counter away without any
+of it. Its trigger, should it ever fire: more than one instance, where concurrent schedulers would run the orphan
+scan N times over and the queue's atomic claim becomes the deciding argument.
 Previous entry: the agent-instruction consolidation,
 `docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
 merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
@@ -72,19 +79,6 @@ them).
   association flips `BeanDescriptor.isDeleteByStatement`, which decides how delete queries compile
   (see `docs/adr/0007-single-representation-soft-delete.md`, fact 3). Its own lot, with its own tests.
   New 2026-07-29.
-- **Periodic maintenance via the task queue instead of dedicated schedulers.** The worker runs three
-  periodic lifecycles (task poll, export retention purge, garbage collection), each on its own
-  single-thread scheduler. The task queue is a solid, retried, state-tracked system, and periodic work
-  could plausibly be modelled as recurring tasks it dispatches rather than as separate schedulers.
-  Surfaced while wiring the schedulers by type (2026-07-27). Trade-off to spec: today's design isolates
-  the garbage collection sweep's heavy filesystem and database work on its own thread so it cannot
-  starve the worker pool serving user tasks (downloads, exports, account deletes), and a sweep is an
-  idempotent loop with no client waiting on a result, which the terminal-state `tasks` model does not
-  fit naturally. Routing maintenance through the task queue would unify retry and observability (a
-  failing sweep would surface as a DEAD task instead of an error log), but it needs a recurrence
-  mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
-  compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
-  needs a poller regardless. New 2026-07-27, kept as its own session by the 2026-08-12 triage.
 
 ## Known limits
 
