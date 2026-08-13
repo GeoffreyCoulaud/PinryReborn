@@ -46,11 +46,16 @@ class TaskQueueBootIntegrationTest : IntegrationTest() {
 
         // Then: that handle sees the write, and has no file behind it
         assertEquals(1, taskCount, "Expected the handle to read the row the port wrote")
-        val files = database
-            .sqlQuery("select file from pragma_database_list")
+        val attached = database
+            .sqlQuery("select name, file from pragma_database_list")
             .findList()
-            .map { it.getString("file") }
-        assertEquals(listOf(""), files, "Expected an in-memory datasource; pragma_database_list reports $files")
+            .map { it.getString("name") to it.getString("file") }
+        val backedByAFile = attached.filter { (_, file) -> file.isNotEmpty() }
+        assertEquals(
+            emptyList<Pair<String, String>>(),
+            backedByAFile,
+            "Expected no database on this connection to have a file behind it; pragma_database_list reports $attached",
+        )
     }
 
     @Test
