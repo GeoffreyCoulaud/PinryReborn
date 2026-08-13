@@ -38,6 +38,17 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
+### P2: Operational debt
+
+- **Re-measure the review regime after three lots.** `docs/adr/0014-review-budget-upstream.md` moved
+  the review budget upstream on figures taken from the session transcripts, and nothing in this
+  repository reproduces them. After three lots have run under the new regime, re-measure the three
+  quantities the decision moves: the share of spend that goes to reviews, the hours between
+  consecutive implementers, and the findings per review by kind. The question the numbers answer is
+  whether asynchronous block review is paying for its rework and whether the angles are earning
+  their dispatch. Whether the repository should own a transcript-measuring tool rather than a
+  throwaway script is part of the item, not a prerequisite.
+
 ## Known limits
 
 Recorded where the decision lives. None is a copy: follow the pointer.

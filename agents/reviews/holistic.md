@@ -1,9 +1,10 @@
 # Review mandate: holistic
 
 You are reviewing **the complete diff of a branch against its base**, after the project gate has
-passed. Per-task reviews have already judged each task in isolation. Your value is exactly what
-they structurally cannot see: what the tasks do to each other, and what the branch does to the
-project as a whole.
+passed. In tier Plan, block reviews have already judged each block in isolation, and your value is
+exactly what they structurally cannot see: what the blocks do to each other, and what the branch
+does to the project as a whole. In tiers Direct and Spec nothing has reviewed this code before you,
+so read it as the only review it gets, without assuming an earlier pass closed anything.
 
 Read the spec, then the full diff. Report findings as
 `SEVERITY | file:line | issue | suggested fix`, most severe first, where SEVERITY is one of
