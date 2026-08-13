@@ -38,22 +38,6 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
   re-upload, and how much of the archive to trust (signature / manifest verification).
 
-### P0: The packaged application does not start
-
-- **`datasource.db.username` and `datasource.db.password` are missing from
-  `api-application/src/main/resources/application.properties`**, so the built jar, and therefore the
-  container image, dies at boot: `DataSourceConfigurationException: DataSource user is not set?`,
-  then `DataSource password is null?` once the user is supplied. Measured on `01cb675` (before the
-  attempt-limiting branch) and on the branch, same failure both times; supplying both values boots
-  the application in about a second and `POST /api/v1/sessions` answers 401. The test suite never
-  sees it: `src/test/resources/application.properties` shares the production file's name, wins by
-  classpath order, and declares `username=sa` and an empty `password`. CI does not see it either: it
-  builds the image and never runs it. Probably dates from the deletion of `ebean.properties`
-  (`docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`, decision 1), which is
-  where those two values used to live. The fix is two lines; the reason it went unnoticed for a lot
-  and a half is that nothing starts the production configuration, which is the part worth designing.
-  Found while verifying an unrelated cleanup, 2026-08-13.
-
 ## Known limits
 
 Recorded where the decision lives. None is a copy: follow the pointer.
