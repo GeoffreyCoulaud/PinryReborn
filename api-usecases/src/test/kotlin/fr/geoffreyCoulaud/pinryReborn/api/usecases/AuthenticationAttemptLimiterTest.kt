@@ -128,14 +128,23 @@ class AuthenticationAttemptLimiterTest : BaseTest() {
     }
 
     @Test
-    fun `Given a counter left idle past the forget-after, Then the failures start over`() {
+    fun `Given a counter left idle past the forget-after, Then the check passes`() {
         // Given: a blocked key
         failTimes(limiter, key, threshold)
         // When: the counter sits idle past the forget-after
         now = start.plus(forgetAfter).plusSeconds(1)
-        // Then: the entry reads as absent, and the next failures count from the first
+        // Then: the entry reads as absent
         assertDoesNotThrow { limiter.check(key) }
+    }
+
+    @Test
+    fun `Given a failure landing on a forgotten counter, Then the failures start over`() {
+        // Given: a blocked key, left idle past the forget-after
+        failTimes(limiter, key, threshold)
+        now = start.plus(forgetAfter).plusSeconds(1)
+        // When: the failures resume, without a check purging the expired entry first
         failTimes(limiter, key, threshold - 1)
+        // Then: they counted from the first, so the earlier ones were forgotten
         assertDoesNotThrow { limiter.check(key) }
     }
 
