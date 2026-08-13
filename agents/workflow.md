@@ -83,11 +83,11 @@ worktree, (4) other. Naming: `<type>/<kebab-slug>` with a conventional-commit ty
 The tier is the user's decision: state the recommended tier and its trigger, then wait. Recommend
 the higher when two fit; if a higher trigger surfaces mid-task, stop and ask again.
 
-| Tier | Trigger | Phases run |
-| --- | --- | --- |
-| Direct | No design decision, no new dependency, no public-surface change, readable in one pass | Act, Verify, Wrap, Improve |
-| Spec | Several modules, or a design decision, dependency, format or public surface | Discuss, Spec, Act, Verify, Wrap, Improve |
-| Plan | More than three tasks, subagent dispatch, or a migration | All seven |
+| Tier | Trigger | Phases run | Reviews |
+| --- | --- | --- | --- |
+| Direct | No design decision, no new dependency, no public-surface change, readable in one pass | Act, Verify, Wrap, Improve | Holistic only |
+| Spec | Several modules, or a design decision, dependency, format or public surface | Discuss, Spec, Act, Verify, Wrap, Improve | Spec angles, holistic |
+| Plan | More than three tasks, subagent dispatch, or a migration | All seven | Spec angles, plan angles, block, holistic |
 
 Mandatory escalation to at least Spec: security or auth, data migration, public contract change,
 anything irreversible. Wrap and Improve run in every tier.
