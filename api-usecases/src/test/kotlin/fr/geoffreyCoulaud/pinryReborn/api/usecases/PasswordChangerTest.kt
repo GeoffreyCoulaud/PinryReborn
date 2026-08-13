@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordChangeColl
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordChangedTooSoonError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.PasswordPreviouslyUsedError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ReauthenticationError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.TooManyAuthenticationAttemptsError
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
@@ -32,13 +33,33 @@ class PasswordChangerTest : BaseTest() {
     private val tx = mockk<TransactionRunner>()
     private val clock = mockk<Clock>()
     private val minimumInterval = Duration.ofSeconds(30)
-    private val changer = PasswordChanger(passwords, hasher, sessionRevoker, tx, clock, minimumInterval)
+    private val threshold = 3
+
+    // Its own clock, so the instants the change itself is measured against stay a per-test choice.
+    // Built lazily, from the test body: BaseTest clears every stub after the instance is constructed.
+    private val limiterClock = mockk<Clock>()
+    private val limiter by lazy {
+        every { limiterClock.now() } returns TestTime.now
+        AuthenticationAttemptLimiter(
+            clock = limiterClock,
+            threshold = threshold,
+            backoffSteps = listOf(Duration.ofSeconds(30)),
+            forgetAfter = Duration.ofMinutes(15),
+            maxTrackedKeys = 100,
+        )
+    }
+    private val changer by lazy {
+        PasswordChanger(passwords, hasher, sessionRevoker, tx, clock, limiter, minimumInterval)
+    }
 
     private val now = Instant.parse("2026-07-29T00:00:00Z")
     private val user = User(id = randomUUID(), name = "u", createdAt = TestTime.now)
     // One minute before `now`, so the pre-existing tests sit outside the 30 s interval.
     private val current =
         HashedPassword("current-hash", PasswordHashAlgorithm.BCRYPT, createdAt = now.minus(Duration.ofMinutes(1)))
+
+    private fun failTimes(count: Int) =
+        repeat(count) { assertThrows<ReauthenticationError> { changer.changePassword(user, "bad", "new") } }
 
     @Test
     fun `Given valid inputs, Then the new hash is appended, stamped from the clock, and all sessions revoked`() {
@@ -166,5 +187,56 @@ class PasswordChangerTest : BaseTest() {
         every { passwords.saveUserPasswordHash(any(), any()) } throws PasswordChangeCollisionException(violation)
         // When / Then
         assertThrows<PasswordChangeCollisionError> { changer.changePassword(user, "old", "new") }
+    }
+
+    @Test
+    fun `Given the threshold reached on wrong current passwords, Then the next change is refused`() {
+        // Given
+        every { passwords.findCurrentPasswordHash(user) } returns current
+        every { hasher.matches("bad", current) } returns false
+        failTimes(threshold)
+        // When
+        val error = assertThrows<TooManyAuthenticationAttemptsError> { changer.changePassword(user, "bad", "new") }
+        // Then
+        assertEquals(30, error.retryAfterSeconds)
+    }
+
+    @Test
+    fun `Given a blocked user, Then no password reaches the hasher`() {
+        // Given
+        every { passwords.findCurrentPasswordHash(user) } returns current
+        every { hasher.matches("bad", current) } returns false
+        failTimes(threshold)
+        // When
+        assertThrows<TooManyAuthenticationAttemptsError> { changer.changePassword(user, "bad", "new") }
+        // Then: one hash per attempt up to the block, none for the refused one (spec D6)
+        verify(exactly = threshold) { hasher.matches(any(), any()) }
+    }
+
+    @Test
+    fun `Given a change refused on another rule, Then the proven password still clears the counter`() {
+        // Given: one failure short of the threshold
+        every { passwords.findCurrentPasswordHash(user) } returns current
+        every { hasher.matches("bad", current) } returns false
+        failTimes(threshold - 1)
+        // When: the right current password, refused for reusing an old one
+        every { hasher.matches("old", current) } returns true
+        every { clock.now() } returns now
+        every { passwords.findAllPasswordHashesForUser(user) } returns listOf(current)
+        every { hasher.matches("reused", current) } returns true
+        assertThrows<PasswordPreviouslyUsedError> { changer.changePassword(user, "old", "reused") }
+        // Then: the counter limits password guesses, and that caller guessed none wrong
+        failTimes(threshold - 1)
+    }
+
+    @Test
+    fun `Given the threshold reached on re-authentication, Then the password change is refused too`() {
+        // Given: both verify the same secret, so they share one counter (spec D4)
+        val reauth = Reauthenticator(passwords, hasher, limiter)
+        every { passwords.findCurrentPasswordHash(user) } returns current
+        every { hasher.matches("bad", current) } returns false
+        repeat(threshold) { assertThrows<ReauthenticationError> { reauth.reauthenticate(user, "bad") } }
+        // When / Then
+        assertThrows<TooManyAuthenticationAttemptsError> { changer.changePassword(user, "bad", "new") }
     }
 }
