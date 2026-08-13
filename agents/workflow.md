@@ -141,8 +141,13 @@ exception: work whose subject is a mandate itself.
 commits, points at each criterion by path and line range, and adds at most three zones of risk,
 each an open question. No instruction begins with "confirm", "verify" or "check that".
 
-**The brief says how the report comes back**: ask for `SendMessage` to `main` with the findings
-in the message body.
+**Dispatch a plain subagent, not a named teammate.** A subagent's final message is its return
+value: it arrives once, in full, when the work ends. Naming an agent turns it into a correspondent
+instead, and the review loop then pays for the mailbox rather than for the review: reports that
+have to be asked for, idle notifications echoing findings already handled, an agent still listed
+after it has answered, and a scope extension sent mid-flight that lands after the report it should
+have changed. Nothing in an adversarial review needs a conversation. If one genuinely does, say in
+the brief that the agent works its inbox to empty before reporting.
 
 ## Git and integration
 
