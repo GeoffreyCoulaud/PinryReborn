@@ -17,6 +17,7 @@ class UserAuthenticator(
     private val userRepository: UserRepositoryInterface,
     private val userPasswordRepository: UserPasswordHashRepositoryInterface,
     private val passwordHasher: PasswordHasher,
+    private val attemptLimiter: AuthenticationAttemptLimiter,
 ) {
     /**
      * Precomputed once. Pays a constant hashing cost when the user does not exist or has no
@@ -33,18 +34,29 @@ class UserAuthenticator(
         }
 
     private fun checkLogin(login: BasicAuthLogin): User {
+        // Keyed by the submitted name, and checked before anything is hashed, so a blocked name
+        // costs no bcrypt (spec D2 and D6).
+        val attemptKey = AuthenticationAttemptKey.forLogin(login.userName)
+        attemptLimiter.check(attemptKey)
         val user = userRepository.findUserByName(login.userName)
         val hash = user?.let { userPasswordRepository.findCurrentPasswordHash(it) }
         if (user == null || hash == null) {
             // Constant cost even without a user/hash: the result is ignored.
             passwordHasher.matches(login.password, dummyHash)
+            // Counted like a wrong password: a refusal the limiter ignored would answer 429 for
+            // existing names and 401 for the rest, which is the enumeration oracle again.
+            attemptLimiter.recordFailure(attemptKey)
             throw if (user == null) {
                 UserAuthenticationUserDoesNotExistError()
             } else {
                 UserAuthenticationInvalidPasswordError()
             }
         }
-        return user.takeIf { passwordHasher.matches(login.password, hash) }
-            ?: throw UserAuthenticationInvalidPasswordError()
+        if (!passwordHasher.matches(login.password, hash)) {
+            attemptLimiter.recordFailure(attemptKey)
+            throw UserAuthenticationInvalidPasswordError()
+        }
+        attemptLimiter.recordSuccess(attemptKey)
+        return user
     }
 }
