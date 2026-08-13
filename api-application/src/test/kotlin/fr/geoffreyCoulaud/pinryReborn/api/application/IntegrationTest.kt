@@ -26,6 +26,10 @@ abstract class IntegrationTest {
      *
      * - Tables prefixed by "sqlite_" are ignored.
      * - The "db_migration" table is ignored, as it's necessary for ebean.
+     *
+     * The database is not the only state a case shares: `AuthenticationAttemptLimiter` counts failed
+     * password attempts in memory and nothing empties those, so a case submitting a wrong credential
+     * takes an identity of its own.
      */
     @BeforeEach
     fun truncateAllTables() {

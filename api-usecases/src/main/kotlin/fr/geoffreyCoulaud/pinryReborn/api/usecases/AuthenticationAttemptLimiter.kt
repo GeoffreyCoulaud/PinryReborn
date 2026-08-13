@@ -57,7 +57,6 @@ class AuthenticationAttemptLimiter(
         val failures = if (stored != null && stored.isLiveAt(now)) stored.failures + 1 else 1
         val blockedUntil = if (failures >= threshold) now.plus(backoffStep(failures)) else null
         val forgetAt = now.plus(forgetAfter)
-        // The entry outlives the block it carries, so a key cannot be forgotten while still blocked.
         val expiresAt = if (blockedUntil != null && blockedUntil.isAfter(forgetAt)) blockedUntil else forgetAt
         return AttemptState(failures, blockedUntil, expiresAt)
     }
