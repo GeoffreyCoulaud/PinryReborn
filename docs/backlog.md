@@ -3,7 +3,13 @@
 **Living document.** What is still open, banded by nature first and by priority second. What already shipped lives
 in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags, not here.
 
-Last reviewed: 2026-08-13 (the agent-instruction consolidation,
+Last reviewed: 2026-08-13 (the persistence P2 lot,
+`docs/specs/2026-08-13-persistence-p2-debt.md`. Closed three items: the integration suite running on a file,
+the duplicated ambient-transaction check, and the three partial indexes on `tasks`. Its two reviews filed
+three CRITICAL findings; all three were fixed inside the lot, one of them a regression the lot itself had
+introduced, and the holistic review's remaining question became the one new item below. The `SQLITE_BUSY`
+this file listed as a candidate consequence is not settled: the lot removed a candidate cause, nothing more.
+Previous entry: the agent-instruction consolidation,
 `docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
 merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
 eleven were fixed inside the lot and one became a known limit. A fourth review, of those fixes, sent one of them
@@ -64,12 +70,6 @@ them).
   association flips `BeanDescriptor.isDeleteByStatement`, which decides how delete queries compile
   (see `docs/adr/0007-single-representation-soft-delete.md`, fact 3). Its own lot, with its own tests.
   New 2026-07-29.
-- **Unify the ambient-transaction logic.** `EbeanTaskQueue` and `EbeanImageRepository` hand-roll the
-  "join the ambient transaction or open my own" check (`transactionControl.currentTransaction() != null`)
-  instead of routing through the domain `TransactionRunner.inTransaction { }`. After ADR 0008 they do it
-  over `TransactionControl`; consolidating both behind `TransactionRunner` would remove the duplication,
-  but it changes Ebean's transaction-nesting behaviour and is its own specification with its own tests.
-  Surfaced 2026-08-03 while wiring the ports.
 - **Periodic maintenance via the task queue instead of dedicated schedulers.** The worker runs three
   periodic lifecycles (task poll, export retention purge, garbage collection), each on its own
   single-thread scheduler. The task queue is a solid, retried, state-tracked system, and periodic work
@@ -83,30 +83,19 @@ them).
   mechanism the queue does not have, and either a dedicated worker pool or acceptance that sweeps
   compete with user tasks. The poll lifecycle itself cannot disappear: SQLite has no push, so the queue
   needs a poller regardless. New 2026-07-27, kept as its own session by the 2026-08-12 triage.
-- **The three partial indexes on `tasks` serve none of the queries they were created for.** Both halves
-  are measured. SQLite does not use a partial index when the value its predicate tests arrives as a
-  bound parameter (sqlite 3.53.3, against the committed definitions): with `state = ?` the claim query
-  plans as `SCAN tasks` plus `USE TEMP B-TREE FOR ORDER BY`, and with `state = 'PENDING'` written as a
-  literal it plans as `SCAN tasks USING INDEX ix_tasks_claim`; the dedup lookup is `SCAN` against
-  `SEARCH ... USING INDEX ux_tasks_dedup` the same way. And Ebean binds: `Query.getGeneratedSql()` on
-  the two queries as the adapter builds them returns `where t0.state = ? and t0.available_at <= ?` and
-  `where t0.dedup_key = ? and t0.state in (?,?)`. So `ix_tasks_claim` and `ix_tasks_lease`
-  (`1.3.sql:23,25`) cost writes and buy nothing, `ux_tasks_dedup` still enforces uniqueness but does not
-  speed its own lookup, and `claimNext` scans the whole table on every poll. The fix is a decision
-  between inlining the state literal, dropping the partial predicate from the two non-unique indexes,
-  and leaving it. Surfaced by the T3 review of the 2026-08-12 triage; the Ebean half was measured before
-  that lot wrapped.
-- **The api-application integration tests run against a file, not memory.**
-  `api-application/src/test/resources/application.properties:5` declares
-  `datasource.db.url=jdbc:sqlite::memory:`, and `api-application/data.db` is nonetheless written during
-  a test run (observed 2026-08-12, mtime tracking the run). Two other declarations of the same key
-  exist, `api-persistence-sqlite/src/main/resources/ebean.properties:26` and
-  `api-application/src/main/resources/application.properties:12`, both naming `data.db`, so the
-  question is which one wins and why. Consequences worth checking before this is dismissed: state
-  survives between runs, two concurrent runs share one file, and a locally mutated migration stays
-  applied in `db_migration` after the `.sql` is deleted. **This is a candidate cause for the
-  `SQLITE_BUSY` that the 2026-08-12 triage closed as unreproduced.** Surfaced by the T6 review and
-  confirmed independently by the T6 task review, 2026-08-12.
+- **Which creation path builds the default `Database` is decided by a race, and only its loser is
+  configured in code.** `EbeanDatabaseProducer` sets the pool bounds, the migration run and the entity
+  packages programmatically; avaje-config sets whatever the properties file names. Whichever runs first
+  wins, silently ("Using existing database with name:db"), and the winner is avaje-config, because
+  `TaskWorkerLifecycle`'s `StartupEvent` observer reaches a query bean, and so `DB.getDefault()`, before
+  anything asks the producer. The 2026-08-13 lot made each properties file declare the full set and
+  pinned the production one with `ProductionDatasourceDeclarationTest`, so the race no longer decides
+  behaviour, but it still decides which object serves the application. Two ways out to weigh: make the
+  producer win (an eager `@Startup` observer ordered before the worker's, or the worker resolving the
+  `Database` before its first query bean), or drop the producer and let avaje-config own the
+  configuration outright. Today's answer, two paths that must agree by hand, is a standing invitation to
+  a fourth key going missing. Surfaced by the holistic review of the 2026-08-13 persistence lot, whose
+  ADR is `docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`.
 
 ## Known limits
 
