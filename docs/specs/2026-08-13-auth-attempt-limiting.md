@@ -150,8 +150,15 @@ property parsed in the producer, and the defaults and semantics above are unchan
 4. A successful login before the threshold clears the counter: the next failure starts over.
 5. `PUT /api/v1/me/password` and `DELETE /api/v1/me` share the counter for one user, and the refusal
    is 429 rather than 403 once the threshold is passed.
-6. A blocked key does not reach the password hasher: pinned in the unit tests by a hasher stub that
-   fails the test if it is called.
+6. A blocked key does not reach the password hasher: pinned in the unit tests by counting the
+   hasher's calls, `verify(exactly = threshold) { matches(any(), any()) }`, at each of the three
+   sites and on both branches an attempt can take, the wrong password and the name that belongs to
+   no user. A hasher that fails the test on any call, the shape this criterion first asked for, does
+   not fit: driving a key to the block takes `threshold` real attempts, each of which the hasher has
+   to answer, so such a stub would fail on the setup and never reach the case. It is available, not
+   forbidden: a bare `mockk<PasswordHasher>()` throws `MockKException` when reached, and
+   `BaseTest.afterEachCheckUnnecessaryStub` has nothing to report against a mock with no stubs. The
+   count pins the same property and pins it against the code rather than against the fixture.
 7. The block expires on its own: with a short step configured, an attempt after the step passes
    through to the ordinary 401.
 8. `./gradlew gate` is green, including the 100 percent branch-coverage bound.
