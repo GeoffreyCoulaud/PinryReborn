@@ -16,7 +16,7 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 class EbeanImageRepositoryTest : RepositoryTest() {
-    private val repository = EbeanImageRepository(persistor, transactionControl)
+    private val repository = EbeanImageRepository(persistor, transactionRunner)
     private val userRepository = UserRepository(persistor)
     private val pinRepository = PinRepository(persistor)
 

@@ -24,7 +24,7 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class EbeanTaskQueueTest : RepositoryTest() {
-    private val queue = EbeanTaskQueue(persistor, transactionControl)
+    private val queue = EbeanTaskQueue(persistor, transactionRunner)
     private val now = Instant.parse("2026-07-08T00:00:00Z")
 
     private fun newTask(
@@ -105,7 +105,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
     fun `Given no ambient transaction, Then enqueue still inserts inside one`() {
         // Given
         val witness = TransactionWitnessPersistor(persistor, transactionControl)
-        val witnessedQueue = EbeanTaskQueue(witness, transactionControl)
+        val witnessedQueue = EbeanTaskQueue(witness, transactionRunner)
 
         // When: nothing above opened a transaction
         witnessedQueue.enqueue(newTask())
@@ -121,7 +121,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Given: a live task appears under the same dedup key between enqueue's check and its insert
         val dedupKey = createRandomString()
         val conflict = liveTaskModel(dedupKey)
-        val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionControl)
+        val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionRunner)
 
         // When: no ambient transaction, so enqueue opens and commits its own
         val converged = racingQueue.enqueue(newTask(dedupKey = dedupKey))
@@ -136,7 +136,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Given
         val dedupKey = createRandomString()
         val conflict = liveTaskModel(dedupKey)
-        val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionControl)
+        val racingQueue = EbeanTaskQueue(LosingDedupRacePersistor(persistor, conflict), transactionRunner)
 
         // When: the caller owns the transaction, so committing it shows the caught violation left it usable
         val converged =
@@ -158,7 +158,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val conflict = liveTaskModel(dedupKey)
         val violation = notNullConstraintViolation()
         val persistorRaising = ForeignFailurePersistor(persistor, conflict, violation)
-        val racingQueue = EbeanTaskQueue(persistorRaising, transactionControl)
+        val racingQueue = EbeanTaskQueue(persistorRaising, transactionRunner)
 
         // When, Then: a NOT NULL violation answered by convergence would hide a broken column
         val thrown =
@@ -172,7 +172,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
     fun `Given a dedup violation with no live task behind it, Then enqueue propagates the violation`() {
         // Given: the violation carries no row to converge on, so propagating it is the honest answer
         val violation = uniqueConstraintViolation()
-        val racingQueue = EbeanTaskQueue(NoConflictRowPersistor(persistor, violation), transactionControl)
+        val racingQueue = EbeanTaskQueue(NoConflictRowPersistor(persistor, violation), transactionRunner)
 
         // When, Then
         val thrown =

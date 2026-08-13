@@ -2,8 +2,8 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.Persistor
-import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.TransactionControl
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.ImageModelMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.mappers.ImageModelMapper.toModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QImageModel
@@ -13,22 +13,12 @@ import java.util.UUID
 @ApplicationScoped
 class EbeanImageRepository(
     private val persistor: Persistor,
-    private val transactionControl: TransactionControl,
+    private val transactionRunner: TransactionRunner,
 ) : ImageRepositoryInterface {
-    // Ambient-transaction-aware: when a TransactionRunner already opened a transaction on this thread,
-    // join it (so the delete+save commits atomically with the caller's other writes, e.g. deleting the
-    // download row) instead of opening (and committing) our own. Only when there is no ambient
-    // transaction do we open our own, so delete-then-save still serializes as one unit.
-    override fun save(image: Image): Image =
-        if (transactionControl.currentTransaction() != null) {
-            saveWithin(image)
-        } else {
-            transactionControl.beginTransaction().use { transaction ->
-                val result = saveWithin(image)
-                transaction.commit()
-                result
-            }
-        }
+    // The delete and the save are one unit: a caller's ambient transaction is joined rather than
+    // nested (Ebean's REQUIRED semantics), so this commits with the caller's other writes when there
+    // is one, and on its own when there is not.
+    override fun save(image: Image): Image = transactionRunner.inTransaction { saveWithin(image) }
 
     private fun saveWithin(image: Image): Image {
         QImageModel().pinId.equalTo(image.pinId).delete()
