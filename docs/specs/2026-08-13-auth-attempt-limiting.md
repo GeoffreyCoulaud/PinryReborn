@@ -141,12 +141,18 @@ The limiter takes these as raw constructor parameters, supplied by a producer in
 root, so `api-usecases` stays free of configuration: the `PasswordChangerProducer` precedent
 (`docs/specs/2026-07-31-current-password-determinism.md`, D22).
 
-**One unverified assumption, to be settled by a test before the code depends on it.** Quarkus's
-config-mappings guide states that collections of simple types are supplied as comma-separated values
-and that `@WithDefault` goes through the same conversion as a configured value, which should make
-`@WithDefault("PT30S,PT2M,PT10M") fun attemptLimitBackoff(): List<Duration>` work. That is read from
-the guide, not measured here. If the mapping does not resolve, the fallback is a single `String`
-property parsed in the producer, and the defaults and semantics above are unchanged.
+**One assumption, since settled by a test.** Quarkus's config-mappings guide states that collections
+of simple types are supplied as comma-separated values and that `@WithDefault` goes through the same
+conversion as a configured value, which should make
+`@WithDefault("PT30S,PT2M,PT10M") fun attemptLimitBackoff(): List<Duration>` work. It does:
+`AuthConfigDefaultsIntegrationTest` reads the four properties back through `AuthConfig` and pins the
+three steps as a `List<Duration>`. The fallback the assumption held in reserve, a single `String`
+property parsed in the producer, was not needed.
+
+`api-application/src/main/resources/application.properties` restates the four with those same values,
+as it does every other config-mapping property: it is what an operator opens to see the knobs. That
+restatement is what the test now reads, `@WithDefault` being the fallback for a property no source
+supplies.
 
 ## 6. Acceptance criteria
 
