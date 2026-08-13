@@ -54,20 +54,16 @@ Recorded where the decision lives. None is a copy: follow the pointer.
   rather than a documentation one: it pins the predicate, not the uniqueness columns that make
   `findOne()` return at most one row. `PartialUniqueIndexStates` and
   `api-persistence-sqlite/src/test/kotlin/.../migration/PartialUniqueIndexStatesTest.kt`.
+- **Authentication attempt counters are per process, and holding one account's login closed is
+  cheap.** `docs/adr/0013-in-memory-authentication-attempt-limiting.md`: decision 1 (counters reset
+  on restart, correct only while the deployment is one instance), decision 3 (the measured cost of
+  keeping a named account out, and the `forget_after` / last-step interaction behind it), decision 4
+  (eviction is a bypass, and nothing purges outside a recorded failure).
 
 ## Before beta
 
 Dated events. No session starts these early.
 
-- **Authentication attempt limiting (brute force).** `PasswordChanger` verifies the current password
-  before changing it, and `POST /api/v1/sessions` verifies it to issue a token: both are password
-  oracles, and neither limits attempts. The minimum interval added by P0 block 3 counts **successful**
-  changes only (it reads the current hash's `createdAt`), so a failed attempt writes nothing and costs
-  the caller nothing. Do not read "there is a rate limit on password change" as "brute force is
-  handled". Limiting attempts needs state the codebase does not have (a per-user failure counter, its
-  expiry, its behaviour across instances), so it is its own specification. Surfaced while specifying
-  the P0 lot, 2026-07-29. **Before beta, and it is the one security gap that is deliberately open**:
-  the project is alpha and nobody should be running it.
 - **Flatten the migration history.** The migration history is append-only, and that already constrains
   fixes: `users`/`pins`/`boards`/`tags` keep `when_created` / `when_modified` column names that no
   longer match the domain's `createdAt` / `updatedAt`, kept only because rewriting an applied migration

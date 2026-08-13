@@ -68,7 +68,7 @@ the enumeration oracle that dummy hash exists to deny.
 Accepted limit: **a third party can degrade an account's login**, by failing on its behalf. Decision
 3 is what bounds the damage.
 
-## Decision 3: escalating backoff, never a lockout
+## Decision 3: escalating backoff, never a lockout state
 
 Five consecutive failures, then a block whose length walks up a configured list of steps and
 saturates on the last one. A success clears the counter, and an idle counter is forgotten after a
