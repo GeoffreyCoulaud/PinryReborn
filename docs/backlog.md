@@ -6,7 +6,8 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 Last reviewed: 2026-08-13 (the agent-instruction consolidation,
 `docs/specs/2026-08-12-consolidate-agents-instructions.md`. The repository left the `agents-baseline` regime and
 merged four instruction files into the `AGENTS.md` it now owns. Of the twelve findings its three reviews filed,
-ten were fixed inside the lot, one became the P2 item on the evidence guard below, and one became a known limit.
+eleven were fixed inside the lot and one became a known limit. The P2 item below is what the last of those fixes
+left standing rather than a finding of its own: the guard was corrected, and it still has no test.
 The reviewed-band accounting of the previous lot, `docs/adr/0010-review-finding-dispositions.md`, is what routed
 them).
 
@@ -105,18 +106,18 @@ them).
   applied in `db_migration` after the `.sql` is deleted. **This is a candidate cause for the
   `SQLITE_BUSY` that the 2026-08-12 triage closed as unreproduced.** Surfaced by the T6 review and
   confirmed independently by the T6 task review, 2026-08-12.
-- **Two faults in the evidence guard, and nothing exercises it.** `.claude/hooks/evidence-guard.py`
-  is Python under `.claude/`, outside the coverage perimeter, so no test reaches it: both faults were
-  found by hand while removing its generic-file rule, and both predate that removal. First,
-  `main()` (`:326-331`) catches `JSONDecodeError` and `ValueError` under a comment promising never to
-  block on input it cannot read, but a valid JSON payload that is not an object reaches
-  `payload.get` and raises `AttributeError`, exiting 1 with a traceback where the docstring defines
-  only 0 and 2. Second, `check_inplace` (`:234-246`) blocks `sed`, `perl` and `ruby` in place on the
-  command name alone and never calls `is_disposable`, though it receives `cwd` and ignores it, where
-  `check_truncating` (`:258`) does call it: measured, `sed -i 1d /tmp/x.md` is refused although the
-  module docstring says a write to a disposable location is allowed. The two are one session's work,
-  but the first question is how this file gets a safety net at all, since the gate perimeter is
-  decided by location and this location is outside it. New 2026-08-13.
+- **Nothing exercises the evidence guard, and two faults reached it that way.**
+  `.claude/hooks/evidence-guard.py` is Python under `.claude/`, outside the coverage perimeter, so no
+  test reaches it and none can while the perimeter is decided by location. Two faults were found by
+  hand there on 2026-08-13 and fixed on the operator's call in the same lot, deliberately without a
+  safety net (`docs/specs/2026-08-12-consolidate-agents-instructions.md`, section 7): a valid JSON
+  payload that was not an object crashed the guard, and in-place editors were blocked on the command
+  name without ever asking whether the target was disposable. What stands is the reason both survived
+  so long, which no fix in that lot addressed: the file has no test and the next regression will
+  arrive the same way. The question to settle is how a Python file under `.claude/` gets a safety net
+  at all. A Gradle task running `python3 -m unittest`, hung off `gate` by `dependsOn` the way
+  `checkNoLongDashes` is, needs no new dependency: `python3` is already required per clone. New
+  2026-08-13.
 
 ## Known limits
 

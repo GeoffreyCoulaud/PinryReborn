@@ -144,6 +144,31 @@ the split had made necessary, or answers a review.
 Listed here on 2026-08-12: the first draft of this document said only titles and section 4 changed,
 which its own diff contradicted, and the holistic review said so.
 
+### 7. Two guard faults fixed here, deliberately without a safety net
+
+Both were found by hand while removing the generic-file rule, both predate it, and the first
+disposition was a backlog item, because the file has no test and the perimeter that would give it one
+is decided by location. The operator read that item on the pull request and asked for the fixes now
+rather than later, the alternative having been put and declined: a Gradle task running
+`python3 -m unittest`, hung off `gate` the way `checkNoLongDashes` is. So they land in this lot, and
+the risk is stated rather than hidden, a change to a file no test reaches.
+
+- `main()` answered a traceback and exit 1 to a valid JSON payload that was not an object, where its
+  own comment promises never to block on input it cannot read and its docstring defines only 0 and 2.
+  A non-object payload now leaves through the same door as unreadable input.
+- `check_inplace` blocked `sed`, `perl` and `ruby` in place on the command name alone, never calling
+  `is_disposable` although it received `cwd`, where `check_truncating` beside it does call it. It now
+  works out which files the editor would rewrite (not its flags, not the value a flag consumes, not
+  sed's script) and lets the call through only when every one of them is disposable. A token it
+  cannot classify counts as a target, so an unparsed command blocks rather than passes, and a command
+  with no target blocks as before.
+
+What stands in for the missing test is the holistic reviewer's 59-payload corpus, replayed against
+the committed guard and the fixed one, plus eight cases aimed at the two fixes. Two corpus verdicts
+move and both are intended; four of the eight move and the four dangerous ones do not. The output is
+in the commit body. The absence of a safety net is not fixed by any of this and stays on the backlog
+as its own item.
+
 ## Target structure
 
 One file, sections in this order. Every bullet moves intact; what changes is section titles, the

@@ -63,6 +63,8 @@ NESTED_SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 PATCH_READONLY = {"--check", "--stat", "--summary", "--numstat", "--dry-run"}
 
 INPLACE_EDITORS = {"sed", "perl", "ruby"}
+# Flags carrying the script, so neither they nor their value is a file to rewrite.
+INPLACE_SCRIPT_FLAGS = ("-e", "-f", "--expression", "--file")
 # Short perl and ruby flag clusters only, so that -Ilib is not read as in-place.
 INPLACE_CLUSTER = re.compile(r"\A-[pnealwsi]*i[pnealwsi]*\Z")
 INPLACE_LONG = re.compile(r"\A--in-place(=.*)?\Z")
@@ -194,18 +196,53 @@ def check_tee(tokens, commands, cwd):
     return None
 
 
+def inplace_targets(name: str, arguments: list[str]) -> list[str]:
+    """The files an in-place editor would rewrite.
+
+    Neither its flags, nor the value a flag consumes, nor sed's script when it
+    is given as the first operand rather than through -e. A token this cannot
+    classify is returned as a target, so an unparsed command blocks rather than
+    passes.
+    """
+    targets = []
+    script_pending = name == "sed"
+    skip_value = False
+    for argument in arguments:
+        if skip_value:
+            skip_value = False
+            continue
+        if argument.startswith("-"):
+            if argument in INPLACE_SCRIPT_FLAGS:
+                skip_value = True
+            if argument.startswith(INPLACE_SCRIPT_FLAGS):
+                script_pending = False
+            continue
+        if script_pending:
+            script_pending = False
+            continue
+        targets.append(argument)
+    return targets
+
+
 def check_inplace(tokens, commands, cwd):
     for index, token in enumerate(tokens):
-        if index not in commands or basename(token) not in INPLACE_EDITORS:
+        name = basename(token)
+        if index not in commands or name not in INPLACE_EDITORS:
             continue
-        for argument in arguments_after(tokens, index):
-            if (
-                argument == "-i"
-                or argument.startswith("-i.")
-                or INPLACE_LONG.match(argument)
-                or (basename(token) != "sed" and INPLACE_CLUSTER.match(argument))
-            ):
-                return f"in-place edit by {basename(token)}"
+        arguments = arguments_after(tokens, index)
+        in_place = any(
+            argument == "-i"
+            or argument.startswith("-i.")
+            or INPLACE_LONG.match(argument)
+            or (name != "sed" and INPLACE_CLUSTER.match(argument))
+            for argument in arguments
+        )
+        if not in_place:
+            continue
+        targets = inplace_targets(name, arguments)
+        if targets and all(is_disposable(target, cwd) for target in targets):
+            continue
+        return f"in-place edit by {name}"
     return None
 
 
@@ -327,6 +364,9 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         # Never block a call because the guard could not read its own input.
+        return 0
+    if not isinstance(payload, dict):
+        # Valid JSON that is not an object is unreadable input all the same.
         return 0
     if payload.get("tool_name") != "Bash":
         return 0
