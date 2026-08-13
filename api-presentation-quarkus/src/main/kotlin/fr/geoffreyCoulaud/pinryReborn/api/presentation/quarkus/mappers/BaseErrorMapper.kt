@@ -64,6 +64,7 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.EXPORT_NOT_READY -> Response.Status.CONFLICT.statusCode
             ErrorCode.EXPORT_GONE -> Response.Status.GONE.statusCode
+            ErrorCode.TOO_MANY_AUTHENTICATION_ATTEMPTS -> Response.Status.TOO_MANY_REQUESTS.statusCode
         }
 
     private companion object {
