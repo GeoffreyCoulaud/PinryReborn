@@ -14,6 +14,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.time.Duration
@@ -300,6 +301,19 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
         // Then
         assertEquals(0, reaped)
         verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given a row whose sweep fails outside Exception, Then the failure is not absorbed`() {
+        // Given: the isolation absorbs an Exception deliberately, and nothing wider. detekt reads catch
+        // clauses only, so a swallow broader than Exception would ship with no suppression and no reason.
+        stubSweep()
+        stubRowWrites()
+        val refused = anImport(UserDataImportState.AWAITING_ARCHIVE)
+        every { archiveStore.discardPartialUpload(refused.id) } throws StackOverflowError("native frame")
+
+        // When / Then
+        assertThrows(StackOverflowError::class.java) { sweep.reap() }
     }
 
     @Test
