@@ -26,6 +26,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
@@ -165,13 +166,24 @@ class AccountDeletionCleanerTest : BaseTest() {
 
     @Test
     fun `Given a user with an import, Then its rows go before the user and its bytes after the commit`() {
-        // Given
-        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        // Given: the transaction says where it is, so "after the commit" is asserted rather than named.
+        // A disk pass held inside it keeps the one writer connection for the length of an unlink.
+        var insideTransaction = false
+        every { tx.inTransaction(any<() -> Any?>()) } answers {
+            insideTransaction = true
+            (firstArg<() -> Any?>())().also { insideTransaction = false }
+        }
         every { users.findUserByIdIncludingDeleted(userId) } returns user
         every { pins.findAllPinIdsForUser(user) } returns emptyList()
         every { exports.findAllExportIdsForUser(userId) } returns emptyList()
         val importId = randomUUID()
         every { imports.findAllImportIdsForUser(userId) } returns listOf(importId)
+        var archiveDeletedInside: Boolean? = null
+        every { importArchiveStore.delete(any()) } answers { archiveDeletedInside = insideTransaction }
+        var uploadDiscardedInside: Boolean? = null
+        every { importArchiveStore.discardPartialUpload(any()) } answers {
+            uploadDiscardedInside = insideTransaction
+        }
 
         // When
         cleaner.deleteAccountData(userId)
@@ -186,6 +198,8 @@ class AccountDeletionCleanerTest : BaseTest() {
         // before its row write is still reclaimed. The upload goes too, promoted or not.
         verify { importArchiveStore.delete("imports/$importId.zip") }
         verify { importArchiveStore.discardPartialUpload(importId) }
+        assertEquals(false, archiveDeletedInside, "the archive delete must not hold the transaction")
+        assertEquals(false, uploadDiscardedInside, "the upload discard must not hold the transaction")
     }
 
     @Test
