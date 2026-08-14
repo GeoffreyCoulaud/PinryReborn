@@ -18,6 +18,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
@@ -144,6 +145,22 @@ class UserDataImportCancellerTest : BaseTest() {
         // Then
         verify(exactly = 0) { cancelTask.cancel(any()) }
         verify { archiveStore.delete(storageKey) }
+        verifyCancelled()
+    }
+
+    @Test
+    fun `Given a store that cannot take the archive back, Then the import is cancelled all the same`() {
+        // Given: deleteIfExists throws, which would otherwise answer a DELETE with a 500 on a task that
+        // is already cancelled. The periodic sweep is the guarantor of the bytes (ADR 0003).
+        every { repository.findById(importId) } returns
+            importWith(state = UserDataImportState.PENDING, taskId = null)
+        every { archiveStore.delete(storageKey) } throws IOException("permission denied")
+        every { repository.save(any()) } answers { firstArg() }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
         verifyCancelled()
     }
 
