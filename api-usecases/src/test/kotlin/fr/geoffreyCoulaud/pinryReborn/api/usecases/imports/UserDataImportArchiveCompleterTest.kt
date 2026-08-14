@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.nio.file.NoSuchFileException
 import java.time.Instant
 import java.util.UUID.randomUUID
 
@@ -171,6 +172,30 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
         // When / Then
         assertThrows(ImportArchiveEmptyError::class.java) { completer.complete(user, importId) }
         verify(exactly = 0) { archiveStore.finishUpload(any()) }
+    }
+
+    @Test
+    fun `Given an upload unlinked before it is closed, Then the completion is refused, not failed`() {
+        // Given: the canceller unlinks the partial upload before it writes CANCELLED, so the file can be
+        // gone while the row still reads AWAITING_ARCHIVE, and the store answers with an untyped throw
+        stubStoredRow()
+        every { archiveStore.finishUpload(importId) } throws NoSuchFileException(staged.path)
+
+        // When / Then: what the next GET shows, not a 500
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+    }
+
+    @Test
+    fun `Given an upload unlinked before it is promoted, Then the completion is refused, not failed`() {
+        // Given: the same window one step later, between the fence and the atomic move
+        stubStoredRow()
+        stubDigest()
+        stubRowWrites()
+        every { archiveStore.promote(staged, storageKey) } throws NoSuchFileException(staged.path)
+
+        // When / Then: nothing was promoted, so nothing is deleted on the way out
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        verify(exactly = 0) { archiveStore.delete(any()) }
     }
 
     @Test
