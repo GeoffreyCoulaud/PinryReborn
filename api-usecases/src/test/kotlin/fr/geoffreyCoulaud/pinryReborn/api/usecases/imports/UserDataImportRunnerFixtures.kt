@@ -12,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbe
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveEntryUnreadableException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveLine
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveSource
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
@@ -60,6 +61,7 @@ internal data class FakeArchiveSource(
     val media: Map<String, ByteArray?> = emptyMap(),
     val readFailure: Exception? = null,
     val failAtPinLine: Int? = null,
+    val unreadable: Set<String> = emptySet(),
 ) : ArchiveSource {
     var closed = false
     var entryBound: Int? = null
@@ -94,10 +96,19 @@ internal data class FakeArchiveSource(
     private fun pinLines(): Sequence<ArchiveLine<ImportedPin>> =
         pins.asSequence().onEach { if (it.line == failAtPinLine) error("the archive read was interrupted") }
 
-    override fun openEntry(name: String): InputStream? = media[name]?.let { ByteArrayInputStream(it) }
+    override fun openEntry(name: String): InputStream? =
+        when (name) {
+            in unreadable -> UnreadableStream(name)
+            else -> media[name]?.let { ByteArrayInputStream(it) }
+        }
 
     override fun close() {
         closed = true
+    }
+
+    /** A bit-rotted entry: announced by the central directory, and raising once the bytes are pulled. */
+    private class UnreadableStream(private val name: String) : InputStream() {
+        override fun read(): Int = throw ArchiveEntryUnreadableException("entry $name is corrupt")
     }
 
     private companion object {

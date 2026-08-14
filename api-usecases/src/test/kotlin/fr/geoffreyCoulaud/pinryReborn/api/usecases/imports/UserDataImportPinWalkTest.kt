@@ -484,6 +484,33 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given an entry that raises mid-read, Then the line is rejected and the import goes on`() {
+        // Given: one bit-rotted deflate stream. The archive reports it per entry, so it settles one line
+        // rather than escaping as an I/O failure and burning the whole retry budget on bytes that cannot
+        // change, which the ten-minute backoff floor would stretch over the better part of an hour.
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                pins = listOf(TestLine(1, aPin()), TestLine(2, aPin(path = BETA_PATH, bytes = betaBytes))),
+                media = everyMedium,
+                unreadable = setOf(ALPHA_PATH),
+            )
+        stubWalk(source)
+        stubMediaPath()
+        stubIssues()
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then
+        assertEquals(listOf(UserDataImportIssueKind.LINE_REJECTED), kinds())
+        assertEquals(UserDataImportState.COMPLETED, stored.state)
+        assertEquals(1, stored.createdPins)
+        assertEquals(1, stored.skippedPins)
+        assertEquals(2, stored.processedPins)
+    }
+
+    @Test
     fun `Given more anomalies than the report holds, Then the rows stop and the count keeps climbing`() {
         // Given
         val detail = "d".repeat(OVER_LONG_DETAIL)

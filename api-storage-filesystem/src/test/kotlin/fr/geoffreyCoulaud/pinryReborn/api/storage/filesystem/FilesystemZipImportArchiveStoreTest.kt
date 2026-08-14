@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveBoundExceededException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveEntryUnreadableException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveLine
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveSource
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveTooLargeException
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayInputStream
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
@@ -477,14 +477,17 @@ class FilesystemZipImportArchiveStoreTest {
     }
 
     @Test
-    fun `Given the corrupt-tail fixture, Then reading its entry whole raises`() {
+    fun `Given the corrupt-tail fixture, Then reading its entry whole raises as unreadable`() {
         // Given: without this the two bound tests above would pass against a fixture that is merely
         // large, and would prove nothing about where the reader stopped.
         val storageKey = writeArchiveWithCorruptTail("imports/proof.zip", "manifest.json", paddedJson())
 
-        // When / Then
+        // When / Then: the source's own type, not an IOException, so a caller settling one line can tell
+        // a rotted entry from a write failure of its own
         store.open(storageKey).use { source ->
-            assertThrows(IOException::class.java) { checkNotNull(source.openEntry("manifest.json")).readBytes() }
+            assertThrows(ArchiveEntryUnreadableException::class.java) {
+                checkNotNull(source.openEntry("manifest.json")).readBytes()
+            }
         }
     }
 
@@ -498,9 +501,10 @@ class FilesystemZipImportArchiveStoreTest {
                 zip.closeEntry()
             }
 
-        // When / Then
+        // When / Then: read byte by byte too, since that path is translated like the bulk one
         store.open(storageKey).use { source ->
             assertArrayEquals(byteArrayOf(1, 2, 3), checkNotNull(source.openEntry("images/a.bin")).readBytes())
+            assertEquals(1, checkNotNull(source.openEntry("images/a.bin")).read())
             assertNull(source.openEntry("images/absent.bin"))
         }
     }
