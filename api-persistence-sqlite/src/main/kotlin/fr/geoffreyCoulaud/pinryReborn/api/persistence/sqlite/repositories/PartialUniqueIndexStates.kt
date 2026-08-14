@@ -11,9 +11,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
  * two answer different questions. `PartialUniqueIndexStatesTest` reads each set against the `where` clause of
  * the migration that created the index.
  *
- * The same literals are spelled again in the `@Index(definition = ...)` of `TaskModel` and
- * `UserDataExportModel`, which cannot read this set because an annotation argument is a compile-time constant,
- * so nothing binds those two until someone runs `generateDbMigration`.
+ * The same literals are spelled again in the `@Index(definition = ...)` of `TaskModel`,
+ * `UserDataExportModel` and `UserDataImportModel`, which cannot read this set because an annotation argument is
+ * a compile-time constant, so nothing binds those three until someone runs `generateDbMigration`.
  */
 internal object PartialUniqueIndexStates {
     /** `ux_tasks_dedup` (`1.3.sql:27`): a dedup key is unique among the tasks in these states. */
