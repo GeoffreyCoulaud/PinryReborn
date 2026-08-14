@@ -44,6 +44,20 @@ internal fun UserDataImportRepositoryInterface.saveFenced(
     }
 
 /**
+ * The same write, answering the row it replaced rather than the one it wrote: a caller whose release
+ * depends on the phase reads it here, since the phase it saw before the fence may be one phase old.
+ */
+internal fun UserDataImportRepositoryInterface.saveFencedOver(
+    transactionRunner: TransactionRunner,
+    importId: UUID,
+    held: (UserDataImport) -> Boolean,
+    update: (UserDataImport) -> UserDataImport,
+): UserDataImport? =
+    transactionRunner.inTransaction {
+        findById(importId)?.takeIf(held)?.also { save(update(it)) }
+    }
+
+/**
  * The fence the upload writes take (spec §6): their windows are wide, a chunk streaming to disk and a
  * digest of up to twenty gigabytes, so a caller that lost the phase is refused as a late one is.
  */
