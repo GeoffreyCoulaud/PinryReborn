@@ -327,6 +327,29 @@ class FilesystemZipImportArchiveStoreTest {
     }
 
     @Test
+    fun `Given fields the type does not declare, Then they are ignored rather than refusing the entry`() {
+        // Given: spec section 4 lists what the importer reads and what it ignores, and every real archive
+        // carries the ignored ones; a reader refusing them would refuse every line of every archive.
+        val storageKey =
+            promoteArchive("imports/undeclared.zip") { zip ->
+                writeEntry(zip, "manifest.json", """{"formatVersion":1,"generator":"pinry-reborn","counts":{}}""")
+                writeEntry(zip, "pins.jsonl", """{"id":"a-b-c","name":"good","count":1,"image":{"path":"x"}}""")
+            }
+
+        // When
+        store.open(storageKey).use { source ->
+            val manifest = source.readJson("manifest.json", ManifestFixture::class.java, 1_000)
+            val lines = mutableListOf<ArchiveLine<LineFixture>>()
+            source.readJsonLines("pins.jsonl", LineFixture::class.java) { lines.addAll(it) }
+
+            // Then
+            assertEquals(ManifestFixture(formatVersion = 1, generator = "pinry-reborn"), manifest)
+            assertEquals(LineFixture(name = "good", count = 1), lines.single().value)
+            assertNull(lines.single().failure)
+        }
+    }
+
+    @Test
     fun `Given an absent entry, Then readJson returns null`() {
         // Given
         val storageKey = promoteArchive("imports/empty.zip") { writeEntry(it, "other.json", "{}") }
