@@ -139,8 +139,27 @@ class UserDataImportCancellerTest : BaseTest() {
     }
 
     @Test
+    fun `Given a pending import claimed and finished while the request ran, Then nothing is released`() {
+        // Given: the runner claims the task and completes the walk in that window, so the fence is lost.
+        // Deciding from the copy read first would cancel a task that ran and delete an archive it owns.
+        val read = importWith(state = UserDataImportState.PENDING, taskId = randomUUID())
+        every { repository.findById(importId) } answers {
+            if (transactions.inside) read.copy(state = UserDataImportState.COMPLETED) else read
+        }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
+        verify(exactly = 0) { repository.save(any()) }
+        verify(exactly = 0) { cancelTask.cancel(any()) }
+        verify(exactly = 0) { archiveStore.delete(any()) }
+    }
+
+    @Test
     fun `Given a pending import with no task id, Then no cancellation is attempted and the archive still goes`() {
-        // Given: a completer that died between the PENDING write and the task id write leaves this row
+        // Given: the column is nullable because the row exists before its task does, so nothing here
+        // may depend on it being set, whatever the hand-over now guarantees
         every { repository.findById(importId) } returns
             importWith(state = UserDataImportState.PENDING, taskId = null)
         every { archiveStore.delete(storageKey) } just runs
