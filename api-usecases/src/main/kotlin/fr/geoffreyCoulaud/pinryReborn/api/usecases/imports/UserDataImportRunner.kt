@@ -151,8 +151,11 @@ class UserDataImportRunner(
         renewLease: () -> Unit,
     ) {
         readingArchive(claimed) { archiveStore.open(runnable.storageKey) }.use { source ->
+            // Read where the central directory already is, so it costs nothing and no walk has run yet:
+            // its refusal is the archive's, and marking the row from the claim reverts nothing.
+            val entryNames = readingArchive(claimed) { source.entryNames(maxEntries) }
             val opened = recordManifest(source, runnable, claimed) ?: return
-            walkContent(source, runnable, claimed, user, renewLease, recorderFor(opened))
+            walkContent(source, runnable, user, renewLease, recorderFor(opened), entryNames)
         }
     }
 
@@ -160,16 +163,15 @@ class UserDataImportRunner(
     private fun walkContent(
         source: ArchiveSource,
         runnable: RunnableImport,
-        claimed: UserDataImport,
         user: User,
         renewLease: () -> Unit,
         recorder: ImportIssueRecorder,
+        entryNames: Set<String>,
     ) {
         val now = clock.now()
         val clamp = ImportInstantClamp(user.createdAt, now)
         walkTags(source, user, clamp, runnable, renewLease, recorder) ?: return
         val walked = walkBoards(source, user, clamp, runnable, renewLease, recorder) ?: return
-        val entryNames = readingArchive(claimed) { source.entryNames(maxEntries) }
         walkPins(PinWalk(source, runnable, user, clamp, now, entryNames, recorder, renewLease), walked)
     }
 
