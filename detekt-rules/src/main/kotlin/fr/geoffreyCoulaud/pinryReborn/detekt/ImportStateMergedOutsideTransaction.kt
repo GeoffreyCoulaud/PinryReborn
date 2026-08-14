@@ -26,10 +26,18 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
  * is set in `detekt.yml`, by path, over the import use cases; every other entity is exposed the same
  * way and has no fence, which is a backlog item rather than this rule's business.
  *
- * Three boundaries follow, all deliberate. The transition is read where it is written, so one hidden
+ * Four boundaries follow, all deliberate. The transition is read where it is written, so one hidden
  * behind a named helper (`save(cancelled(row))`) is not seen; the transaction is recognised by the
  * name `inTransaction` alone, this project's only transaction boundary; and both are spellings rather
  * than resolved types, since this rule set runs without type resolution.
+ *
+ * The fourth is the one to know. The rule sees where the write is, not where the read was, so a row
+ * read outside and saved inside a transaction passes it: opening a transaction around a copy taken
+ * before it changes nothing about what the merge restores. That half is a behaviour, and it is held by
+ * behaviour tests, whose transaction fake answers a read taken outside one with a cancelled row
+ * (`UserDataImportRunnerTest`, `UserDataImportCancellerTest`). This rule is the other half: it fails
+ * the build on a writer that never opened a transaction at all, which is the shape every one of the
+ * seven sites actually took.
  */
 class ImportStateMergedOutsideTransaction(
     config: Config,
