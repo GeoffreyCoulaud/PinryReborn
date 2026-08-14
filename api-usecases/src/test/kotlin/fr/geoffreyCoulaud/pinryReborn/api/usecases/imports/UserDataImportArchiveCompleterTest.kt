@@ -21,8 +21,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID.randomUUID
@@ -51,7 +51,10 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     private var digested = false
     private var promoted = false
     private var enqueued = false
-    private var enqueuedInTransaction = false
+
+    /** Which transaction each write and the enqueue saw open, so two sequential ones never read as one. */
+    private val savedInTransactions = mutableListOf<Int?>()
+    private var enqueuedInTransaction: Int? = null
     private val deletedArchives = mutableListOf<String>()
 
     private fun importWith(state: UserDataImportState = UserDataImportState.AWAITING_ARCHIVE) =
@@ -71,17 +74,20 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     }
 
     /**
-     * The canceller landing at a chosen point of the completion: from then on a re-read answers
-     * `CANCELLED`, which is how a `DELETE` reaches this use case, by the row rather than by a call.
+     * Another actor landing at a chosen point of the completion: from then on a re-read answers [state],
+     * which is how a concurrent request reaches this use case, by the row rather than by a call.
      */
-    private fun cancelWhen(landed: () -> Boolean) {
+    private fun landing(state: UserDataImportState, landed: () -> Boolean) {
         reread = { current ->
             when {
-                landed() -> current.copy(state = UserDataImportState.CANCELLED)
+                landed() -> current.copy(state = state)
                 else -> current
             }
         }
     }
+
+    /** How a `DELETE` reaches this use case. */
+    private fun cancelWhen(landed: () -> Boolean) = landing(UserDataImportState.CANCELLED, landed)
 
     private fun stubDigest() {
         every { archiveStore.finishUpload(importId) } answers { digested = true; staged }
@@ -92,7 +98,10 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     }
 
     private fun stubRowWrites() {
-        every { repository.save(any()) } answers { firstArg<UserDataImport>().also { saved -> row = saved } }
+        every { repository.save(any()) } answers {
+            savedInTransactions += transactions.current
+            firstArg<UserDataImport>().also { saved -> row = saved }
+        }
     }
 
     private fun stubArchiveDeletion() {
@@ -110,7 +119,7 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
                 )
             } answers {
                 enqueued = true
-                enqueuedInTransaction = transactions.inside
+                enqueuedInTransaction = transactions.current
                 task
             }
         }
@@ -233,16 +242,36 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     }
 
     @Test
-    fun `Given a finished upload, Then the task and the row naming it are written in one transaction`() {
-        // Given: ADR 0009's pair, an enqueue and the write that records its id: a process dying between
-        // them leaves a task nothing points at, and this row is the only place its id is kept
+    fun `Given a finished upload, Then the transition, the task and the row naming it commit together`() {
+        // Given: a PENDING row whose enqueue never landed holds the account's only active slot, keeps
+        // its bytes, and is rescued by no sweep: the three writes are one transaction or none
         stubCompletion()
 
         // When
         completer.complete(user, importId)
 
-        // Then
-        assertTrue(enqueuedInTransaction)
+        // Then: the same open transaction at the transition, at the enqueue and at the task id write
+        val handOver = savedInTransactions.last()
+        assertNotNull(handOver)
+        assertEquals(listOf(handOver, handOver), savedInTransactions.takeLast(2))
+        assertEquals(handOver, enqueuedInTransaction)
+    }
+
+    @Test
+    fun `Given a second completion that won the race, Then this one is refused and its bytes go`() {
+        // Given: the concurrent complete left the row PENDING, which passes a not-terminal fence and
+        // fails the awaiting-archive one; a second walk over the same archive must not be enqueued
+        stubStoredRow()
+        stubDigest()
+        stubPromote()
+        stubRowWrites()
+        landing(UserDataImportState.PENDING) { promoted }
+        stubArchiveDeletion()
+
+        // When / Then
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        assertEquals(listOf(storageKey), deletedArchives)
+        verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

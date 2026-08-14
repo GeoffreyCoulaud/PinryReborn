@@ -40,19 +40,30 @@ import java.util.UUID.randomUUID
 
 /**
  * The ambient transaction the claim runs in; this suite owns no connection. It runs the block inline,
- * so [inside] is the only channel a case has to tell a read within the transaction from one before it.
+ * so [inside] is the only channel a case has to tell a read within the transaction from one before it,
+ * and [current] the only one to tell two sequential transactions from a single one.
  */
 internal class PassthroughTransactionRunner : TransactionRunner {
     private var depth = 0
+    private var opened = 0
 
-    val inside: Boolean get() = depth > 0
+    /** The open transaction's sequence number, null outside one. Nesting keeps the outermost number. */
+    var current: Int? = null
+        private set
+
+    val inside: Boolean get() = current != null
 
     override fun <T> inTransaction(block: () -> T): T {
         depth++
+        if (depth == 1) {
+            opened++
+            current = opened
+        }
         return try {
             block()
         } finally {
             depth--
+            if (depth == 0) current = null
         }
     }
 }
