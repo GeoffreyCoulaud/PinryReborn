@@ -21,8 +21,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * The pin walk (spec section 8, step 6 and the per-pin sequence): the fence, the cursor, every issue
- * kind a pin line can produce, and the report cap. Split from [UserDataImportRunnerTest] to keep both
- * under detekt's `LargeClass` threshold.
+ * kind a pin line produces, and the report cap. Split from [UserDataImportRunnerTest] for `LargeClass`.
  */
 internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
     private val secondImportId = randomUUID()
@@ -167,6 +166,31 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given the import row deleted mid-walk, Then the walk stops and leaves no bytes behind`() {
+        // Given: an account deletion lands while the walk holds the archive. Writing on regardless would
+        // re-insert a row for an account that is gone, which foreign keys do not stop on this datasource.
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                pins = listOf(TestLine(1, aPin()), TestLine(2, aPin(path = BETA_PATH, bytes = betaBytes))),
+                media = everyMedium,
+            )
+        stubWalk(source)
+        stubMediaPath()
+        stubDiscard()
+        stubDelete()
+        reread = { row -> if (savedPins.isEmpty()) row else null }
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then
+        assertEquals(1, savedPins.size)
+        assertEquals(savedImages.map { it.storageKey }.toSet(), promoted)
+        assertTrue(stagedPaths.isEmpty())
+    }
+
+    @Test
     fun `Given a per-pin transaction that throws, Then the promoted bytes go and the line is reported`() {
         // Given: the resumption case throws before anything is staged, so this path needs its own case
         val source =
@@ -174,7 +198,8 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubWalk(source)
         stubDigest()
         stubHashLookup()
-        stubStaging()
+        stubStage()
+        stubPromote()
         stubProbe()
         stubDiscard()
         stubDelete()
@@ -329,7 +354,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubWalk(source)
         stubDigest()
         stubHashLookup()
-        stubStaging()
+        stubStage()
         stubDiscard()
         stubIssues()
         every { imageProbe.probe(any(), MAX_PIXELS) } throws ImageTooManyPixelsException("too many pixels")
@@ -351,7 +376,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubWalk(source)
         stubDigest()
         stubHashLookup()
-        stubStaging()
+        stubStage()
         stubDiscard()
         stubIssues()
         every { imageProbe.probe(any(), MAX_PIXELS) } throws UndecodableImageException("not an image")

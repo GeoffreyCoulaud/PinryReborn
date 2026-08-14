@@ -33,6 +33,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.HexFormat
 import java.util.UUID
 import java.util.UUID.randomUUID
 
@@ -48,11 +49,8 @@ internal data class TestLine<out T>(
 ) : ArchiveLine<T>
 
 /**
- * An [ArchiveSource] over typed lines: a runner test says what the archive holds instead of building a
- * ZIP. Framing and mapper belong to the adapter's own suite, and the real bytes to block 10's round trip.
- *
- * [media] maps an entry name to its bytes; a name mapped to null is announced by [entryNames] and then
- * refused by [openEntry], which is the one shape those two reads of one archive can disagree on.
+ * An [ArchiveSource] over typed lines, so a runner test says what the archive holds. A [media] name
+ * mapped to null is announced by [entryNames] and refused by [openEntry], the one shape they disagree on.
  */
 internal data class FakeArchiveSource(
     val manifest: ImportedManifest?,
@@ -99,12 +97,8 @@ internal data class FakeArchiveSource(
 }
 
 /**
- * What the `UserDataImportRunner` suite shares, declared once instead of copied into each slice. The
- * suite is split across [UserDataImportRunnerTest] (claim, archive, tags and boards) and
- * [UserDataImportPinWalkTest] (the pin walk) to keep every class under detekt's `LargeClass` threshold.
- *
- * Every stub is opt-in: `BaseTest` fails a test that declares one it never uses, so a helper stubbing
- * a collaborator "just in case" would fail the very tests that stop before reaching it.
+ * What [UserDataImportRunnerTest] and [UserDataImportPinWalkTest] share, split for `LargeClass`. Every
+ * stub is opt-in: `BaseTest` fails a test that declares one it never reaches.
  */
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base for the slices above.
 internal abstract class UserDataImportRunnerFixtures : BaseTest() {
@@ -173,14 +167,14 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     protected val stagedPaths = mutableSetOf<String>()
     protected var stageCalls = 0
 
-    /** How a re-read of the row answers. The fence slices replace it, rather than stubbing twice. */
-    protected var reread: (UserDataImport) -> UserDataImport = { it }
+    /** How a re-read of the row answers, null included. The fence cases replace it instead of restubbing. */
+    protected var reread: (UserDataImport) -> UserDataImport? = { it }
 
     /** What the archive store hands back. Replaced between two runs by the resumption case. */
     protected var archive = FakeArchiveSource(manifest = null)
 
     protected fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { byte -> "%02x".format(byte) }
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
 
     protected fun anImport(
         state: UserDataImportState,
@@ -313,18 +307,22 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     protected fun stubHashLookup() {
         every { pinRepository.findPinIdsByContentHashForUser(user, any()) } answers {
             val contentHash = secondArg<String>()
-            savedImages.filter { it.contentHash == contentHash }.map { it.pinId }
+            savedImages.filter { image -> image.contentHash == contentHash }.map { image -> image.pinId }
         }
     }
 
-    /** Step 4 and the promote: the entry is reopened, written to a temp file and moved into place. */
-    protected fun stubStaging() {
+    /** Step 4: the entry is reopened and written to a temp file, which the probe then reads. */
+    protected fun stubStage() {
         every { imageStore.stage(any(), MAX_IMAGE_BYTES) } answers {
             stageCalls++
             val bytes = firstArg<InputStream>().readBytes()
             StagedFile(path = "tmp/${randomUUID()}", byteSize = bytes.size.toLong(), contentHash = sha256(bytes))
-                .also { stagedPaths += it.path }
+                .also { file -> stagedPaths += file.path }
         }
+    }
+
+    /** Step 5's first half: the temp file is moved into place before any row is written. */
+    protected fun stubPromote() {
         every { imageStore.promote(any(), any()) } answers {
             stagedPaths -= firstArg<StagedFile>().path
             promoted += secondArg<String>()
@@ -345,7 +343,8 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     protected fun stubMediaPath() {
         stubDigest()
         stubHashLookup()
-        stubStaging()
+        stubStage()
+        stubPromote()
         stubProbe()
         stubPinWrites()
     }

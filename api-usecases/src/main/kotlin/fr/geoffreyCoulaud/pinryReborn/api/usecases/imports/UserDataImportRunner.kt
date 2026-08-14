@@ -1,31 +1,46 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImport
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImportIssue
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportIssueKind
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbe
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageProbeException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveBoundExceededException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveLine
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveSource
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportIssueRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.discardQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.UserDataExportRequester
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import java.io.IOException
+import java.io.InputStream
+import java.time.Instant
 import java.util.UUID
+import java.util.UUID.randomUUID
 
 /**
- * Replays an import archive into its owner's account (spec section 8), steps 1 to 5. Nothing that
- * already exists is modified: a conflict is a skip. Not `@ApplicationScoped`: two bounds have no producer.
+ * Replays an import archive into its owner's account (spec section 8), steps 1 to 6. Nothing that
+ * already exists is modified: a conflict is a skip. Not `@ApplicationScoped`: the bounds have no producer.
  */
 @Suppress("LongParameterList", "TooManyFunctions")
 class UserDataImportRunner(
@@ -34,11 +49,19 @@ class UserDataImportRunner(
     private val userRepository: UserRepositoryInterface,
     private val tagRepository: TagRepositoryInterface,
     private val boardRepository: BoardRepositoryInterface,
+    private val pinRepository: PinRepositoryInterface,
+    private val imageRepository: ImageRepositoryInterface,
     private val archiveStore: ImportArchiveStore,
+    private val imageStore: ImageStore,
+    private val imageProbe: ImageProbe,
     private val transactionRunner: TransactionRunner,
     private val clock: Clock,
     private val maxMetadataBytes: Long,
+    private val maxEntries: Int,
+    private val maxImageBytes: Long,
+    private val maxPixels: Long,
     private val leaseRenewalLines: Int,
+    private val reportDetailLimit: Int,
 ) {
     /**
      * The `account.import` task's entry point. A row that is neither `PENDING` nor `RUNNING` is left
@@ -89,10 +112,25 @@ class UserDataImportRunner(
     ) {
         readingArchive(claimed) { archiveStore.open(runnable.storageKey) }.use { source ->
             val opened = recordManifest(source, claimed)
-            val clamp = ImportInstantClamp(user.createdAt, clock.now())
-            walkBoards(source, user, clamp, walkTags(source, user, clamp, opened, renewLease), renewLease)
+            val now = clock.now()
+            val clamp = ImportInstantClamp(user.createdAt, now)
+            val recorder = recorderFor(opened)
+            val tagged = walkTags(source, user, clamp, opened, renewLease, recorder)
+            val walked = walkBoards(source, user, clamp, tagged, renewLease, recorder)
+            val entryNames = readingArchive(claimed) { source.entryNames(maxEntries) }
+            walkPins(PinWalk(source, runnable, user, clamp, now, entryNames, recorder, renewLease), walked)
         }
     }
+
+    /** The cap counts the rows already stored, which a lost counter write would over-report. */
+    private fun recorderFor(opened: UserDataImport): ImportIssueRecorder =
+        ImportIssueRecorder(
+            issueRepository = issueRepository,
+            importId = opened.id,
+            limit = reportDetailLimit,
+            storedAlready = issueRepository.countForImport(opened.id),
+            truncatedAlready = opened.issueDetailTruncated,
+        )
 
     /**
      * Every way an archive refuses to be read is the same answer: the bytes will not change, so no
@@ -149,14 +187,16 @@ class UserDataImportRunner(
         clamp: ImportInstantClamp,
         current: UserDataImport,
         renewLease: () -> Unit,
+        recorder: ImportIssueRecorder,
     ): UserDataImport {
-        val tally = MetadataTally(current.id)
+        val tally = MetadataTally(recorder)
         walkLines(source, TAGS_ENTRY, ImportedTag::class.java, renewLease) { importTag(it, user, clamp, tally) }
         return importRepository.save(
             current.copy(
                 createdTags = current.createdTags + tally.created,
                 skippedTags = current.skippedTags + tally.skipped,
                 issueCount = current.issueCount + tally.issues,
+                issueDetailTruncated = recorder.truncated,
             ),
         )
     }
@@ -179,7 +219,7 @@ class UserDataImportRunner(
 
     private fun createTag(user: User, tag: ImportedTag, clamp: ImportInstantClamp, tally: MetadataTally) {
         tagRepository.saveTag(
-            Tag(id = UUID.randomUUID(), author = user, name = tag.name, createdAt = clamp.clamp(tag.createdAt)),
+            Tag(id = randomUUID(), author = user, name = tag.name, createdAt = clamp.clamp(tag.createdAt)),
         )
         tally.created++
     }
@@ -191,14 +231,16 @@ class UserDataImportRunner(
         clamp: ImportInstantClamp,
         current: UserDataImport,
         renewLease: () -> Unit,
+        recorder: ImportIssueRecorder,
     ): UserDataImport {
-        val tally = MetadataTally(current.id)
+        val tally = MetadataTally(recorder)
         walkLines(source, BOARDS_ENTRY, ImportedBoard::class.java, renewLease) { importBoard(it, user, clamp, tally) }
         return importRepository.save(
             current.copy(
                 createdBoards = current.createdBoards + tally.created,
                 skippedBoards = current.skippedBoards + tally.skipped,
                 issueCount = current.issueCount + tally.issues,
+                issueDetailTruncated = recorder.truncated,
             ),
         )
     }
@@ -248,7 +290,7 @@ class UserDataImportRunner(
         val createdAt = clamp.clamp(board.createdAt)
         boardRepository.saveBoard(
             Board(
-                id = UUID.randomUUID(),
+                id = randomUUID(),
                 author = user,
                 name = board.name,
                 description = board.description,
@@ -267,31 +309,300 @@ class UserDataImportRunner(
         subject: String?,
         detail: String?,
     ) {
-        issueRepository.save(
-            UserDataImportIssue(
-                id = UUID.randomUUID(),
-                importId = tally.importId,
-                kind = kind,
-                line = line,
-                subject = subject?.take(ISSUE_TEXT_LIMIT),
-                detail = detail?.take(ISSUE_TEXT_LIMIT),
-            ),
-        )
+        tally.recorder.record(kind, line, subject, detail)
         tally.issues++
     }
 
+    /**
+     * Step 6, from the cursor. One transaction per line, so an interruption costs at most the pin it was
+     * on, and a refused fence stops the walk rather than letting a second worker write beside the first.
+     */
+    private fun walkPins(walk: PinWalk, current: UserDataImport) {
+        val cursor = current.processedPins
+        var seen = 0
+        var holding = true
+        walk.source.readJsonLines(PINS_ENTRY, ImportedPin::class.java) { lines ->
+            lines.takeWhile { holding }.forEach { line ->
+                seen++
+                walk.renewLease()
+                if (seen > cursor) holding = importPin(walk, line)
+            }
+        }
+    }
+
+    /**
+     * `LINE_REJECTED` makes "one bad entry never fails an import" structural: every per-line failure with
+     * no better kind lands there. Caught at [RuntimeException], so a full disk still escapes and retries.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun importPin(walk: PinWalk, line: ArchiveLine<ImportedPin>): Boolean =
+        try {
+            settle(walk, line.line, outcomeFor(walk, line))
+        } catch (error: RuntimeException) {
+            settle(walk, line.line, reported(UserDataImportIssueKind.LINE_REJECTED, null, error.toString()))
+        }
+
+    private fun settle(walk: PinWalk, line: Int, outcome: PinOutcome): Boolean =
+        when (val created = outcome.created) {
+            null -> write(walk, line, outcome)
+            else -> promoteAndWrite(walk, line, outcome, created)
+        }
+
+    /**
+     * The bytes land before the row, as `SetPinImage` does, and a refusal undoes both halves: a promoted
+     * object nothing points at is residue the sweep would have to reclaim.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun promoteAndWrite(walk: PinWalk, line: Int, outcome: PinOutcome, created: CreatedPin): Boolean =
+        try {
+            imageStore.promote(created.staged, created.image.storageKey)
+            write(walk, line, outcome).also { held -> if (!held) compensate(created) }
+        } catch (error: Exception) {
+            compensate(created)
+            throw error
+        }
+
+    private fun compensate(created: CreatedPin) {
+        imageStore.discardQuietly(created.staged)
+        imageStore.deleteQuietly(created.image.storageKey)
+    }
+
+    /** The fence: the row is re-read inside the transaction that settles the line, never before it. */
+    private fun write(walk: PinWalk, line: Int, outcome: PinOutcome): Boolean =
+        transactionRunner.inTransaction {
+            val current = importRepository.findById(walk.runnable.importId)?.takeIf { it.holds(walk.runnable) }
+            when (current) {
+                null -> false
+                else -> {
+                    apply(walk, line, outcome, current)
+                    true
+                }
+            }
+        }
+
+    /** Cancellation keeps the token and only writes the state, so both are read. */
+    private fun UserDataImport.holds(runnable: RunnableImport): Boolean =
+        runToken == runnable.runToken && state == UserDataImportState.RUNNING
+
+    private fun apply(walk: PinWalk, line: Int, outcome: PinOutcome, current: UserDataImport) {
+        outcome.issues.forEach { walk.recorder.record(it.kind, line, it.subject, it.detail) }
+        val created = outcome.created?.also { createPin(walk, it) }
+        val delta = if (created == null) 0 else 1
+        importRepository.save(
+            current.copy(
+                processedPins = current.processedPins + 1,
+                createdPins = current.createdPins + delta,
+                skippedPins = current.skippedPins + (1 - delta),
+                issueCount = current.issueCount + outcome.issues.size,
+                issueDetailTruncated = walk.recorder.truncated,
+            ),
+        )
+    }
+
+    /**
+     * Names are resolved here, inside the settling transaction. One that resolves to nothing is dropped:
+     * a name the metadata walk refused must not come back through a membership.
+     */
+    private fun createPin(walk: PinWalk, created: CreatedPin) {
+        pinRepository.savePin(
+            created.pin.copy(
+                tags = created.tagNames.mapNotNull { tagRepository.findUserTagByName(walk.user, it) },
+                boards = created.boardNames.mapNotNull { boardRepository.findBoardForUserByName(walk.user, it) },
+            ),
+        )
+        imageRepository.save(created.image)
+    }
+
+    private fun outcomeFor(walk: PinWalk, line: ArchiveLine<ImportedPin>): PinOutcome {
+        val pin = line.value
+        val fault = pin?.let { pinFault(it) }
+        return when {
+            pin == null -> reported(UserDataImportIssueKind.LINE_MALFORMED, null, line.failure)
+            fault != null -> reported(UserDataImportIssueKind.FIELD_INVALID, pin.sourceContextUrl, fault)
+            else -> mediaOutcome(walk, pin)
+        }
+    }
+
+    private fun pinFault(pin: ImportedPin): String? =
+        ImportFieldBounds.descriptionFault(pin.description)
+            ?: ImportFieldBounds.blankFault(SOURCE_CONTEXT_URL, pin.sourceContextUrl)
+            ?: ImportFieldBounds.referenceCountFault(TAGS_FIELD, pin.tags.size)
+            ?: ImportFieldBounds.referenceCountFault(BOARDS_FIELD, pin.boards.size)
+
+    private fun reported(kind: UserDataImportIssueKind, subject: String?, detail: String?): PinOutcome =
+        PinOutcome(issues = listOf(PendingIssue(kind, subject, detail)))
+
+    /** Per-pin step 1: everything decidable before a byte is read. */
+    private fun mediaOutcome(walk: PinWalk, pin: ImportedPin): PinOutcome {
+        val image = pin.image
+        val fault = image?.let { ImportFieldBounds.entryPathFault(it.path) }
+        return when {
+            image == null -> reported(UserDataImportIssueKind.PIN_HAS_NO_MEDIA, pin.sourceContextUrl, null)
+            fault != null -> reported(UserDataImportIssueKind.ENTRY_PATH_INVALID, image.path, fault)
+            image.path !in walk.entryNames ->
+                reported(UserDataImportIssueKind.MEDIA_ENTRY_MISSING, image.path, null)
+            else -> boundedMedia(walk, pin, image)
+        }
+    }
+
+    /**
+     * Steps 2 to 5. One arm for the byte bound: [ImageStore.digest] reads it first, so a refusal from
+     * the staging pass over the same bytes under the same bound is the same answer.
+     */
+    private fun boundedMedia(walk: PinWalk, pin: ImportedPin, image: ImportedImage): PinOutcome =
+        try {
+            digested(walk, pin, image)
+        } catch (error: ImageTooLargeException) {
+            reported(UserDataImportIssueKind.MEDIA_TOO_LARGE, image.path, error.message)
+        }
+
+    /** Step 2 then 3: hashed where it lies, so a medium the account already holds costs no write. */
+    private fun digested(walk: PinWalk, pin: ImportedPin, image: ImportedImage): PinOutcome {
+        val digest = entryOf(walk, image.path).use { imageStore.digest(it, maxImageBytes) }
+        val holders = pinRepository.findPinIdsByContentHashForUser(walk.user, digest)
+        return matched(walk, pin, image, holders).with(mismatch(image, digest))
+    }
+
+    private fun matched(walk: PinWalk, pin: ImportedPin, image: ImportedImage, holders: List<UUID>): PinOutcome =
+        when {
+            holders.size > 1 ->
+                reported(
+                    UserDataImportIssueKind.MEDIA_AMBIGUOUS,
+                    image.path,
+                    "${holders.size} pins already hold this medium",
+                )
+            holders.isNotEmpty() -> PinOutcome()
+            else -> stagedOutcome(walk, pin, image)
+        }
+
+    /** Reported, never acted on: the bytes are the authority, so the pin is created all the same. */
+    private fun mismatch(image: ImportedImage, digest: String): PendingIssue? =
+        when (image.sha256) {
+            digest -> null
+            else ->
+                PendingIssue(
+                    UserDataImportIssueKind.MEDIA_DIGEST_MISMATCH,
+                    image.path,
+                    "declared ${image.sha256}, read $digest",
+                )
+        }
+
+    /**
+     * The entry the name set announced. A source that then refuses to open it contradicts itself, which
+     * is the per-line catch-all's business rather than a report of a medium the archive never carried.
+     */
+    private fun entryOf(walk: PinWalk, path: String): InputStream =
+        walk.source.openEntry(path) ?: error("the archive refused the entry $path")
+
+    /** Step 4: the entry is reopened, since the digest pass consumed the first stream. */
+    private fun stagedOutcome(walk: PinWalk, pin: ImportedPin, image: ImportedImage): PinOutcome {
+        val staged = entryOf(walk, image.path).use { imageStore.stage(it, maxImageBytes) }
+        return try {
+            created(walk, pin, staged, imageProbe.probe(staged, maxPixels))
+        } catch (error: ImageTooManyPixelsException) {
+            imageStore.discardQuietly(staged)
+            reported(UserDataImportIssueKind.MEDIA_TOO_MANY_PIXELS, image.path, error.message)
+        } catch (error: ImageProbeException) {
+            imageStore.discardQuietly(staged)
+            reported(UserDataImportIssueKind.MEDIA_UNREADABLE, image.path, error.message)
+        }
+    }
+
+    /** The probe is the authority on the stored media type and dimensions, never the archive. */
+    private fun created(walk: PinWalk, pin: ImportedPin, staged: StagedFile, probe: ProbeResult): PinOutcome {
+        val pinId = randomUUID()
+        val imageId = randomUUID()
+        val createdAt = walk.clamp.clamp(pin.createdAt)
+        return PinOutcome(
+            created =
+                CreatedPin(
+                    pin =
+                        Pin(
+                            id = pinId,
+                            author = walk.user,
+                            sourceContextUrl = pin.sourceContextUrl,
+                            sourceMediaUrl = pin.sourceMediaUrl,
+                            description = pin.description,
+                            tags = emptyList(),
+                            boards = emptyList(),
+                            createdAt = createdAt,
+                            updatedAt = walk.clamp.clampUpdate(pin.updatedAt, createdAt),
+                            softDeletedAt = pin.deletedAt?.let { walk.clamp.clamp(it) },
+                        ),
+                    image =
+                        Image(
+                            id = imageId,
+                            pinId = pinId,
+                            mimeType = probe.format.mimeType,
+                            width = probe.width,
+                            height = probe.height,
+                            animated = probe.animated,
+                            byteSize = staged.byteSize,
+                            contentHash = staged.contentHash,
+                            storageKey = "originals/${walk.user.id}/$pinId/$imageId.${probe.format.extension}",
+                            createdAt = walk.importInstant,
+                        ),
+                    staged = staged,
+                    tagNames = pin.tags.map { it.name },
+                    boardNames = pin.boards.map { it.name },
+                )
+        )
+    }
+
+    private fun PinOutcome.with(issue: PendingIssue?): PinOutcome =
+        when (issue) {
+            null -> this
+            else -> PinOutcome(listOf(issue) + issues, created)
+        }
+
     /** What one metadata walk accumulates before its single row write. */
-    private class MetadataTally(val importId: UUID) {
+    private class MetadataTally(val recorder: ImportIssueRecorder) {
         var created = 0
         var skipped = 0
         var issues = 0
     }
 
+    /** What every pin line needs, gathered once so no per-pin helper carries eight parameters. */
+    private class PinWalk(
+        val source: ArchiveSource,
+        val runnable: RunnableImport,
+        val user: User,
+        val clamp: ImportInstantClamp,
+        val importInstant: Instant,
+        val entryNames: Set<String>,
+        val recorder: ImportIssueRecorder,
+        val renewLease: () -> Unit,
+    )
+
+    /** What one `pins.jsonl` line settles into: one transaction writes all of it, or none of it. */
+    private class PinOutcome(
+        val issues: List<PendingIssue> = emptyList(),
+        val created: CreatedPin? = null,
+    )
+
+    private class PendingIssue(
+        val kind: UserDataImportIssueKind,
+        val subject: String?,
+        val detail: String?,
+    )
+
+    /** A pin whose bytes are staged and whose rows are not written yet; both halves compensate together. */
+    private class CreatedPin(
+        val pin: Pin,
+        val image: Image,
+        val staged: StagedFile,
+        val tagNames: List<String>,
+        val boardNames: List<String>,
+    )
+
     private companion object {
         const val MANIFEST_ENTRY = "manifest.json"
         const val TAGS_ENTRY = "tags.jsonl"
         const val BOARDS_ENTRY = "boards.jsonl"
-        const val ISSUE_TEXT_LIMIT = 200
+        const val PINS_ENTRY = "pins.jsonl"
+        const val SOURCE_CONTEXT_URL = "sourceContextUrl"
+        const val TAGS_FIELD = "tags"
+        const val BOARDS_FIELD = "boards"
         const val USER_GONE = "USER_GONE"
         const val ARCHIVE_UNREADABLE = "ARCHIVE_UNREADABLE"
         const val MANIFEST_MISSING = "MANIFEST_MISSING"
