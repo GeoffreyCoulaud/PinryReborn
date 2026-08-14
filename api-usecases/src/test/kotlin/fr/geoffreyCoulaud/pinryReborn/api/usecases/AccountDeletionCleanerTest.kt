@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
@@ -14,6 +15,8 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenReposi
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportIssueRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
@@ -41,10 +44,13 @@ class AccountDeletionCleanerTest : BaseTest() {
     private val renditions = mockk<RenditionCache>(relaxed = true)
     private val exports = mockk<UserDataExportRepositoryInterface>(relaxed = true)
     private val exportArchiveStore = mockk<ExportArchiveStore>(relaxed = true)
+    private val imports = mockk<UserDataImportRepositoryInterface>(relaxed = true)
+    private val importIssues = mockk<UserDataImportIssueRepositoryInterface>(relaxed = true)
+    private val importArchiveStore = mockk<ImportArchiveStore>(relaxed = true)
     private val tx = mockk<TransactionRunner>()
     private val cleaner = AccountDeletionCleaner(
         users, pins, boards, tags, images, sessions, passwords, clearDownload, imageStore, renditions,
-        exports, exportArchiveStore, tx,
+        exports, exportArchiveStore, imports, importIssues, importArchiveStore, tx,
     )
 
     private val userId = randomUUID()
@@ -155,6 +161,67 @@ class AccountDeletionCleanerTest : BaseTest() {
         // Then
         verify { exports.deleteAllForUser(userId) }
         verify(exactly = 0) { exportArchiveStore.delete(any()) }
+    }
+
+    @Test
+    fun `Given a user with an import, Then its rows go before the user and its bytes after the commit`() {
+        // Given
+        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { users.findUserByIdIncludingDeleted(userId) } returns user
+        every { pins.findAllPinIdsForUser(user) } returns emptyList()
+        every { exports.findAllExportIdsForUser(userId) } returns emptyList()
+        val importId = randomUUID()
+        every { imports.findAllImportIdsForUser(userId) } returns listOf(importId)
+
+        // When
+        cleaner.deleteAccountData(userId)
+
+        // Then: the issues before the rows they hang off, and both before the user row
+        verifyOrder {
+            importIssues.deleteAllForUser(userId)
+            imports.deleteAllForUser(userId)
+            users.permanentlyDeleteUser(user)
+        }
+        // Derived from the id, not read from the row, so a completer that died after its promote and
+        // before its row write is still reclaimed. The upload goes too, promoted or not.
+        verify { importArchiveStore.delete("imports/$importId.zip") }
+        verify { importArchiveStore.discardPartialUpload(importId) }
+    }
+
+    @Test
+    fun `Given a user with no import, Then no import archive delete is attempted`() {
+        // Given
+        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { users.findUserByIdIncludingDeleted(userId) } returns user
+        every { pins.findAllPinIdsForUser(user) } returns emptyList()
+        every { exports.findAllExportIdsForUser(userId) } returns emptyList()
+        every { imports.findAllImportIdsForUser(userId) } returns emptyList()
+
+        // When
+        cleaner.deleteAccountData(userId)
+
+        // Then
+        verify { imports.deleteAllForUser(userId) }
+        verify(exactly = 0) { importArchiveStore.delete(any()) }
+        verify(exactly = 0) { importArchiveStore.discardPartialUpload(any()) }
+    }
+
+    @Test
+    fun `Given an import archive delete that throws, Then the rest of the disk pass still runs`() {
+        // Given: the rows are committed, so the disk pass is best effort and the sweep is the guarantor
+        every { tx.inTransaction(any<() -> Any?>()) } answers { (firstArg<() -> Any?>())() }
+        every { users.findUserByIdIncludingDeleted(userId) } returns user
+        every { pins.findAllPinIdsForUser(user) } returns emptyList()
+        every { exports.findAllExportIdsForUser(userId) } returns emptyList()
+        val firstImportId = randomUUID()
+        val secondImportId = randomUUID()
+        every { imports.findAllImportIdsForUser(userId) } returns listOf(firstImportId, secondImportId)
+        every { importArchiveStore.delete(any()) } throws RuntimeException("disk down")
+
+        // When / Then
+        assertDoesNotThrow { cleaner.deleteAccountData(userId) }
+        verify { importArchiveStore.delete("imports/$secondImportId.zip") }
+        verify { importArchiveStore.discardPartialUpload(secondImportId) }
     }
 
     @Test
