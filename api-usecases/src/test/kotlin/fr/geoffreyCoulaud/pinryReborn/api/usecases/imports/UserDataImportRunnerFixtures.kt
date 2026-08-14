@@ -176,6 +176,7 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     protected val existingTags = mutableMapOf<String, Tag>()
     protected val existingBoards = mutableMapOf<String, Board>()
     protected val promoted = mutableSetOf<String>()
+    protected val deletedArchives = mutableListOf<String>()
     protected val stagedPaths = mutableSetOf<String>()
     protected var stageCalls = 0
 
@@ -379,6 +380,11 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
         stubPromote()
         stubProbe()
         stubPinWrites()
+    }
+
+    /** Step 8, and the key is asserted rather than counted: the runner deletes what it opened. */
+    protected fun stubArchiveRelease() {
+        every { archiveStore.delete(any()) } answers { deletedArchives += firstArg<String>() }
     }
 
     protected fun stubDiscard() {
