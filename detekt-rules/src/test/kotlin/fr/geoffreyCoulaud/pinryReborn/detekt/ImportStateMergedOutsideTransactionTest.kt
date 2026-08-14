@@ -28,9 +28,8 @@ class ImportStateMergedOutsideTransactionTest {
         val finding = findings.single()
         assertEquals(3, finding.entity.location.source.line)
         assertEquals(
-            "This save merges a copy of a row read elsewhere, which restores every column that copy " +
-                "carried, its state included. Write it through saveFenced, which reads the row " +
-                "inside the transaction that saves it.",
+            "This save merges a row read elsewhere, which restores every column that row carried, " +
+                "its state included. Read the row inside the transaction that saves it.",
             finding.message,
         )
     }
@@ -98,16 +97,40 @@ class ImportStateMergedOutsideTransactionTest {
     }
 
     @Test
-    fun `Given a save handed a row it did not copy, Then nothing is reported`() {
-        // Given: the fence's own write, whose argument is neither a copy nor a construction
+    fun `Given a row the save did not build itself, Then it is reported however it got there`() {
+        // Given: the three indirections the copy-shaped rule missed, a named local, a scoping function
+        // around the copy and one around the save. The first is the abandonment sweep's natural shape.
+        val code =
+            """
+            class Sweep {
+                fun named(current: UserDataImport) {
+                    val abandoned = current.copy(state = UserDataImportState.ABANDONED)
+                    repository.save(abandoned)
+                }
+
+                fun alsoed(row: UserDataImport) =
+                    repository.save(row.copy(state = UserDataImportState.ABANDONED).also { log(it) })
+
+                fun letted(row: UserDataImport) =
+                    row.copy(state = UserDataImportState.ABANDONED).let { repository.save(it) }
+
+                fun asRead(row: UserDataImport) = repository.save(row)
+            }
+            """.trimIndent()
+
+        // When
+        val findings = rule.lint(code)
+
+        // Then
+        assertEquals(4, findings.size)
+    }
+
+    @Test
+    fun `Given a save handed no argument at all, Then nothing is reported`() {
+        // Given: nothing names a row, so nothing says a row was read elsewhere
         val code =
             """
             class Fence {
-                fun saveFenced(row: UserDataImport, update: (UserDataImport) -> UserDataImport) =
-                    save(update(row))
-
-                fun saveAsRead(row: UserDataImport) = save(row)
-
                 fun saveNothing() = save()
             }
             """.trimIndent()
