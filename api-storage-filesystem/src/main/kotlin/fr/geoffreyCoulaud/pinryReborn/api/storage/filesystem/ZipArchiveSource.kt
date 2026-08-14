@@ -62,8 +62,9 @@ internal class ZipArchiveSource(
     override fun close() = zip.close()
 
     /**
-     * An over-long line ends the walk rather than being skipped over: skipping means reading the very
-     * bytes the bound exists to refuse, which is the difference the bound is there to make.
+     * An over-long line is reported and walked past, never ending the walk: a walk that ends is
+     * indistinguishable from the end of the entry, so every later line would be dropped unreported.
+     * The bound protects the heap, which discarding the rest of the line still honours.
      */
     private fun <T : Any> lines(
         stream: InputStream,
@@ -76,7 +77,7 @@ internal class ZipArchiveSource(
                 number++
                 if (line.overLong) {
                     yield(ZipArchiveLine<T>(number, null, "Line is longer than the $maxLineBytes bytes allowed"))
-                    return@sequence
+                    continue
                 }
                 yield(parse(number, line.bytes, type))
             }
@@ -104,7 +105,16 @@ internal class ZipArchiveSource(
             }
             buffer.write(next)
         }
+        skipToNextLine(stream)
         return ReadLine(ByteArray(0), overLong = true)
+    }
+
+    /** Discards the rest of an over-long line, allocating nothing, so the next line is still read. */
+    private fun skipToNextLine(stream: InputStream) {
+        while (true) {
+            val next = stream.read()
+            if (next < 0 || next == NEWLINE) return
+        }
     }
 
     private class ReadLine(val bytes: ByteArray, val overLong: Boolean)
