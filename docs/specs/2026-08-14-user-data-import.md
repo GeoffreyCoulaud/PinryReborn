@@ -302,8 +302,12 @@ cannot see a `BaseError`, which is why `ExportAlreadyInProgressException` exists
 ### Repository ports
 
 `UserDataImportRepositoryInterface`: `save`, `findById`, `findAllForUser(userId, cursor, pageSize)`,
-`findAbandonableBefore(instant)`, `findReclaimableTerminal()`, `findMissingImportIds(candidates)`,
-`findAllImportIdsForUser`, `deleteAllForUser`.
+`findAbandonableBefore(instant)`, `findReclaimableTerminal()`, `findRunning()`,
+`findMissingImportIds(candidates)`, `findAllImportIdsForUser`, `deleteAllForUser`.
+
+`findRunning` was missing from this list until the sweep was built: the reaper's third path needs the
+`RUNNING` rows, and neither of the other two selections reaches one (`findAbandonableBefore` is
+`AWAITING_ARCHIVE`-only, `findReclaimableTerminal` terminal-only).
 
 There is deliberately **no** `findActiveForUser` used as a pre-insert check. ADR 0009 decision 2
 forbids a read that exists solely to answer a uniqueness question an index already answers, and the
@@ -383,6 +387,20 @@ sweep is the guarantor if that delete fails.
   still have some, stamping the row so the same bytes are not re-deleted every hour; moves a
   `RUNNING` row whose task is `DEAD` or absent to `FAILED` with `IMPORT_INTERRUPTED`; and sweeps
   orphaned staged files.
+
+  Three properties the implementation settles. **Every path writes through the same fence**, so a row
+  another actor moved between the selection and the write is left alone. **Abandonment writes the
+  state before it unlinks the upload**, since a fence lost to a completion means the file is a
+  promoted archive's source; **reclamation deletes the bytes before it stops the row naming them**,
+  since a stamp over a failed delete hides residue from the only sweep that can still name it. And
+  **abandonment runs before reclamation**, because one transaction over the hand-over means an
+  `AWAITING_ARCHIVE` row can hold a promoted archive: making it terminal is what brings those bytes
+  within reach of the same run.
+
+  **"Absent" never means "not enqueued yet."** The task, the transition and the `taskId` write commit
+  together, so a `PENDING` or `RUNNING` row always carries its task id; a task the queue no longer
+  holds is one `ReapTerminalTasks` deleted past its grace. A task that is `PENDING` or `RUNNING` is a
+  live attempt, lease expiry included, and is left alone.
 - **`ReapOrphanedStorage`** gains the import half, pairing `forEachStorageKeyOnDisk` with
   `findMissingImportIds`, exactly as it already does for exports. Without it, an archive promoted by
   a completer that died before writing its row is unreclaimable, and ADR 0003 makes the sweep the
@@ -390,7 +408,9 @@ sweep is the guarantor if that delete fails.
 - **`AccountDeletionCleaner`** deletes issues, then import rows, inside its transaction (before the
   user row), and the archive bytes after the commit, keyed on the **derived** key rather than the
   stored column, so an archive promoted by a completer that died is still reclaimed. This mirrors the
-  export half already in that class.
+  export half already in that class. It discards the **partial upload** too: an account erased while
+  an upload was streaming would otherwise leave a chunk under `tmp/` until `imports.staged_file_max_age`
+  caught it.
 - **`UserDataImportTask`**: `KIND = "account.import"`, `MAX_ATTEMPTS = 5`.
 
 ## 7. REST surface
@@ -545,7 +565,11 @@ The sweep runs on its own `PeriodicScheduler`, injected by type (ADR 0004).
 **Deployment**: `imports.data_dir` is a third dataset. The `Dockerfile` comment gains
 `IMPORTS_DATA_DIR` alongside the two it names, and the directory is checked writable at startup
 rather than on first write, so an unwritable volume refuses to boot instead of failing after a user
-has streamed twenty gigabytes. A reverse proxy needs no change, since every request stays under the
+has streamed twenty gigabytes. The check writes a probe file and deletes it, rather than reading the
+mode: the effective user is what decides, and a container running as root passes a permission check
+that would refuse everybody else. It runs on every boot, so `api-application`'s test properties point
+the key at a writable path; the declared default is asserted off the `@ConfigMapping` itself, since
+no boot in that module can resolve it. A reverse proxy needs no change, since every request stays under the
 existing body limit; that is a direct benefit of chunking.
 
 ## 10. Errors
