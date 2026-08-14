@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -58,6 +59,11 @@ class FilesystemImageStore(private val dataDir: String) : ImageStore {
         }
     }
 
+    // Nothing is resolved, created or opened under the data directory: the store's tmp/ is never
+    // touched, which is what separates this from a stage followed by a discard.
+    override fun digest(source: InputStream, maxBytes: Long): String =
+        OutputStream.nullOutputStream().use { HEX.formatHex(readAndDigest(source, it, maxBytes).second) }
+
     override fun promote(staged: StagedFile, storageKey: String) {
         val dest = paths.resolveWithinRoot(storageKey)
         Files.createDirectories(dest.parent)
@@ -81,23 +87,31 @@ class FilesystemImageStore(private val dataDir: String) : ImageStore {
      * Fsyncs the temp file before returning so a promote never observes a partially-flushed
      * file.
      */
-    private fun writeAndDigest(source: InputStream, tempPath: Path, maxBytes: Long): Pair<Long, ByteArray> {
+    private fun writeAndDigest(source: InputStream, tempPath: Path, maxBytes: Long): Pair<Long, ByteArray> =
+        FileOutputStream(tempPath.toFile()).use { out ->
+            val measured = readAndDigest(source, out, maxBytes)
+            out.flush()
+            out.channel.force(true)
+            measured
+        }
+
+    /**
+     * Reads [source] into [sink], hashing and counting, aborting with [ImageTooLargeException] as soon
+     * as the count passes [maxBytes]: tested per block, so an oversize stream is never read whole.
+     */
+    private fun readAndDigest(source: InputStream, sink: OutputStream, maxBytes: Long): Pair<Long, ByteArray> {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(STREAM_BUFFER_SIZE)
         var byteSize = 0L
-        FileOutputStream(tempPath.toFile()).use { out ->
-            var read = source.read(buffer)
-            while (read >= 0) {
-                byteSize += read
-                if (byteSize > maxBytes) {
-                    throw ImageTooLargeException("Stream exceeded the $maxBytes byte limit")
-                }
-                digest.update(buffer, 0, read)
-                out.write(buffer, 0, read)
-                read = source.read(buffer)
+        var read = source.read(buffer)
+        while (read >= 0) {
+            byteSize += read
+            if (byteSize > maxBytes) {
+                throw ImageTooLargeException("Stream exceeded the $maxBytes byte limit")
             }
-            out.flush()
-            out.channel.force(true)
+            digest.update(buffer, 0, read)
+            sink.write(buffer, 0, read)
+            read = source.read(buffer)
         }
         return byteSize to digest.digest()
     }

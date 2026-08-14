@@ -110,4 +110,10 @@ interface PinRepositoryInterface {
      * recycled pins are already exported with their own deletion marker.
      */
     fun findBoardsForPinIncludingRecycled(pinId: UUID): List<Board>
+
+    /**
+     * Ids of [user]'s pins whose image carries [contentHash], in **every** state, so an import never
+     * re-creates a recycled pin. Author-scoped: a content hash is otherwise an oracle on other accounts.
+     */
+    fun findPinIdsByContentHashForUser(user: User, contentHash: String): List<UUID>
 }

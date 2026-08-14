@@ -151,6 +151,21 @@ class PinRepository(
             ?.let { PinQueries.any().id.equalTo(it.pivotId).findOne() }
             ?.let { ModelCursor(pivot = it, direction = cursor.direction) }
 
+    override fun findPinIdsByContentHashForUser(user: User, contentHash: String): List<UUID> =
+        pinIdsByContentHashQuery(user, contentHash).findSingleAttributeList()
+
+    /**
+     * The subquery keeps the author and the state on the pin side while `ix_images_content_hash` still
+     * serves the read. `internal` so its test reads the plan of this SQL, not of a transcription.
+     */
+    internal fun pinIdsByContentHashQuery(user: User, contentHash: String) =
+        PinQueries
+            .any()
+            .author.id
+            .equalTo(user.id)
+            .select("id")
+            .raw("id in (select pin_id from images where content_hash = ?)", contentHash)
+
     override fun findPinById(id: UUID): Pin? {
         val pin =
             PinQueries

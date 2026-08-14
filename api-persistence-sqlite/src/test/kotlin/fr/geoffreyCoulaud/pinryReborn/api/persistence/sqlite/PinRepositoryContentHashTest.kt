@@ -11,10 +11,8 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 /**
- * The import's "do I already hold these bytes?" lookup. A content-addressed key is an oracle for
- * what other accounts hold unless the author is part of the question, which is why the cross-user
- * case is here and why the query is rooted on pins: `ImageModel` reaches neither the author nor the
- * recycled state.
+ * The import's "do I already hold these bytes?" lookup. A content-addressed key is an oracle on other
+ * accounts unless the author is part of the question, which is why the cross-user case is here.
  */
 class PinRepositoryContentHashTest : PinRepositoryFixtures() {
     private val imageRepository = EbeanImageRepository(persistor, transactionRunner)

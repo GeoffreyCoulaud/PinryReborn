@@ -11,6 +11,12 @@ interface ImageStore {
     fun stage(source: InputStream, maxBytes: Long): StagedFile
 
     /**
+     * SHA-256 of [source], hex encoded, read without writing anything, aborting past [maxBytes]
+     * (throws ImageTooLargeException). Asked before staging: bytes already held then cost nothing.
+     */
+    fun digest(source: InputStream, maxBytes: Long): String
+
+    /**
      * Move a staged temp file to [storageKey] (a fresh path).
      */
     fun promote(staged: StagedFile, storageKey: String)

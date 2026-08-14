@@ -22,6 +22,7 @@ class ImagePortsTest {
         val store = object : ImageStore {
             override fun stage(source: InputStream, maxBytes: Long) =
                 StagedFile("/tmp/staged", source.readBytes().size.toLong(), "hash")
+            override fun digest(source: InputStream, maxBytes: Long) = "hash"
             override fun promote(staged: StagedFile, storageKey: String) {}
             override fun openStream(storageKey: String): InputStream = ByteArrayInputStream(ByteArray(0))
             override fun delete(storageKey: String) {}
