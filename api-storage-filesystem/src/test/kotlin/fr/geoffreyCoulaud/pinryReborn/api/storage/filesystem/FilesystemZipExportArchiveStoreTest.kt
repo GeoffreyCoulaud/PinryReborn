@@ -177,6 +177,19 @@ class FilesystemZipExportArchiveStoreTest {
     }
 
     @Test
+    fun `Given the writer's mapper, Then it registers the date module and nothing else`() {
+        // Given: jackson-module-kotlin is on this module's runtime classpath for the import reader, so
+        // a findAndRegisterModules() or a stray registration here would move the published format
+        // without any golden test in another module noticing.
+
+        // When / Then
+        assertEquals(
+            setOf<Any>("com.fasterxml.jackson.datatype.jsr310.JavaTimeModule"),
+            store.mapper.registeredModuleIds,
+        )
+    }
+
+    @Test
     fun `Given the archive format, Then it advertises ZIP media type and extension`() {
         // Given / When / Then
         assertEquals("application/zip", store.format.mediaType)
