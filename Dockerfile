@@ -31,15 +31,20 @@ RUN mkdir -p /data && chown 1001:1001 /data
 VOLUME /data
 
 # On-disk bytes live outside the database (no blobs in SQLite): original image
-# bytes under images.data_dir, and user data export archives under
-# exports.data_dir. Both default to /var/lib/pinry/* (see application.properties)
-# and MUST be redirected to writable, persistent locations at deploy time, e.g.
-#   -e IMAGES_DATA_DIR=/data/images -e EXPORTS_DATA_DIR=/data/exports
+# bytes under images.data_dir, user data export archives under exports.data_dir,
+# and uploaded import archives under imports.data_dir. All three default to
+# /var/lib/pinry/* (see application.properties) and MUST be redirected to
+# writable, persistent locations at deploy time, e.g.
+#   -e IMAGES_DATA_DIR=/data/images -e EXPORTS_DATA_DIR=/data/exports \
+#   -e IMPORTS_DATA_DIR=/data/imports
 # so they share the /data volume above. exports.data_dir is a SEPARATE dataset
 # from images: export archives are large, short-lived (7-day retention) and
 # regenerable, so an operator may want it on its own volume with its own backup
-# and quota policy. The container does not create these paths; the app creates
-# them on first write, but only if their parent is writable by uid 1001.
+# and quota policy. imports.data_dir is a third one for the same reasons, and it
+# takes uploads of up to imports.max_archive_bytes (20 GiB by default) each. The
+# container does not create these paths; images and exports are created on first
+# write, but only if their parent is writable by uid 1001, and imports is created
+# and probed at startup, so an unwritable volume refuses the boot.
 
 # Copy the Quarkus fast-jar layout. lib/ changes least often (better layer
 # caching), then the application classes, and the tiny runner jar last.

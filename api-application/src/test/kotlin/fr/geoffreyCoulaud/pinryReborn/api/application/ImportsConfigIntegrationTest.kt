@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ImportsConfig
 import io.quarkus.runtime.configuration.MemorySize
+import io.smallrye.config.WithDefault
 import io.quarkus.test.junit.QuarkusTest
 import jakarta.inject.Inject
 import org.eclipse.microprofile.config.inject.ConfigProperty
@@ -39,8 +40,13 @@ class ImportsConfigIntegrationTest {
 
     @Test
     fun `Given no configuration, Then the import defaults are the specified ones`() {
-        // Given / Then: spec section 9's table, which the mapping is the single source of
-        assertEquals("/var/lib/pinry/imports", config.dataDir())
+        // Given / Then: spec section 9's table, which the mapping is the single source of. The data
+        // directory is read off the mapping rather than resolved: this module's test properties must
+        // override it, since ImportDataDirectoryCheck probes it and would refuse every boot here.
+        assertEquals(
+            "/var/lib/pinry/imports",
+            ImportsConfig::class.java.getMethod("dataDir").getAnnotation(WithDefault::class.java).value,
+        )
         assertEquals(21_474_836_480, config.maxArchiveBytes())
         assertEquals(16_777_216, config.maxChunkBytes())
         assertEquals(200_000, config.maxEntries())
