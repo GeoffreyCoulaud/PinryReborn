@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTas
 import io.mockk.every
 import io.mockk.verify
 import java.io.IOException
+import java.util.zip.ZipException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -95,6 +96,22 @@ internal class UserDataImportCompletionTest : UserDataImportRunnerFixtures() {
         assertEquals(UserDataImportState.FAILED, stored.state)
         assertEquals("IMPORT_FAILED", stored.failureCode)
         assertEquals(0, stored.processedPins)
+        assertEquals(listOf(storageKey), deletedArchives)
+    }
+
+    @Test
+    fun `Given a cancellation landing before a permanent refusal, Then FAILED is not written over it`() {
+        // Given: the fourth site of the same shape, and the only one left unfenced. The user was already
+        // answered CANCELLED; a blind merge of the claim-time row puts FAILED back over that answer.
+        stubRunUpToOpen()
+        stubArchiveRelease()
+        every { archiveStore.open(storageKey) } throws ZipException("not a zip file")
+        cancelWhen { stored.state == UserDataImportState.RUNNING }
+
+        // When / Then: the refusal is still permanent, since the bytes will not read on a retry either
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
+        assertEquals(UserDataImportState.CANCELLED, stored.state)
+        assertNull(stored.failureCode)
         assertEquals(listOf(storageKey), deletedArchives)
     }
 
