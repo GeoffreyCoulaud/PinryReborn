@@ -28,8 +28,8 @@ class ImportStateMergedOutsideTransactionTest {
         val finding = findings.single()
         assertEquals(3, finding.entity.location.source.line)
         assertEquals(
-            "This save writes a state transition onto a copy of a row read elsewhere, which restores " +
-                "every column that copy carried. Write it through saveFenced, which reads the row " +
+            "This save merges a copy of a row read elsewhere, which restores every column that copy " +
+                "carried, its state included. Write it through saveFenced, which reads the row " +
                 "inside the transaction that saves it.",
             finding.message,
         )
@@ -58,9 +58,9 @@ class ImportStateMergedOutsideTransactionTest {
     }
 
     @Test
-    fun `Given a save that writes no state, Then nothing is reported`() {
-        // Given: the milder half of the same cause, out of this rule's reach deliberately: a stale
-        // counter mis-reports, while a stale state makes the next actor act on it
+    fun `Given a save naming no state, Then it is reported all the same`() {
+        // Given: the chunk receiver's shape. `merge` writes every column, so a copy restores the state
+        // whether it names it or not: two counters were enough to bring back an AWAITING_ARCHIVE
         val code =
             """
             class Receiver {
@@ -75,8 +75,8 @@ class ImportStateMergedOutsideTransactionTest {
         // When
         val findings = rule.lint(code)
 
-        // Then
-        assertEquals(0, findings.size)
+        // Then: the positional copy too, which names nothing at all
+        assertEquals(2, findings.size)
     }
 
     @Test
