@@ -887,6 +887,13 @@ pinry-reborn:
     # roots an unfiltered read without the confined instance. Applies to every module's production
     # sources; tests are exempt because RepositoryTest legitimately calls DB.getDefault().
     excludes: ['**/test/**', '**/testFixtures/**']
+  ImportStateMergedOutsideTransaction:
+    active: true
+    # The rule keys on a call shape, so its reach is a path filter: the import use cases, whose row a
+    # request and a worker both write. Every other entity is exposed the same way and has no fence,
+    # which is the P2 backlog item rather than this rule's business. Tests write the shape on purpose.
+    includes: ['**/api-usecases/**/imports/**']
+    excludes: ['**/test/**', '**/testFixtures/**']
   CommentCarriesDocumentation:
     active: true
     # Four lines, tests included: a long comment in a test is the same duplication as anywhere else.

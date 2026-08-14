@@ -66,6 +66,9 @@ class ImportStateMergedOutsideTransactionTest {
             class Receiver {
                 fun receive(userDataImport: UserDataImport, uploadedBytes: Long) =
                     repository.save(userDataImport.copy(uploadedBytes = uploadedBytes))
+
+                fun stamp(userDataImport: UserDataImport, activity: Instant) =
+                    repository.save(userDataImport.copy(activity))
             }
             """.trimIndent()
 
@@ -125,6 +128,9 @@ class ImportStateMergedOutsideTransactionTest {
             class Runner {
                 fun failed(current: UserDataImport, failureCode: String) =
                     current.copy(state = UserDataImportState.FAILED, failureCode = failureCode)
+
+                fun report(current: UserDataImport) =
+                    recorder.record(current.copy(state = UserDataImportState.FAILED))
             }
             """.trimIndent()
 

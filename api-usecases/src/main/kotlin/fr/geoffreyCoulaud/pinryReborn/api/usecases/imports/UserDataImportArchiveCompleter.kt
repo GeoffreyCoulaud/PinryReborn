@@ -32,6 +32,9 @@ class UserDataImportArchiveCompleter(
         // after the promote still leaves an archive some row points at.
         val keyed = repository.save(userDataImport.copy(storageKey = storageKey, byteSize = staged.byteSize))
         archiveStore.promote(staged, storageKey)
+        // The one state transition still merged from a copy. Fencing it has to decide what a client is
+        // told when a cancellation lands during finishUpload, which no spec section does yet (backlog).
+        @Suppress("ImportStateMergedOutsideTransaction")
         val pending =
             repository.save(keyed.copy(state = UserDataImportState.PENDING, archiveCompletedAt = clock.now()))
         // Enqueued after that write, never before: a worker claiming the task while the row still said
