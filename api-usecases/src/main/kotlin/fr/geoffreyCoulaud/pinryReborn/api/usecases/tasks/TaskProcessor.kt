@@ -49,11 +49,12 @@ class TaskProcessor(
             if (taskQueue.markCancelledIfRequested(claimed.id, claimed.leaseId, now)) {
                 return
             }
-            settle(claimed, outcome, now)
+            settle(claimed, outcome, now, handler.retryFloor)
         }
     }
 
-    private fun settle(claimed: ClaimedTask, outcome: Outcome, now: Instant) {
+    /** [retryFloor] is the handler's, not the queue's: the floor belongs to the kind being settled. */
+    private fun settle(claimed: ClaimedTask, outcome: Outcome, now: Instant, retryFloor: Duration) {
         when (outcome) {
             is Success -> taskQueue.markSucceeded(claimed.id, claimed.leaseId, now)
             is Permanent -> {
@@ -65,7 +66,7 @@ class TaskProcessor(
                     logger.warn { "task ${claimed.id} exhausted retries, marking dead: ${outcome.message}" }
                     taskQueue.markDead(claimed.id, claimed.leaseId, now, outcome.message)
                 } else {
-                    val retryAt = backoffPolicy.nextAttemptAt(claimed.attempts, now)
+                    val retryAt = backoffPolicy.nextAttemptAt(claimed.attempts, now, retryFloor)
                     taskQueue.markPendingRetry(claimed.id, claimed.leaseId, retryAt, now, outcome.message)
                 }
         }

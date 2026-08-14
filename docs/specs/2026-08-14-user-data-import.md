@@ -528,6 +528,16 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
   the three attempts of the first draft were consumed in about three seconds, which no operator can
   use. The archive survives until the row is terminal, so a retry does not re-upload.
 
+  **Where the floor lives.** The queue had no floor of any kind, and an earlier revision of this
+  section read as though it had one. It is now a property of the task, not of the queue: `TaskHandler`
+  carries a `retryFloor` defaulting to `Duration.ZERO`, `UserDataImportTaskHandler` overrides it with
+  `imports.retry_floor` read live from `ImportsConfig`, and `TaskProcessor` hands the settled task's
+  own floor to `BackoffPolicy.nextAttemptAt`, where it applies after the jitter and over the cap
+  (`tasks.backoff_cap` bounds the queue's exponential window, not this task's minimum). The three
+  other kinds declare nothing and keep the exact delay they compute today. Not a column on `tasks`:
+  the value is configuration an operator retunes, and a floor stamped at enqueue would hold the old
+  one for every task already queued.
+
   **It is not, however, named as its own failure code.** An earlier revision listed `DISK_FULL` among
   the row's failure codes, copying the export, which can use it because it asks `hasFreeSpace` before
   building and therefore knows. The walk does not ask: a full disk reaches it as an `IOException`
