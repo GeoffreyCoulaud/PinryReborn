@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
@@ -29,15 +30,15 @@ class UserDataImportCanceller(
                 archiveStore.discardPartialUpload(importId)
                 markCancelled(importId)
             }
-            // The Boolean is dropped deliberately: cancel() answers true both for a task cancelled
-            // before it ran and for one already RUNNING, so it cannot say whether a runner holds these
-            // bytes. Accepted race: a worker that claimed the task while the row still read PENDING
-            // loses its archive and lands on FAILED rather than CANCELLED, costing no data and no bytes.
-            UserDataImportState.PENDING -> {
-                userDataImport.taskId?.let { cancelTask.cancel(it) }
-                archiveStore.deleteQuietly(ImportArchiveKey.forImport(importId))
-                markCancelled(importId)
-            }
+            // The state first, and everything else from the row that write read: a request whose fence
+            // was refused releases nothing. The Boolean is dropped deliberately: cancel() answers true
+            // both for a task cancelled before it ran and for one already RUNNING, so it cannot say
+            // whether a runner holds these bytes.
+            UserDataImportState.PENDING ->
+                markCancelled(importId)?.let { cancelled ->
+                    cancelled.taskId?.let { cancelTask.cancel(it) }
+                    archiveStore.deleteQuietly(ImportArchiveKey.forImport(importId))
+                }
             // The archive is left alone: the fence stops the walk at the next pin and the runner
             // deletes it as it returns, so deleting here would pull the file out from under a live read.
             UserDataImportState.RUNNING -> markCancelled(importId)
@@ -46,12 +47,11 @@ class UserDataImportCanceller(
     }
 
     /**
-     * The state alone, on the row as it is now: the runner advances this row's counters while the
-     * request runs, and a row that went terminal in that window keeps the outcome it reached.
+     * The state alone, on the row as it is now, answering it back: the runner advances this row's
+     * counters while the request runs, and one that went terminal in that window keeps its outcome.
      */
-    private fun markCancelled(importId: UUID) {
+    private fun markCancelled(importId: UUID): UserDataImport? =
         repository.saveFenced(transactionRunner, importId, { !it.state.isTerminal }) {
             it.copy(state = UserDataImportState.CANCELLED)
         }
-    }
 }
