@@ -357,6 +357,27 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given a cancellation landing before the claim, Then the run is not claimed`() {
+        // Given: the account lookup is the window between reading the row and claiming it, and a DELETE
+        // commits in it. A claim merging the copy read before that window puts RUNNING back under a
+        // fresh token, and every downstream fence then reads its own token and lets the walk run on.
+        stubRow(anImport(UserDataImportState.PENDING))
+        every { userRepository.findUserById(user.id) } answers {
+            seedRow(rows.getValue(importId).copy(state = UserDataImportState.CANCELLED))
+            user
+        }
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then: nothing is written, so the row the user was answered on is the row that stands
+        assertEquals(UserDataImportState.CANCELLED, stored.state)
+        assertNull(stored.runToken)
+        verify(exactly = 0) { importRepository.save(any()) }
+        verify(exactly = 0) { archiveStore.open(any()) }
+    }
+
+    @Test
     fun `Given a cancellation landing before the manifest is recorded, Then no walk runs`() {
         // Given: the tag and board stubs are deliberately absent, so a walk that runs anyway fails here
         val source =
