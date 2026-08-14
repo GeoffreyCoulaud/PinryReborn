@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportArchiveEmptyError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.UserDataImportTask
 import java.util.UUID
@@ -22,6 +23,9 @@ class UserDataImportArchiveCompleter(
 ) {
     fun complete(user: User, importId: UUID): UserDataImport {
         val userDataImport = repository.findAwaitingArchive(user, importId)
+        // The row is the authority on what the upload received; with nothing behind it, the store would
+        // open an upload file no chunk ever created and raise an untyped IOException.
+        if (userDataImport.uploadedBytes == 0L) throw ImportArchiveEmptyError()
         val staged = archiveStore.finishUpload(importId)
         val storageKey = ImportArchiveKey.forImport(importId)
         // Named before the bytes are there, as the export builder does: a completer that dies right

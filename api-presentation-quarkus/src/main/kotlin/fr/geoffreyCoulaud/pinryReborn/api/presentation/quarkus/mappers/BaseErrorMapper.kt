@@ -71,6 +71,7 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.IMPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.IMPORT_NOT_AWAITING_ARCHIVE -> Response.Status.CONFLICT.statusCode
             ErrorCode.IMPORT_CHUNK_OFFSET_MISMATCH -> Response.Status.CONFLICT.statusCode
+            ErrorCode.IMPORT_ARCHIVE_EMPTY -> Response.Status.CONFLICT.statusCode
             ErrorCode.IMPORT_ARCHIVE_TOO_LARGE -> Response.Status.REQUEST_ENTITY_TOO_LARGE.statusCode
             ErrorCode.IMPORT_INSUFFICIENT_STORAGE -> INSUFFICIENT_STORAGE_STATUS_CODE
             ErrorCode.TOO_MANY_AUTHENTICATION_ATTEMPTS -> Response.Status.TOO_MANY_REQUESTS.statusCode

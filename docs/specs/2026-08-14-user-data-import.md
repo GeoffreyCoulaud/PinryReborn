@@ -522,12 +522,18 @@ existing body limit; that is a direct benefit of chunking.
 | `IMPORT_INSUFFICIENT_PERMISSIONS` | `403` | Not the owner |
 | `IMPORT_NOT_AWAITING_ARCHIVE` | `409` | A chunk or completion for an import past the upload phase |
 | `IMPORT_CHUNK_OFFSET_MISMATCH` | `409` | Offset is not the current length; the body names the current length |
+| `IMPORT_ARCHIVE_EMPTY` | `409` | Completion for an import that received no chunk |
 | `IMPORT_ARCHIVE_TOO_LARGE` | `413` | The chunk would carry the total past `imports.max_archive_bytes` |
 | `IMPORT_INSUFFICIENT_STORAGE` | `507` | Free space below the margin |
 | `BOARD_NAME_ALREADY_EXISTS` | `409` | Section 12, at all three sites |
 
 Naming follows `USERNAME_ALREADY_EXISTS` and its `UsernameAlreadyTakenException`, rather than
 inventing a second vocabulary for the same concept.
+
+**Correction (block 2 review).** `IMPORT_ARCHIVE_EMPTY` is added after the fact. Section 6's
+completer went straight to `finishUpload`, which opens the upload file, so an import that received no
+chunk raised `NoSuchFileException` and reached its owner as a `500`. The row's `uploadedBytes`
+settles it in the use case, before the store is touched.
 
 Failure codes on the row: `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
 `UNSUPPORTED_FORMAT_VERSION`, `DISK_FULL`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`.
