@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BaseError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportChunkOffsetMismatchError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ThrottledError
 import jakarta.ws.rs.core.Context
 import jakarta.ws.rs.core.Response
@@ -21,7 +22,11 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
         // rather than a default: a new such status is a missing entry, not a wrong title to ship.
         val title =
             if (resolvedStatus == null) TITLES_WITHOUT_CONSTANT.getValue(status) else resolvedStatus.reasonPhrase
-        val builder = problemResponse(status, title, exception.message, exception.code.name, uriInfo)
+        // The one refusal a client acts on with a number: it resumes from this length rather than
+        // parsing it out of the sentence that also names it.
+        val currentLength = (exception as? ImportChunkOffsetMismatchError)?.currentLength
+        val builder =
+            problemResponse(status, title, exception.message, exception.code.name, uriInfo, currentLength)
         if (exception is ThrottledError) {
             builder.header("Retry-After", exception.retryAfterSeconds)
         }

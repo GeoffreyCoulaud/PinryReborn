@@ -16,16 +16,17 @@ fun problemResponse(
 ): Response.ResponseBuilder = problemResponse(status.statusCode, status.reasonPhrase, detail, code, uriInfo)
 
 /**
- * Build an RFC 7807 problem+json response builder for a raw status code, for statuses with no
- * matching [Response.Status] constant (e.g. 422 Unprocessable Entity, not part of jakarta.ws.rs 4.0).
- * Callers may add headers before build().
+ * The builder for a raw status code, for statuses with no [Response.Status] constant (422, 507).
+ * Callers may add headers before build(). One parameter per payload member, [currentLength] included.
  */
+@Suppress("LongParameterList")
 fun problemResponse(
     status: Int,
     title: String,
     detail: String?,
     code: String,
     uriInfo: UriInfo,
+    currentLength: Long? = null,
 ): Response.ResponseBuilder =
     Response
         .status(status)
@@ -36,6 +37,7 @@ fun problemResponse(
                 detail = detail,
                 instance = uriInfo.path,
                 code = code,
+                currentLength = currentLength,
             ),
         )
         .type(PROBLEM_JSON_MEDIA_TYPE)

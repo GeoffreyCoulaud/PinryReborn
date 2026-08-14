@@ -110,7 +110,8 @@ class MeImportController(
     )
     @APIResponse(
         responseCode = "409",
-        description = "IMPORT_NOT_AWAITING_ARCHIVE, or IMPORT_CHUNK_OFFSET_MISMATCH naming the current length",
+        description = "IMPORT_NOT_AWAITING_ARCHIVE, or IMPORT_CHUNK_OFFSET_MISMATCH whose currentLength " +
+            "member names the length to resume from",
         content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
     )
     @APIResponse(
