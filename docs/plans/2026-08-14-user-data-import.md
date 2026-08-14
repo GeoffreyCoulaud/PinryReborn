@@ -121,7 +121,34 @@ otherwise ship titled "Unprocessable Entity".
 
 ## Block 2: storage and schema
 
-Two tasks, mutually independent. Both depend on block 1's task 2.
+Three tasks, mutually independent. Tasks 3 and 4 depend on block 1's task 2; task 2b depends on
+block 1's task 1, whose index is what turns the old race into a `500`.
+
+### 2b. A transaction around tag find-or-create
+
+Added 2026-08-14, after block 1. This lot **aggravates** a pre-existing defect, which is why it is
+fixed here rather than filed: `TagCreator.findOrCreate` is a check-then-insert, and neither
+`PinTagger.setTags` nor `PinCreator.createPin` opens a transaction around it. Before block 1 the race
+silently created two tag rows differing only by case. With `ix_tags_author_name_nocase` in place it
+surfaces as an untranslated `PersistenceException`, so two concurrent taggings of one new name now
+give the client a `500`. ADR 0009 names this exact shape: one connection serialises each statement,
+not a pair, and only a transaction makes a check-then-insert safe (measured there at 335 of 400
+interleavings without one).
+
+**Files.** `api-usecases/.../{TagCreator,PinTagger,PinCreator}.kt`, their tests.
+
+**What.** A transaction boundary owned by the use case, following `EbeanTaskQueue.enqueue`'s
+precedent. Whether the boundary belongs in `TagCreator` or in each caller is the implementer's call,
+argued in the commit message; a nested `inTransaction` is safe here, which the plan review of the
+persistence lot established.
+
+**Acceptance.**
+- A concurrency test in `UserCreatorTest`'s shape for the same class of race: two concurrent
+  taggings of one new name yield one tag row and two successful responses, never a `500`. It must
+  fail before the change, so the red carries the reproduction count.
+- The tag index's row in `UniqueConstraintOutcomeTest` is updated to say what a client now receives,
+  since block 1 corrected it once already.
+- `./gradlew gate`.
 
 ### 3. Import persistence
 

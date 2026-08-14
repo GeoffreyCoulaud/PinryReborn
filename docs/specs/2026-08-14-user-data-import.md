@@ -579,12 +579,23 @@ The import needs a name to be an identity. Today it is not one.
   deliberate breaking change to a public contract: alpha status allows it, no instance is deployed,
   and a name cannot be an identity while the system lets it be ambiguous.
 
-**The constraint fires at three sites, not one.** Besides creation, `PUT /api/v1/boards/{boardId}`
-renames through `BoardUpdater` with no check, and `BoardRecycleBin.restore` re-activates a board. The
-translation lives at **two** repository methods, not one: `saveBoard` covers creation and renaming,
-and `restoreBoard` covers restoration, which persists its model directly and never passes through
-`saveBoard`. Each use case rethrows the domain error, so no persistence exception reaches a
-controller from any of the three sites.
+**The constraint fires at two write sites, not three.** Creation and renaming both reach
+`BoardRepository.saveBoard`, which translates the violation; each use case rethrows the domain error,
+so no persistence exception reaches a controller.
+
+**Restoration is not a third site**, and two earlier revisions of this section said it was. Because
+the index covers recycled rows, no homonym can exist while a board sits in the recycle bin, and
+`restoreBoard` changes no indexed column: the collision is unreachable, a `catch` there would be dead
+code, and the test that was prescribed for it could not be set up, since creating the collision is
+itself refused by the constraint under test. The paragraph below already said as much
+("restoring from the recycle bin can no longer collide") without the contradiction being noticed. The
+reachable half of the rule is what ships: a recycled board holds its name, the `409` says so, and
+emptying the bin releases it.
+
+**The `409` detail is read after the refusal, not before it.** Naming the recycled holder needs a
+lookup, which ADR 0009 decision 2 permits: it bars a read that *decides* uniqueness, not one that
+explains a refusal the database has already made. The holder is nullable, since a concurrent hard
+delete can free the name in between, and that third branch is a case of its own.
 
 **Recycled rows hold their name.** Operator decision. The index covers every row, like
 `ix_users_name_nocase`. Consequences, all deliberate: a board in the recycle bin blocks a new board
