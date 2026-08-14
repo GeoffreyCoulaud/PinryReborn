@@ -344,6 +344,20 @@ recycle bin would try to create a board whose name is already taken and hit the 
   "below account deletion" is only expressible as a negative number, and this is the first use of the
   field. The storage key is written **before** the promote, as the export
   builder does, so bytes are reclaimable even if the row is never written again.
+
+**Both upload writes are fenced on `AWAITING_ARCHIVE`, and a lost fence answers
+`IMPORT_NOT_AWAITING_ARCHIVE`.** This was not specified, and its absence left two unfenced writes
+standing while the rest of the feature was fenced. The windows are wide, not theoretical: the receiver
+streams a chunk to disk between its read and its write, and the completer fsyncs and digests up to
+twenty gigabytes before promoting. A `DELETE` landing in either window writes `CANCELLED`, and an
+unfenced save then restores `AWAITING_ARCHIVE` or writes `PENDING`, leaving an import the user was
+told was cancelled holding the account's only active slot, in the completer's case with a task
+enqueued for it.
+
+The refusal needs no new code: the caller asked to feed or close an import that is no longer taking an
+archive, which is exactly what `IMPORT_NOT_AWAITING_ARCHIVE` already says, and the client's next `GET`
+shows `CANCELLED`. Bytes promoted before a lost fence are deleted best-effort on the way out, and the
+sweep is the guarantor if that delete fails.
 - **`UserDataImportRunner.run(importId, isLastAttempt, renewLease)`**: the worker path (section 8).
 - **`UserDataImportGetter`**, **`UserDataImportIssueLister`**: owner-checked reads.
 - **`UserDataImportCanceller.cancel(user, importId)`**: owner check; `AWAITING_ARCHIVE` discards the
