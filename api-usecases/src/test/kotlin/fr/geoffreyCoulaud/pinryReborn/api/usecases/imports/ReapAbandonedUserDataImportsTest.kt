@@ -247,6 +247,28 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
     }
 
     @Test
+    fun `Given a running import whose task ended, Then it fails as interrupted`() {
+        // Given: a live attempt is a task PENDING or RUNNING (spec section 6). One that succeeded or was
+        // cancelled is not coming back to this row, whatever left the row RUNNING behind it.
+        stubSweep()
+        stubRowWrites()
+        val succeeded = aTask(TaskState.SUCCEEDED)
+        val cancelled = aTask(TaskState.CANCELLED)
+        val afterSuccess = anImport(UserDataImportState.RUNNING, taskId = succeeded.id)
+        val afterCancellation = anImport(UserDataImportState.RUNNING, taskId = cancelled.id)
+        every { taskQueue.findById(succeeded.id) } returns succeeded
+        every { taskQueue.findById(cancelled.id) } returns cancelled
+
+        // When
+        val reaped = sweep.reap()
+
+        // Then
+        assertEquals(2, reaped)
+        assertEquals(UserDataImportState.FAILED, stored(afterSuccess.id).state)
+        assertEquals(UserDataImportState.FAILED, stored(afterCancellation.id).state)
+    }
+
+    @Test
     fun `Given a walk that finished while the sweep read it, Then no failure is written over it`() {
         // Given: the runner writes COMPLETED between the selection and the fence, and the task it has
         // just finished is on its way out of the queue
