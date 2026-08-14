@@ -3,12 +3,14 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.BackoffPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ExponentialBackoffWithJitter
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
@@ -21,11 +23,11 @@ class TaskProcessorTest {
     private val now = Instant.parse("2026-07-08T00:00:00Z")
     private val leaseDuration = Duration.ofMinutes(1)
 
-    private fun processorWith(handler: TaskHandler?) =
+    private fun processorWith(handler: TaskHandler?, policy: BackoffPolicy = backoff) =
         TaskProcessor(
             taskQueue = queue,
             registry = TaskHandlerRegistry(listOfNotNull(handler)),
-            backoffPolicy = backoff,
+            backoffPolicy = policy,
             clock = clock,
         )
 
@@ -34,6 +36,12 @@ class TaskProcessorTest {
 
     private fun handler(kind: String, body: () -> Unit) = object : TaskHandler {
         override val kind = kind
+        override fun handle(payload: String, context: TaskContext) = body()
+    }
+
+    private fun flooredHandler(kind: String, floor: Duration, body: () -> Unit) = object : TaskHandler {
+        override val kind = kind
+        override val retryFloor = floor
         override fun handle(payload: String, context: TaskContext) = body()
     }
 
@@ -94,7 +102,7 @@ class TaskProcessorTest {
         every { clock.now() } returns now
         every { queue.markCancelledIfRequested(any(), any(), any()) } returns false
         val retryAt = now.plusSeconds(4)
-        every { backoff.nextAttemptAt(2, now) } returns retryAt
+        every { backoff.nextAttemptAt(2, now, Duration.ZERO) } returns retryAt
         val c = claimed(attempts = 2, maxAttempts = 3)
         val p = processorWith(handler("k") { throw IllegalStateException("boom") })
         // When
@@ -134,7 +142,7 @@ class TaskProcessorTest {
         // Given
         every { clock.now() } returns now
         every { queue.markCancelledIfRequested(any(), any(), any()) } returns false
-        every { backoff.nextAttemptAt(1, now) } returns now.plusSeconds(1)
+        every { backoff.nextAttemptAt(1, now, Duration.ZERO) } returns now.plusSeconds(1)
         val c = claimed(attempts = 1, maxAttempts = 3)
         val p = processorWith(handler("k") { throw IllegalStateException() })
         // When
@@ -158,6 +166,30 @@ class TaskProcessorTest {
         // Then
         assertEquals(2, seen?.attempt)
         assertEquals(3, seen?.maxAttempts)
+    }
+
+    @Test
+    fun `Given attempt 2 of each kind, Then the import waits out its floor and the download does not`() {
+        // Given: the real policy at full jitter, so both delays are computed rather than stubbed. The
+        // unfloored window is base * 2 = 4s, which is what an operator cannot use (spec section 9).
+        every { clock.now() } returns now
+        every { queue.markCancelledIfRequested(any(), any(), any()) } returns false
+        val retryAts = mutableListOf<Instant>()
+        every { queue.markPendingRetry(any(), any(), capture(retryAts), any(), any()) } returns true
+        val policy = ExponentialBackoffWithJitter(base = Duration.ofSeconds(2), cap = Duration.ofMinutes(1)) { 1.0 }
+        val floor = Duration.ofMinutes(10)
+        val boom = { throw IllegalStateException("boom") }
+
+        // When
+        processorWith(flooredHandler(UserDataImportTask.KIND, floor, boom), policy)
+            .execute(claimed(kind = UserDataImportTask.KIND, attempts = 2), leaseDuration)
+        processorWith(handler(PinDownloadTask.KIND, boom), policy)
+            .execute(claimed(kind = PinDownloadTask.KIND, attempts = 2), leaseDuration)
+
+        // Then
+        val (importRetryAt, downloadRetryAt) = retryAts
+        assertTrue(!importRetryAt.isBefore(now.plus(floor)), "the import should wait out its floor")
+        assertEquals(now.plusSeconds(4), downloadRetryAt, "a kind declaring no floor keeps its window")
     }
 
     @Test
