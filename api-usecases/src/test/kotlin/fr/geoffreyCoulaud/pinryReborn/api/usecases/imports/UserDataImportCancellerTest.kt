@@ -193,6 +193,22 @@ class UserDataImportCancellerTest : BaseTest() {
     }
 
     @Test
+    fun `Given an import erased while the request ran, Then nothing is released`() {
+        // Given: the account deletion cleaner drops the row between the owner check and the fence, so
+        // there is no phase left to answer and nothing this request is still the one to release
+        every { repository.findById(importId) } answers {
+            if (transactions.inside) null else importWith(state = UserDataImportState.AWAITING_ARCHIVE)
+        }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
+        verify(exactly = 0) { repository.save(any()) }
+        verify(exactly = 0) { archiveStore.discardPartialUpload(any()) }
+    }
+
+    @Test
     fun `Given a pending import with no task id, Then no cancellation is attempted and the archive still goes`() {
         // Given: the column is nullable because the row exists before its task does, so nothing here
         // may depend on it being set, whatever the hand-over now guarantees
