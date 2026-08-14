@@ -103,6 +103,29 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given an archive past the entry bound, Then it is refused before anything is created`() {
+        // Given: the entry names are read where the central directory already is, as the archive opens,
+        // so an over-large one is refused before the walks create hundreds of tags and boards, and before
+        // a manifest write the refusal would then revert to the claim-time row.
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags = listOf(TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant))),
+                boards = listOf(TestLine(1, aBoard("Summer"))),
+                entriesFailure = ArchiveBoundExceededException("200001 entries, past the 200000 allowed"),
+            )
+        stubRunUpToOpen()
+        every { archiveStore.open(storageKey) } returns source
+
+        // When / Then
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
+        assertEquals(UserDataImportState.FAILED, stored.state)
+        assertEquals("ARCHIVE_UNREADABLE", stored.failureCode)
+        assertNull(stored.formatVersion)
+        assertCreatedNothing()
+    }
+
+    @Test
     fun `Given an archive with no manifest, Then it fails as missing and the source is closed`() {
         // Given
         val source = FakeArchiveSource(manifest = null)

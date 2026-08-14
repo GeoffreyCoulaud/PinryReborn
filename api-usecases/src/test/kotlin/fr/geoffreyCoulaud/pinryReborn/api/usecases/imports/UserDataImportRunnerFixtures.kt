@@ -62,6 +62,7 @@ internal data class FakeArchiveSource(
     val readFailure: Exception? = null,
     val failAtPinLine: Int? = null,
     val unreadable: Set<String> = emptySet(),
+    val entriesFailure: Exception? = null,
 ) : ArchiveSource {
     var closed = false
     var entryBound: Int? = null
@@ -69,6 +70,7 @@ internal data class FakeArchiveSource(
 
     override fun entryNames(maxEntries: Int): Set<String> {
         entryBound = maxEntries
+        entriesFailure?.let { throw it }
         return setOf(MANIFEST, TAGS, BOARDS, PINS) + media.keys
     }
 
