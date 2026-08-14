@@ -267,6 +267,26 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         assertTrue(reclaimable.isEmpty())
     }
 
+    // --- interrupted runs ---
+
+    @Test
+    fun `Given a running import, Then it is the only state findRunning answers with`() {
+        // Given: one row per state, so a predicate widened by accident is caught here
+        val user = createAndSaveUser()
+        val running = repository.save(awaitingImport(user.id).copy(state = UserDataImportState.RUNNING))
+        UserDataImportState.entries
+            .filterNot { it == UserDataImportState.RUNNING }
+            .forEach { state ->
+                repository.save(awaitingImport(createAndSaveUser().id).copy(state = state))
+            }
+
+        // When
+        val found = repository.findRunning()
+
+        // Then
+        assertEquals(listOf(running.id), found.map { it.id })
+    }
+
     // --- orphan sweep, ids and deletion ---
 
     @Test
