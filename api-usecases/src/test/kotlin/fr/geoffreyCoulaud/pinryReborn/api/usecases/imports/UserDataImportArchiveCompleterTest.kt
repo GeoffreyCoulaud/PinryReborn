@@ -9,6 +9,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.Task
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportArchiveEmptyError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportDoesNotExistError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportNotAwaitingArchiveError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportPermissionError
@@ -94,6 +95,20 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
 
         // When / Then
         assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        verify(exactly = 0) { archiveStore.finishUpload(any()) }
+    }
+
+    @Test
+    fun `Given an import that received no chunk, Then completion is refused before the store is touched`() {
+        // Given: nothing created the upload file, so `finishUpload` opens an absent path and raises
+        // NoSuchFileException, untyped, which reaches the client as a 500:
+        //   java.nio.file.NoSuchFileException: /tmp/.../tmp/import-a1d0d5d4-....part
+        //       at java.base/java.nio.channels.FileChannel.open(FileChannel.java:353)
+        //       at ...FilesystemZipImportArchiveStore.finishUpload(FilesystemZipImportArchiveStore.kt:105)
+        every { repository.findById(importId) } returns importWith().copy(uploadedBytes = 0)
+
+        // When / Then
+        assertThrows(ImportArchiveEmptyError::class.java) { completer.complete(user, importId) }
         verify(exactly = 0) { archiveStore.finishUpload(any()) }
     }
 

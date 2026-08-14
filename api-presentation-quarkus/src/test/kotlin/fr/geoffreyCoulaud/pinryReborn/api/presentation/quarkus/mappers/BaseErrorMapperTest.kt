@@ -228,6 +228,11 @@ class BaseErrorMapperTest {
     }
 
     @Test
+    fun `Given IMPORT_ARCHIVE_EMPTY, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.IMPORT_ARCHIVE_EMPTY))
+    }
+
+    @Test
     fun `Given IMPORT_ARCHIVE_TOO_LARGE, Then status is 413 REQUEST_ENTITY_TOO_LARGE`() {
         assertEquals(Response.Status.REQUEST_ENTITY_TOO_LARGE, statusFor(ErrorCode.IMPORT_ARCHIVE_TOO_LARGE))
     }
