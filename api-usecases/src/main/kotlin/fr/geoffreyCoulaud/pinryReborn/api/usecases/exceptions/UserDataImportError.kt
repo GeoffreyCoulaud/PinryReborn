@@ -16,14 +16,15 @@ class ImportNotAwaitingArchiveError :
     UserDataImportError("Import is past its upload phase", ErrorCode.IMPORT_NOT_AWAITING_ARCHIVE)
 
 /** Carries [currentLength] so a client resumes from the reported offset rather than restarting. */
-class ImportChunkOffsetMismatchError(val currentLength: Long) :
+class ImportChunkOffsetMismatchError(val currentLength: Long, cause: Throwable) :
     UserDataImportError(
         "Chunk offset does not match the current length of $currentLength",
         ErrorCode.IMPORT_CHUNK_OFFSET_MISMATCH,
+        cause,
     )
 
-class ImportArchiveTooLargeError :
-    UserDataImportError("Archive is larger than this instance accepts", ErrorCode.IMPORT_ARCHIVE_TOO_LARGE)
+class ImportArchiveTooLargeError(cause: Throwable) :
+    UserDataImportError("Archive is larger than this instance accepts", ErrorCode.IMPORT_ARCHIVE_TOO_LARGE, cause)
 
 class ImportInsufficientStorageError :
     UserDataImportError("Not enough free space to receive this archive", ErrorCode.IMPORT_INSUFFICIENT_STORAGE)

@@ -1,0 +1,29 @@
+package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
+
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImport
+import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportDoesNotExistError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportNotAwaitingArchiveError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportPermissionError
+import java.util.UUID
+
+/** The one existence-then-ownership check, so no use case can answer either question differently. */
+internal fun UserDataImportRepositoryInterface.findOwned(
+    user: User,
+    importId: UUID,
+): UserDataImport {
+    val userDataImport = findById(importId) ?: throw ImportDoesNotExistError()
+    if (userDataImport.userId != user.id) throw ImportPermissionError()
+    return userDataImport
+}
+
+/** Owner before state, so a stranger learns nothing from the refusal about an import that is not his. */
+internal fun UserDataImportRepositoryInterface.findAwaitingArchive(
+    user: User,
+    importId: UUID,
+): UserDataImport =
+    findOwned(user, importId).also {
+        if (it.state != UserDataImportState.AWAITING_ARCHIVE) throw ImportNotAwaitingArchiveError()
+    }
