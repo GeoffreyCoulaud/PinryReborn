@@ -729,6 +729,10 @@ TDD, 100% branch coverage per package. Each scenario names where it lives, becau
   un-importable**, as `MEDIA_TOO_LARGE`.
 - **`FIELD_INVALID` bounds are restated, not shared.** Until the bounds move into the entities, the
   DTOs and this walk can drift apart. The backlog carries the consolidation.
+- **`USER_GONE` leaves the archive bytes behind.** The refusal happens before the run is claimed, so
+  step 8 never runs and the sweep reclaims them on its next pass, like any other orphan.
+- **The metadata walks have no cursor.** A resumed attempt re-walks `tags.jsonl` and `boards.jsonl`
+  in full with an empty tally, so every line already imported is counted a second time as a skip.
 
 ## 15. References
 
