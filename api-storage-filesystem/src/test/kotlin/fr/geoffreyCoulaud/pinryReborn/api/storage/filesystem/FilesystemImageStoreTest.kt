@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayInputStream
+import java.io.IOException
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -77,6 +79,65 @@ class FilesystemImageStoreTest {
     fun `Given an absolute storage key, Then it is rejected`() {
         assertThrows(IllegalArgumentException::class.java) {
             store().openStream("/etc/passwd")
+        }
+    }
+
+    @Test
+    fun `Given bytes within the limit, Then digest hashes them and writes nothing`() {
+        // Given: a data directory that does not exist yet
+        val absent = dataDir.resolve("absent")
+
+        // When
+        val hash = FilesystemImageStore(absent.toString())
+            .digest(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), maxBytes = 100)
+
+        // Then: the same hash stage measures, and not a directory created. `stage(...).also { discard(it) }`
+        // returns the same hash and deletes its temp file, but leaves `tmp/` behind, so this is what
+        // discriminates; a listing before and after would not.
+        assertEquals("9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a", hash)
+        assertFalse(Files.exists(absent))
+    }
+
+    @Test
+    fun `Given a data directory that cannot be created, Then digest still hashes`() {
+        // Given: a regular file where the data directory would be, so createDirectories fails for
+        // every user, root included. An unwritable directory would not bite when tests run as root.
+        val blocked = dataDir.resolve("blocked")
+        Files.writeString(blocked, "not a directory")
+
+        // When
+        val hash = FilesystemImageStore(blocked.toString())
+            .digest(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), maxBytes = 100)
+
+        // Then
+        assertEquals("9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a", hash)
+    }
+
+    @Test
+    fun `Given bytes over the limit, Then digest throws before the stream is exhausted`() {
+        // Given: a stream that refuses to be read past its first buffer
+        val source = PoisonedStream(readableBytes = 8192)
+
+        // When / Then: the bound is what stops it, not the poison
+        assertThrows(ImageTooLargeException::class.java) {
+            store().digest(source, maxBytes = 100)
+        }
+    }
+
+    /**
+     * Delivers [readableBytes] and then throws, so "the refusal arrives before the stream is
+     * exhausted" is observable rather than merely unmeasured.
+     */
+    private class PoisonedStream(private val readableBytes: Int) : InputStream() {
+        private var delivered = 0
+
+        override fun read(): Int = throw IOException("the single-byte path is not the one under test")
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            if (delivered >= readableBytes) throw IOException("read past the poisoned point")
+            val count = minOf(length, readableBytes - delivered)
+            delivered += count
+            return count
         }
     }
 }
