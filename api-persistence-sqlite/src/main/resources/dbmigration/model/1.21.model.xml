@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createTable name="user_data_import_issues" identityType="external" pkName="pk_user_data_import_issues">
+            <column name="id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="import_id" type="uuid" notnull="true" references="user_data_imports.id" foreignKeyName="fk_user_data_import_issues_import_id"/>
+            <column name="kind" type="varchar" notnull="true"/>
+            <column name="line" type="integer"/>
+            <column name="subject" type="varchar"/>
+            <column name="detail" type="varchar"/>
+        </createTable>
+        <createTable name="user_data_imports" identityType="external" pkName="pk_user_data_imports">
+            <column name="id" type="uuid" primaryKey="true" identity="true"/>
+            <column name="user_id" type="uuid" notnull="true" references="users.id" foreignKeyName="fk_user_data_imports_user_id" foreignKeyIndex="ix_user_data_imports_user_id"/>
+            <column name="state" type="varchar" notnull="true"/>
+            <column name="requested_at" type="timestamp" notnull="true"/>
+            <column name="task_id" type="uuid"/>
+            <column name="run_token" type="uuid"/>
+            <column name="uploaded_bytes" type="bigint" notnull="true"/>
+            <column name="last_upload_activity_at" type="timestamp"/>
+            <column name="archive_completed_at" type="timestamp"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="completed_at" type="timestamp"/>
+            <column name="storage_key" type="varchar"/>
+            <column name="byte_size" type="bigint"/>
+            <column name="format_version" type="integer"/>
+            <column name="announced_pins" type="integer"/>
+            <column name="processed_pins" type="integer" notnull="true"/>
+            <column name="created_pins" type="integer" notnull="true"/>
+            <column name="skipped_pins" type="integer" notnull="true"/>
+            <column name="created_boards" type="integer" notnull="true"/>
+            <column name="skipped_boards" type="integer" notnull="true"/>
+            <column name="created_tags" type="integer" notnull="true"/>
+            <column name="skipped_tags" type="integer" notnull="true"/>
+            <column name="issue_count" type="integer" notnull="true"/>
+            <column name="issue_detail_truncated" type="boolean" defaultValue="false" notnull="true"/>
+            <column name="failure_code" type="varchar"/>
+        </createTable>
+        <createIndex indexName="ix_images_content_hash" tableName="images" columns="content_hash"/>
+        <createIndex indexName="ix_user_data_import_issues_import" tableName="user_data_import_issues" columns="import_id"/>
+        <createIndex indexName="uq_user_data_imports_active" tableName="user_data_imports" columns="" definition="create unique index uq_user_data_imports_active on user_data_imports (user_id) where state in ('AWAITING_ARCHIVE','PENDING','RUNNING')"/>
+        <createIndex indexName="ix_user_data_imports_user_state" tableName="user_data_imports" columns="user_id,state"/>
+    </changeSet>
+</migration>

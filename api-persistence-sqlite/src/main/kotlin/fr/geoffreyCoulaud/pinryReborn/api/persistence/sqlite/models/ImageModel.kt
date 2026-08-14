@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models
 
 import io.ebean.annotation.DbDefault
+import io.ebean.annotation.Index
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
@@ -10,6 +11,9 @@ import java.util.UUID
 
 @Entity
 @Table(name = "images")
+// Not unique: two accounts, or two pins of one account, may legitimately hold the same bytes. The
+// import probes this column once per pin, which without an index is pins times images.
+@Index(name = "ix_images_content_hash", columnNames = ["content_hash"])
 @Suppress("LongParameterList") // Ebean entity: every parameter is a persisted column.
 class ImageModel(
     @Id var id: UUID,

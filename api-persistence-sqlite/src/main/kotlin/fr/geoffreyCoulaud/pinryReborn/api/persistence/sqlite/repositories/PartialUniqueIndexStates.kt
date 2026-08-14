@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 
 /**
@@ -20,4 +21,8 @@ internal object PartialUniqueIndexStates {
 
     /** `uq_user_data_exports_pending` (`1.11.sql:2`): a user has at most one export in these states. */
     val pendingExportStates: Set<String> = setOf(UserDataExportState.PENDING.name)
+
+    /** `uq_user_data_imports_active` (`1.21.sql:2`): a user has at most one import in these states. */
+    val activeImportStates: Set<String> =
+        UserDataImportState.entries.filter { it.isActive }.map { it.name }.toSet()
 }
