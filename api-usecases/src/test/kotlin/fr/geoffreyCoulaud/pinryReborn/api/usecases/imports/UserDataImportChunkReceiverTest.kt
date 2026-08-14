@@ -21,6 +21,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.time.Instant
@@ -30,10 +31,13 @@ class UserDataImportChunkReceiverTest : BaseTest() {
     private val repository = mockk<UserDataImportRepositoryInterface>()
     private val archiveStore = mockk<ImportArchiveStore>()
     private val clock = mockk<Clock>()
+    private val transactions = PassthroughTransactionRunner()
     private val maxArchiveBytes = 1_000L
     private val minimumFreeBytes = 64L
     private val receiver =
-        UserDataImportChunkReceiver(repository, archiveStore, clock, maxArchiveBytes, minimumFreeBytes)
+        UserDataImportChunkReceiver(
+            repository, archiveStore, clock, transactions, maxArchiveBytes, minimumFreeBytes,
+        )
     private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val stranger = User(id = randomUUID(), name = "mallory", createdAt = TestTime.now)
     private val importId = randomUUID()
@@ -110,6 +114,41 @@ class UserDataImportChunkReceiverTest : BaseTest() {
         assertEquals(516, updated.uploadedBytes)
         assertEquals(now, updated.lastUploadActivityAt)
         assertEquals(UserDataImportState.AWAITING_ARCHIVE, updated.state)
+    }
+
+    @Test
+    fun `Given a chunk at the current length, Then the row is read and written in one transaction`() {
+        // Given: a save of the copy read before the chunk streamed restores every column that copy
+        // carried, the state included, which is what the fence exists to prevent
+        every { repository.findById(importId) } returns importWith(uploadedBytes = 512)
+        every { archiveStore.hasFreeSpace(minimumFreeBytes) } returns true
+        every { archiveStore.appendChunk(importId, 512, any(), maxArchiveBytes) } returns 516
+        every { clock.now() } returns now
+        var savedInTransaction = false
+        every { repository.save(any()) } answers { savedInTransaction = transactions.inside; firstArg() }
+
+        // When
+        receive(offset = 512)
+
+        // Then
+        assertTrue(savedInTransaction)
+    }
+
+    @Test
+    fun `Given a cancellation landing while the chunk streams, Then the chunk is refused and nothing is stamped`() {
+        // Given: the DELETE discards the partial upload and writes CANCELLED between the read and the
+        // write, so an unfenced save would restore AWAITING_ARCHIVE over it and hold the only slot
+        every { repository.findById(importId) } returnsMany
+            listOf(
+                importWith(uploadedBytes = 512),
+                importWith(state = UserDataImportState.CANCELLED, uploadedBytes = 512),
+            )
+        every { archiveStore.hasFreeSpace(minimumFreeBytes) } returns true
+        every { archiveStore.appendChunk(importId, 512, any(), maxArchiveBytes) } returns 516
+
+        // When / Then: the client's next GET shows CANCELLED, which is what this refusal says
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { receive(offset = 512) }
+        verify(exactly = 0) { repository.save(any()) }
     }
 
     @Test

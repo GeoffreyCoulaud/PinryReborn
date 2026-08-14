@@ -17,13 +17,12 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.runs
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID.randomUUID
@@ -33,13 +32,27 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     private val archiveStore = mockk<ImportArchiveStore>()
     private val enqueueTask = mockk<EnqueueTask>()
     private val clock = mockk<Clock>()
-    private val completer = UserDataImportArchiveCompleter(repository, archiveStore, enqueueTask, clock)
+    private val transactions = PassthroughTransactionRunner()
+    private val completer =
+        UserDataImportArchiveCompleter(repository, archiveStore, enqueueTask, clock, transactions)
     private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val stranger = User(id = randomUUID(), name = "mallory", createdAt = TestTime.now)
     private val importId = randomUUID()
     private val now = Instant.parse("2026-08-14T10:00:00Z")
     private val storageKey = "imports/$importId.zip"
     private val staged = StagedFile(path = "/data/tmp/import-$importId.part", byteSize = 4096, contentHash = "h")
+
+    /** The row as the store holds it: a fenced write reads what the write before it left, not a copy. */
+    private var row = importWith()
+
+    /** How a re-read inside a fence answers. The cancellation cases replace it rather than restubbing. */
+    private var reread: (UserDataImport) -> UserDataImport = { it }
+
+    private var digested = false
+    private var promoted = false
+    private var enqueued = false
+    private var enqueuedInTransaction = false
+    private val deletedArchives = mutableListOf<String>()
 
     private fun importWith(state: UserDataImportState = UserDataImportState.AWAITING_ARCHIVE) =
         UserDataImport(id = importId, userId = user.id, state = state, requestedAt = now, uploadedBytes = 4096)
@@ -51,21 +64,65 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
             leaseExpiresAt = null, cancelRequested = false, dedupKey = null, lastError = null,
         )
 
+    /** Reads answer the stored row, so every fence sees what the write before it committed. */
+    private fun stubStoredRow(stored: UserDataImport = importWith()) {
+        row = stored
+        every { repository.findById(importId) } answers { reread(row) }
+    }
+
+    /**
+     * The canceller landing at a chosen point of the completion: from then on a re-read answers
+     * `CANCELLED`, which is how a `DELETE` reaches this use case, by the row rather than by a call.
+     */
+    private fun cancelWhen(landed: () -> Boolean) {
+        reread = { current ->
+            when {
+                landed() -> current.copy(state = UserDataImportState.CANCELLED)
+                else -> current
+            }
+        }
+    }
+
+    private fun stubDigest() {
+        every { archiveStore.finishUpload(importId) } answers { digested = true; staged }
+    }
+
+    private fun stubPromote() {
+        every { archiveStore.promote(staged, storageKey) } answers { promoted = true }
+    }
+
+    private fun stubRowWrites() {
+        every { repository.save(any()) } answers { firstArg<UserDataImport>().also { row = it } }
+    }
+
+    private fun stubArchiveDeletion() {
+        every { archiveStore.delete(any()) } answers { deletedArchives += firstArg<String>() }
+    }
+
+    private fun stubEnqueue(): Task =
+        aTask().also { task ->
+            every {
+                enqueueTask.enqueue(
+                    kind = "account.import",
+                    payload = importId.toString(),
+                    maxAttempts = 5,
+                    priority = -1,
+                )
+            } answers {
+                enqueued = true
+                enqueuedInTransaction = transactions.inside
+                task
+            }
+        }
+
+    /** Everything a completion that is never interrupted needs. */
     private fun stubCompletion(): Task {
-        every { archiveStore.finishUpload(importId) } returns staged
-        every { archiveStore.promote(staged, storageKey) } just runs
-        every { repository.save(any()) } answers { firstArg() }
+        stubStoredRow()
+        stubDigest()
+        stubPromote()
+        stubRowWrites()
         every { clock.now() } returns now
-        val task = aTask()
-        every {
-            enqueueTask.enqueue(
-                kind = "account.import",
-                payload = importId.toString(),
-                maxAttempts = 5,
-                priority = -1,
-            )
-        } returns task
-        return task
+        return stubEnqueue()
     }
 
     @Test
@@ -112,7 +169,6 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     @Test
     fun `Given a finished upload, Then the storage key is written before the bytes are promoted`() {
         // Given
-        every { repository.findById(importId) } returns importWith()
         stubCompletion()
 
         // When
@@ -128,7 +184,6 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     @Test
     fun `Given a finished upload, Then the import moves to PENDING and carries its task`() {
         // Given
-        every { repository.findById(importId) } returns importWith()
         val task = stubCompletion()
 
         // When
@@ -145,7 +200,6 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     @Test
     fun `Given a finished upload, Then the task is enqueued below every other kind and is retried five times`() {
         // Given: the literals rather than the constants, so a change to either has to be meant
-        every { repository.findById(importId) } returns importWith()
         stubCompletion()
 
         // When
@@ -166,7 +220,6 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     fun `Given a finished upload, Then the task is enqueued only once the row is PENDING`() {
         // Given: a worker claiming the task first would find a row still awaiting its archive, return,
         // and leave the import to be swept rather than run.
-        every { repository.findById(importId) } returns importWith()
         stubCompletion()
 
         // When
@@ -177,5 +230,62 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
             repository.save(match { it.state == UserDataImportState.PENDING })
             enqueueTask.enqueue(kind = any(), payload = any(), maxAttempts = any(), priority = any())
         }
+    }
+
+    @Test
+    fun `Given a finished upload, Then the task and the row naming it are written in one transaction`() {
+        // Given: ADR 0009's pair, an enqueue and the write that records its id: a process dying between
+        // them leaves a task nothing points at, and this row is the only place its id is kept
+        stubCompletion()
+
+        // When
+        completer.complete(user, importId)
+
+        // Then
+        assertTrue(enqueuedInTransaction)
+    }
+
+    @Test
+    fun `Given a cancellation landing while the archive is digested, Then nothing is promoted`() {
+        // Given: the DELETE lands during the fsync and digest of up to twenty gigabytes, discarding the
+        // partial upload the promote would then move
+        stubStoredRow()
+        stubDigest()
+        cancelWhen { digested }
+
+        // When / Then
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        verify(exactly = 0) { archiveStore.promote(any(), any()) }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given a cancellation landing while the bytes are promoted, Then they are deleted and no task is enqueued`() {
+        // Given: an unfenced save would write PENDING over the CANCELLED the user was told about, and
+        // enqueue a walk for it
+        stubStoredRow()
+        stubDigest()
+        stubPromote()
+        stubRowWrites()
+        cancelWhen { promoted }
+        stubArchiveDeletion()
+
+        // When / Then
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        assertEquals(listOf(storageKey), deletedArchives)
+        verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `Given a cancellation landing while the task is enqueued, Then the bytes are deleted`() {
+        // Given: the task id write carries the whole row, so an unfenced merge of it restores PENDING
+        // over the cancellation just as the transition itself would
+        stubCompletion()
+        cancelWhen { enqueued }
+        stubArchiveDeletion()
+
+        // When / Then
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        assertEquals(listOf(storageKey), deletedArchives)
     }
 }
