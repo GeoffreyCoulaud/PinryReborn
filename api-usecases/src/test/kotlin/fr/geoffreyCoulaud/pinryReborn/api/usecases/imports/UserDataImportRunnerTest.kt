@@ -160,8 +160,43 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         assertEquals(ANNOUNCED_PINS, stored.announcedPins)
         assertEquals(2, stored.createdTags)
         assertEquals(0, stored.skippedTags)
+        // The metadata bound has no other caller in this codebase, so this is where it is pinned
+        assertEquals(MAX_METADATA_BYTES, source.metadataBound)
         // Every second line, so line 1 renews nothing and line 2 renews once
         assertEquals(1, renewals)
+    }
+
+    @Test
+    fun `Given an archive naming a tag and a board twice, Then the second line finds what the first created`() {
+        // Given: inside one archive the walk is its own history, which a lookup blind to it would miss
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags =
+                    listOf(
+                        TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant)),
+                        TestLine(2, ImportedTag(name = "voyage", createdAt = futureInstant)),
+                    ),
+                boards =
+                    listOf(TestLine(1, aBoard("Summer")), TestLine(2, aBoard("Summer", description = "second"))),
+            )
+        stubWalk(source)
+        stubTagLookup()
+        stubTagCreation()
+        stubBoardLookup()
+        stubBoardCreation()
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then: the first line is what survives, since a row that already exists is never modified
+        assertEquals(1, stored.createdTags)
+        assertEquals(1, stored.skippedTags)
+        assertEquals(pastInstant, savedTag("voyage").createdAt)
+        assertEquals(1, stored.createdBoards)
+        assertEquals(1, stored.skippedBoards)
+        assertEquals("", savedBoard("Summer").description)
+        assertTrue(savedIssues.isEmpty())
     }
 
     @Test

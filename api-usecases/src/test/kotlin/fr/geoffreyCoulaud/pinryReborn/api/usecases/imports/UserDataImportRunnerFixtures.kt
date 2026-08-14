@@ -63,14 +63,18 @@ internal data class FakeArchiveSource(
 ) : ArchiveSource {
     var closed = false
     var entryBound: Int? = null
+    var metadataBound: Long? = null
 
     override fun entryNames(maxEntries: Int): Set<String> {
         entryBound = maxEntries
-        return setOf("manifest.json", "tags.jsonl", "boards.jsonl", "pins.jsonl") + media.keys
+        return setOf(MANIFEST, TAGS, BOARDS, PINS) + media.keys
     }
 
+    /** Keyed on the entry, so asking for the wrong one is a failure rather than the manifest again. */
     override fun <T : Any> readJson(name: String, type: Class<T>, maxBytes: Long): T? {
+        metadataBound = maxBytes
         readFailure?.let { throw it }
+        check(name == MANIFEST) { "no JSON entry named $name" }
         return type.cast(manifest)
     }
 
@@ -78,9 +82,10 @@ internal data class FakeArchiveSource(
     override fun <T : Any> readJsonLines(name: String, type: Class<T>, block: (Sequence<ArchiveLine<T>>) -> Unit) {
         val lines: Sequence<ArchiveLine<*>> =
             when (name) {
-                "tags.jsonl" -> tags.asSequence()
-                "boards.jsonl" -> boards.asSequence()
-                else -> pinLines()
+                TAGS -> tags.asSequence()
+                BOARDS -> boards.asSequence()
+                PINS -> pinLines()
+                else -> error("no JSONL entry named $name")
             }
         block(lines as Sequence<ArchiveLine<T>>)
     }
@@ -93,6 +98,13 @@ internal data class FakeArchiveSource(
 
     override fun close() {
         closed = true
+    }
+
+    private companion object {
+        const val MANIFEST = "manifest.json"
+        const val TAGS = "tags.jsonl"
+        const val BOARDS = "boards.jsonl"
+        const val PINS = "pins.jsonl"
     }
 }
 
@@ -269,8 +281,10 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
         every { tagRepository.findUserTagByName(user, any()) } answers { existingTags[secondArg<String>()] }
     }
 
+    /** A created row is one the lookup answers with from then on, as a repository would. */
     protected fun stubTagCreation() {
-        every { tagRepository.saveTag(any()) } answers { firstArg<Tag>().also { tag -> savedTags += tag } }
+        every { tagRepository.saveTag(any()) } answers
+            { firstArg<Tag>().also { tag -> savedTags += tag; existingTags[tag.name] = tag } }
     }
 
     protected fun stubBoardLookup() {
@@ -279,7 +293,7 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
 
     protected fun stubBoardCreation() {
         every { boardRepository.saveBoard(any()) } answers
-            { firstArg<Board>().also { board -> savedBoards += board } }
+            { firstArg<Board>().also { board -> savedBoards += board; existingBoards[board.name] = board } }
     }
 
     /** Everything a run needs to reach the archive: the row, its writes, the account and the clock. */
