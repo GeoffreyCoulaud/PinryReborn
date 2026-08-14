@@ -180,7 +180,10 @@ The failure mode is never one endpoint being wrong: it is one endpoint being **d
 - **Never poke holes through layers**: presentation never calls persistence; use cases never
   depend on persistence implementations.
 - **Domain data is stamped by use cases, never invented by adapters**: instants, ids, state
-  transitions come from ports (`Clock`); the adapter stores what it is given.
+  transitions come from ports (`Clock`); the adapter stores what it is given. One exception,
+  carved by `docs/adr/0015-import-identifies-by-natural-key.md` decision 3: the user data import
+  restores the instants it reads from an archive, clamped to the account's creation at one end and
+  to the import instant at the other, and stamps from `Clock` everything it invents.
 - **All code is English**; documents predating the decision keep their language.
 - **The migration history is append-only until beta**, then flattened into a generated baseline.
   Accepted cost meanwhile: legacy `when_created`/`when_modified` column names.

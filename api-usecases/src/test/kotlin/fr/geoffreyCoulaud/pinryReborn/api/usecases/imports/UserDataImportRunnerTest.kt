@@ -160,11 +160,12 @@ class UserDataImportRunnerTest : BaseTest() {
     }
 
     private fun stubRowWrites() {
-        every { importRepository.save(any()) } answers { firstArg<UserDataImport>().also { stored = it } }
+        every { importRepository.save(any()) } answers { firstArg<UserDataImport>().also { row -> stored = row } }
     }
 
     private fun stubIssues() {
-        every { issueRepository.save(any()) } answers { firstArg<UserDataImportIssue>().also { savedIssues += it } }
+        every { issueRepository.save(any()) } answers
+            { firstArg<UserDataImportIssue>().also { issue -> savedIssues += issue } }
     }
 
     private fun stubTagLookup() {
@@ -172,7 +173,7 @@ class UserDataImportRunnerTest : BaseTest() {
     }
 
     private fun stubTagCreation() {
-        every { tagRepository.saveTag(any()) } answers { firstArg<Tag>().also { savedTags += it } }
+        every { tagRepository.saveTag(any()) } answers { firstArg<Tag>().also { tag -> savedTags += tag } }
     }
 
     private fun stubBoardLookup() {
@@ -180,7 +181,7 @@ class UserDataImportRunnerTest : BaseTest() {
     }
 
     private fun stubBoardCreation() {
-        every { boardRepository.saveBoard(any()) } answers { firstArg<Board>().also { savedBoards += it } }
+        every { boardRepository.saveBoard(any()) } answers { firstArg<Board>().also { board -> savedBoards += board } }
     }
 
     /** Everything a run needs to reach the archive: the row, its writes, the account and the clock. */
@@ -198,6 +199,19 @@ class UserDataImportRunnerTest : BaseTest() {
     private fun assertCreatedNothing() {
         verify(exactly = 0) { tagRepository.saveTag(any()) }
         verify(exactly = 0) { boardRepository.saveBoard(any()) }
+    }
+
+    @Test
+    fun `Given an import row that is gone, Then the runner touches nothing`() {
+        // Given: an account deletion removes the row while its task is still queued
+        every { importRepository.findById(importId) } returns null
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then
+        verify(exactly = 0) { importRepository.save(any()) }
+        verify(exactly = 0) { archiveStore.open(any()) }
     }
 
     @Test
