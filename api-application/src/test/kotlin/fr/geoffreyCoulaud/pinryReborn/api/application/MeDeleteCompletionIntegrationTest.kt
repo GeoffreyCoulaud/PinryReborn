@@ -45,6 +45,8 @@ class MeDeleteCompletionTestProfile : QuarkusTestProfile {
  */
 @QuarkusTest
 @TestProfile(MeDeleteCompletionTestProfile::class)
+// The app under test runs the real SystemClock; the seeded import row is stamped against it.
+@Suppress("WallClockRead")
 class MeDeleteCompletionIntegrationTest : IntegrationTest() {
 
     @Inject

@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
@@ -10,8 +11,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.SessionTokenReposi
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportIssueRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ImportArchiveKey
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 
@@ -35,6 +39,9 @@ class AccountDeletionCleaner(
     private val renditionCache: RenditionCache,
     private val userDataExportRepository: UserDataExportRepositoryInterface,
     private val exportArchiveStore: ExportArchiveStore,
+    private val userDataImportRepository: UserDataImportRepositoryInterface,
+    private val userDataImportIssueRepository: UserDataImportIssueRepositoryInterface,
+    private val importArchiveStore: ImportArchiveStore,
     private val transactionRunner: TransactionRunner,
 ) {
     fun deleteAccountData(userId: UUID) {
@@ -43,6 +50,7 @@ class AccountDeletionCleaner(
         // Collected before the transaction: the rows are deleted inside it, but the archive keys are
         // derived from the ids (not read from the rows), so they must be captured while the rows exist.
         val exportIds = userDataExportRepository.findAllExportIdsForUser(user.id)
+        val importIds = userDataImportRepository.findAllImportIdsForUser(user.id)
         transactionRunner.inTransaction {
             val pinIds = pinRepository.findAllPinIdsForUser(user)
             for (pinId in pinIds) {
@@ -56,6 +64,9 @@ class AccountDeletionCleaner(
             sessionTokenRepository.deleteAllForUser(user.id)
             userPasswordRepository.deleteForUser(user)
             userDataExportRepository.deleteAllForUser(user.id)
+            // The issues before the rows they hang off, both before the user row.
+            userDataImportIssueRepository.deleteAllForUser(user.id)
+            userDataImportRepository.deleteAllForUser(user.id)
             userRepository.permanentlyDeleteUser(user)
         }
         for ((storageKey, imageId) in toEvict) {
@@ -66,6 +77,12 @@ class AccountDeletionCleaner(
         // archive promoted by a builder that died before writing its storageKey column.
         for (exportId in exportIds) {
             exportArchiveStore.deleteQuietly(exportStorageKey(exportId))
+        }
+        // Both sides of the lifecycle: an archive already promoted, and an upload still under tmp/ that
+        // nothing else would reclaim before the staged-file age caught it.
+        for (importId in importIds) {
+            importArchiveStore.deleteQuietly(ImportArchiveKey.forImport(importId))
+            importArchiveStore.discardPartialUploadQuietly(importId)
         }
     }
 

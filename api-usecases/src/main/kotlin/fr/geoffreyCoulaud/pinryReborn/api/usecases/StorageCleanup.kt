@@ -41,3 +41,7 @@ fun ExportArchiveStore.deleteQuietly(storageKey: String) =
 /** Best-effort [ImportArchiveStore.delete]: logs WARN and swallows on failure. */
 fun ImportArchiveStore.deleteQuietly(storageKey: String) =
     StorageCleanup.runQuietly("import $storageKey") { delete(storageKey) }
+
+/** Best-effort [ImportArchiveStore.discardPartialUpload]: logs WARN and swallows on failure. */
+fun ImportArchiveStore.discardPartialUploadQuietly(importId: UUID) =
+    StorageCleanup.runQuietly("import upload $importId") { discardPartialUpload(importId) }
