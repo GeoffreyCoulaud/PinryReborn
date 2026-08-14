@@ -5,6 +5,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.CancelTask
 import java.util.UUID
 
@@ -31,7 +32,7 @@ class UserDataImportCanceller(
             // loses its archive and lands on FAILED rather than CANCELLED, costing no data and no bytes.
             UserDataImportState.PENDING -> {
                 userDataImport.taskId?.let { cancelTask.cancel(it) }
-                archiveStore.delete(ImportArchiveKey.forImport(importId))
+                archiveStore.deleteQuietly(ImportArchiveKey.forImport(importId))
                 markCancelled(userDataImport)
             }
             // The archive is left alone: the fence stops the walk at the next pin and the runner
