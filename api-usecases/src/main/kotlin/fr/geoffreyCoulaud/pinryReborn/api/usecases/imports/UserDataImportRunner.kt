@@ -38,10 +38,10 @@ import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
 
-/**
- * Replays an import archive into its owner's account (spec section 8), steps 1 to 6. Nothing that
- * already exists is modified: a conflict is a skip. Not `@ApplicationScoped`: the bounds have no producer.
- */
+/** Replays an import archive into its owner's account (spec section 8): a conflict is a skip. */
+// Not `@ApplicationScoped`: the bounds have no producer. LongParameterList and TooManyFunctions: the
+// ports plus the six bounds of spec section 9 have no type to group them, and each step being its own
+// named helper is what keeps every one of them under LongMethod.
 @Suppress("LongParameterList", "TooManyFunctions")
 class UserDataImportRunner(
     private val importRepository: UserDataImportRepositoryInterface,
@@ -111,16 +111,39 @@ class UserDataImportRunner(
         renewLease: () -> Unit,
     ) {
         readingArchive(claimed) { archiveStore.open(runnable.storageKey) }.use { source ->
-            val opened = recordManifest(source, claimed)
-            val now = clock.now()
-            val clamp = ImportInstantClamp(user.createdAt, now)
-            val recorder = recorderFor(opened)
-            val tagged = walkTags(source, user, clamp, opened, renewLease, recorder)
-            val walked = walkBoards(source, user, clamp, tagged, renewLease, recorder)
-            val entryNames = readingArchive(claimed) { source.entryNames(maxEntries) }
-            walkPins(PinWalk(source, runnable, user, clamp, now, entryNames, recorder, renewLease), walked)
+            val opened = recordManifest(source, runnable, claimed) ?: return
+            walkContent(source, runnable, claimed, user, renewLease, recorderFor(opened))
         }
     }
+
+    /** Steps 4 to 6. A walk whose fenced write is refused ends the run there: the row is no longer ours. */
+    private fun walkContent(
+        source: ArchiveSource,
+        runnable: RunnableImport,
+        claimed: UserDataImport,
+        user: User,
+        renewLease: () -> Unit,
+        recorder: ImportIssueRecorder,
+    ) {
+        val now = clock.now()
+        val clamp = ImportInstantClamp(user.createdAt, now)
+        walkTags(source, user, clamp, runnable, renewLease, recorder) ?: return
+        val walked = walkBoards(source, user, clamp, runnable, renewLease, recorder) ?: return
+        val entryNames = readingArchive(claimed) { source.entryNames(maxEntries) }
+        walkPins(PinWalk(source, runnable, user, clamp, now, entryNames, recorder, renewLease), walked)
+    }
+
+    /**
+     * The fence at every row write the per-pin settlement does not own: re-read inside the transaction,
+     * written only while the row still holds the run, since a blind merge restores state and token.
+     */
+    private fun advance(runnable: RunnableImport, update: (UserDataImport) -> UserDataImport): UserDataImport? =
+        transactionRunner.inTransaction {
+            importRepository
+                .findById(runnable.importId)
+                ?.takeIf { it.holds(runnable) }
+                ?.let { importRepository.save(update(it)) }
+        }
 
     /** The cap counts the rows already stored, which a lost counter write would over-report. */
     private fun recorderFor(opened: UserDataImport): ImportIssueRecorder =
@@ -146,16 +169,20 @@ class UserDataImportRunner(
         }
 
     /** Step 3. The count is display only, so a manifest disagreeing with the real line count is no error. */
-    private fun recordManifest(source: ArchiveSource, claimed: UserDataImport): UserDataImport {
+    private fun recordManifest(
+        source: ArchiveSource,
+        runnable: RunnableImport,
+        claimed: UserDataImport,
+    ): UserDataImport? {
         val manifest =
             readingArchive(claimed) { source.readJson(MANIFEST_ENTRY, ImportedManifest::class.java, maxMetadataBytes) }
                 ?: markFailed(claimed, MANIFEST_MISSING, "the archive carries no manifest")
         if (manifest.formatVersion != UserDataExportRequester.EXPORT_FORMAT_VERSION) {
             markFailed(claimed, UNSUPPORTED_FORMAT_VERSION, "format version ${manifest.formatVersion}")
         }
-        return importRepository.save(
-            claimed.copy(formatVersion = manifest.formatVersion, announcedPins = manifest.counts?.pins),
-        )
+        return advance(runnable) {
+            it.copy(formatVersion = manifest.formatVersion, announcedPins = manifest.counts?.pins)
+        }
     }
 
     private fun markFailed(userDataImport: UserDataImport, failureCode: String, reason: String): Nothing {
@@ -185,20 +212,20 @@ class UserDataImportRunner(
         source: ArchiveSource,
         user: User,
         clamp: ImportInstantClamp,
-        current: UserDataImport,
+        runnable: RunnableImport,
         renewLease: () -> Unit,
         recorder: ImportIssueRecorder,
-    ): UserDataImport {
+    ): UserDataImport? {
         val tally = MetadataTally(recorder)
         walkLines(source, TAGS_ENTRY, ImportedTag::class.java, renewLease) { importTag(it, user, clamp, tally) }
-        return importRepository.save(
-            current.copy(
-                createdTags = current.createdTags + tally.created,
-                skippedTags = current.skippedTags + tally.skipped,
-                issueCount = current.issueCount + tally.issues,
+        return advance(runnable) {
+            it.copy(
+                createdTags = it.createdTags + tally.created,
+                skippedTags = it.skippedTags + tally.skipped,
+                issueCount = it.issueCount + tally.issues,
                 issueDetailTruncated = recorder.truncated,
-            ),
-        )
+            )
+        }
     }
 
     private fun importTag(
@@ -229,20 +256,20 @@ class UserDataImportRunner(
         source: ArchiveSource,
         user: User,
         clamp: ImportInstantClamp,
-        current: UserDataImport,
+        runnable: RunnableImport,
         renewLease: () -> Unit,
         recorder: ImportIssueRecorder,
-    ): UserDataImport {
+    ): UserDataImport? {
         val tally = MetadataTally(recorder)
         walkLines(source, BOARDS_ENTRY, ImportedBoard::class.java, renewLease) { importBoard(it, user, clamp, tally) }
-        return importRepository.save(
-            current.copy(
-                createdBoards = current.createdBoards + tally.created,
-                skippedBoards = current.skippedBoards + tally.skipped,
-                issueCount = current.issueCount + tally.issues,
+        return advance(runnable) {
+            it.copy(
+                createdBoards = it.createdBoards + tally.created,
+                skippedBoards = it.skippedBoards + tally.skipped,
+                issueCount = it.issueCount + tally.issues,
                 issueDetailTruncated = recorder.truncated,
-            ),
-        )
+            )
+        }
     }
 
     private fun importBoard(
@@ -280,15 +307,16 @@ class UserDataImportRunner(
             return
         }
         tally.skipped++
-        // Nothing is restored and nothing is renamed, so the holder of the name is named instead.
-        if (existing.softDeletedAt != null) {
+        // Nothing is restored and nothing is renamed, so the holder of the name is named instead. One
+        // this walk recycled itself is excluded: the archive named it twice, which is not a conflict.
+        if (existing.softDeletedAt != null && existing.id !in tally.recycled) {
             record(tally, UserDataImportIssueKind.NAME_TAKEN_BY_RECYCLED, line, board.name, null)
         }
     }
 
     private fun createBoard(user: User, board: ImportedBoard, clamp: ImportInstantClamp, tally: MetadataTally) {
         val createdAt = clamp.clamp(board.createdAt)
-        boardRepository.saveBoard(
+        val created =
             Board(
                 id = randomUUID(),
                 author = user,
@@ -297,8 +325,9 @@ class UserDataImportRunner(
                 createdAt = createdAt,
                 updatedAt = clamp.clampUpdate(board.updatedAt, createdAt),
                 softDeletedAt = board.deletedAt?.let { clamp.clamp(it) },
-            ),
-        )
+            )
+        boardRepository.saveBoard(created)
+        if (created.softDeletedAt != null) tally.recycled += created.id
         tally.created++
     }
 
@@ -367,35 +396,24 @@ class UserDataImportRunner(
         imageStore.deleteQuietly(created.image.storageKey)
     }
 
-    /** The fence: the row is re-read inside the transaction that settles the line, never before it. */
+    /** The same fence, settling one line: the issue rows and the cursor land in one transaction or none. */
     private fun write(walk: PinWalk, line: Int, outcome: PinOutcome): Boolean =
-        transactionRunner.inTransaction {
-            val current = importRepository.findById(walk.runnable.importId)?.takeIf { it.holds(walk.runnable) }
-            when (current) {
-                null -> false
-                else -> {
-                    apply(walk, line, outcome, current)
-                    true
-                }
-            }
-        }
+        advance(walk.runnable) { applied(walk, line, outcome, it) } != null
 
     /** Cancellation keeps the token and only writes the state, so both are read. */
     private fun UserDataImport.holds(runnable: RunnableImport): Boolean =
         runToken == runnable.runToken && state == UserDataImportState.RUNNING
 
-    private fun apply(walk: PinWalk, line: Int, outcome: PinOutcome, current: UserDataImport) {
+    private fun applied(walk: PinWalk, line: Int, outcome: PinOutcome, current: UserDataImport): UserDataImport {
         outcome.issues.forEach { walk.recorder.record(it.kind, line, it.subject, it.detail) }
         val created = outcome.created?.also { createPin(walk, it) }
         val delta = if (created == null) 0 else 1
-        importRepository.save(
-            current.copy(
-                processedPins = current.processedPins + 1,
-                createdPins = current.createdPins + delta,
-                skippedPins = current.skippedPins + (1 - delta),
-                issueCount = current.issueCount + outcome.issues.size,
-                issueDetailTruncated = walk.recorder.truncated,
-            ),
+        return current.copy(
+            processedPins = current.processedPins + 1,
+            createdPins = current.createdPins + delta,
+            skippedPins = current.skippedPins + (1 - delta),
+            issueCount = current.issueCount + outcome.issues.size,
+            issueDetailTruncated = walk.recorder.truncated,
         )
     }
 
@@ -560,6 +578,9 @@ class UserDataImportRunner(
         var created = 0
         var skipped = 0
         var issues = 0
+
+        /** Only the recycled ones: an active board this walk created is a skip nothing reports. */
+        val recycled = mutableSetOf<UUID>()
     }
 
     /** What every pin line needs, gathered once so no per-pin helper carries eight parameters. */

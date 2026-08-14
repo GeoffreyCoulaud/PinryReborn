@@ -342,7 +342,8 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
                 tags = listOf(TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant))),
                 boards = listOf(TestLine(1, aBoard("Summer"))),
             )
-        stubWalk(source)
+        // The report cap is never consulted either: the recorder is built from the manifest write
+        stubOpen(source)
         cancelWhen { stored.state == UserDataImportState.RUNNING }
 
         // When

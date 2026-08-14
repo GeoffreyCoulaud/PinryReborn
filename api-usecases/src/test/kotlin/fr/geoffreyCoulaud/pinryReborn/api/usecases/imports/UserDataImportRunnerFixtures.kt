@@ -317,11 +317,16 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
         every { clock.now() } returns now
     }
 
-    /** A run that reaches the walks: the archive opens and the report cap knows what is already stored. */
-    protected fun stubWalk(source: FakeArchiveSource, row: UserDataImport = anImport(UserDataImportState.PENDING)) {
+    /** A run that reaches the archive, for the cases that end before a walk starts. */
+    protected fun stubOpen(source: FakeArchiveSource, row: UserDataImport = anImport(UserDataImportState.PENDING)) {
         archive = source
         stubRunUpToOpen(row)
         every { archiveStore.open(any()) } answers { archive }
+    }
+
+    /** A run that reaches the walks, where the report cap asks how many rows the report already holds. */
+    protected fun stubWalk(source: FakeArchiveSource, row: UserDataImport = anImport(UserDataImportState.PENDING)) {
+        stubOpen(source, row)
         every { issueRepository.countForImport(any()) } returns 0
     }
 
