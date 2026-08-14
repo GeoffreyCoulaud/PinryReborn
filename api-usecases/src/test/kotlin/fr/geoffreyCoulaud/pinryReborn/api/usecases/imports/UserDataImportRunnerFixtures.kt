@@ -39,9 +39,8 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 /**
- * The ambient transaction the claim runs in; this suite owns no connection. It runs the block inline,
- * so [inside] is the only channel a case has to tell a read within the transaction from one before it,
- * and [current] the only one to tell two sequential transactions from a single one.
+ * The ambient transaction the claim runs in; this suite owns no connection. Run inline, so [inside]
+ * tells a read within the transaction from one before it and [current] tells two from one.
  */
 internal class PassthroughTransactionRunner : TransactionRunner {
     private var depth = 0

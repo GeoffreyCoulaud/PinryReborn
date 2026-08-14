@@ -45,12 +45,11 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     /** The row as the store holds it: a fenced write reads what the write before it left, not a copy. */
     private var row = importWith()
 
-    /** How a re-read inside a fence answers. The cancellation cases replace it rather than restubbing. */
-    private var reread: (UserDataImport) -> UserDataImport = { it }
+    /** How a re-read inside a fence answers, null included. Cases replace it rather than restubbing. */
+    private var reread: (UserDataImport) -> UserDataImport? = { it }
 
     private var digested = false
     private var promoted = false
-    private var enqueued = false
 
     /** Which transaction each write and the enqueue saw open, so two sequential ones never read as one. */
     private val savedInTransactions = mutableListOf<Int?>()
@@ -118,7 +117,6 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
                     priority = -1,
                 )
             } answers {
-                enqueued = true
                 enqueuedInTransaction = transactions.current
                 task
             }
@@ -258,6 +256,22 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     }
 
     @Test
+    fun `Given an account erased while the archive was digested, Then the completion is refused`() {
+        // Given: the cleaner deletes the import rows, so the fence finds no row at all rather than one
+        // in another state, and the bytes it promoted answer to nobody
+        stubStoredRow()
+        stubDigest()
+        stubPromote()
+        stubRowWrites()
+        reread = { current -> if (promoted) null else current }
+        stubArchiveDeletion()
+
+        // When / Then
+        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
+        assertEquals(listOf(storageKey), deletedArchives)
+    }
+
+    @Test
     fun `Given a second completion that won the race, Then this one is refused and its bytes go`() {
         // Given: the concurrent complete left the row PENDING, which passes a not-terminal fence and
         // fails the awaiting-archive one; a second walk over the same archive must not be enqueued
@@ -303,18 +317,5 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
         assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
         assertEquals(listOf(storageKey), deletedArchives)
         verify(exactly = 0) { enqueueTask.enqueue(any(), any(), any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `Given a cancellation landing while the task is enqueued, Then the bytes are deleted`() {
-        // Given: the task id write carries the whole row, so an unfenced merge of it restores PENDING
-        // over the cancellation just as the transition itself would
-        stubCompletion()
-        cancelWhen { enqueued }
-        stubArchiveDeletion()
-
-        // When / Then
-        assertThrows(ImportNotAwaitingArchiveError::class.java) { completer.complete(user, importId) }
-        assertEquals(listOf(storageKey), deletedArchives)
     }
 }

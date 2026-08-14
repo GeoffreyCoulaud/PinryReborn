@@ -44,7 +44,7 @@ internal fun UserDataImportRepositoryInterface.saveFenced(
     }
 
 /**
- * The fence both upload writes take (spec §6): their windows are wide, a chunk streaming to disk and a
+ * The fence the upload writes take (spec §6): their windows are wide, a chunk streaming to disk and a
  * digest of up to twenty gigabytes, so a caller that lost the phase is refused as a late one is.
  */
 internal fun UserDataImportRepositoryInterface.saveWhileAwaitingArchive(
@@ -52,5 +52,8 @@ internal fun UserDataImportRepositoryInterface.saveWhileAwaitingArchive(
     importId: UUID,
     update: (UserDataImport) -> UserDataImport,
 ): UserDataImport =
-    saveFenced(transactionRunner, importId, { it.state == UserDataImportState.AWAITING_ARCHIVE }, update)
+    saveFenced(transactionRunner, importId, { it.awaitsItsArchive() }, update)
         ?: throw ImportNotAwaitingArchiveError()
+
+/** The upload phase, spelled once: the completer opens its own transaction and reads it there too. */
+internal fun UserDataImport.awaitsItsArchive(): Boolean = state == UserDataImportState.AWAITING_ARCHIVE

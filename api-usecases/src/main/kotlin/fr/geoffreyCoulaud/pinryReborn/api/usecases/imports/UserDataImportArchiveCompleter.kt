@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.Task
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportArchiveEmptyError
@@ -53,32 +54,30 @@ class UserDataImportArchiveCompleter(
     }
 
     /**
-     * The transition first, the task after: a worker claiming a row still awaiting its archive would
-     * return without running it and leave the import to be swept instead.
+     * The transition, the task and the row naming it in one transaction: a failure anywhere leaves an
+     * `AWAITING_ARCHIVE` row the sweep covers, not a `PENDING` one no sweep selects and no task serves.
      */
-    private fun handOver(importId: UUID): UserDataImport {
-        repository.saveWhileAwaitingArchive(transactionRunner, importId) {
-            it.copy(state = UserDataImportState.PENDING, archiveCompletedAt = clock.now())
+    private fun handOver(importId: UUID): UserDataImport =
+        // Opened here rather than borrowed from a helper: the fence is lexical, and so is the rule that
+        // holds it, so the read and both writes stay inside the block a reader can see.
+        transactionRunner.inTransaction {
+            val current =
+                repository.findById(importId)?.takeIf { it.awaitsItsArchive() }
+                    ?: throw ImportNotAwaitingArchiveError()
+            // The transition before the enqueue: a worker claiming a row still awaiting its archive
+            // would return without running it and leave the import to be swept instead.
+            val pending =
+                repository.save(
+                    current.copy(state = UserDataImportState.PENDING, archiveCompletedAt = clock.now()),
+                )
+            repository.save(pending.copy(taskId = enqueued(importId).id))
         }
-        return transactionRunner.inTransaction { enqueued(importId) }
-    }
 
-    /**
-     * ADR 0009's pair, in one transaction: the task and the only row that names it commit together, so a
-     * lost fence takes the task with it rather than leaving one enqueued against a cancelled import.
-     */
-    private fun enqueued(importId: UUID): UserDataImport {
-        val task =
-            enqueueTask.enqueue(
-                kind = UserDataImportTask.KIND,
-                payload = importId.toString(),
-                maxAttempts = UserDataImportTask.MAX_ATTEMPTS,
-                priority = UserDataImportTask.PRIORITY,
-            )
-        // Not fenced on PENDING: a worker can claim the row before this write lands, and a RUNNING row
-        // still has to keep the task id the sweep reads to tell a dead attempt from a live one.
-        return repository.saveFenced(transactionRunner, importId, { !it.state.isTerminal }) {
-            it.copy(taskId = task.id)
-        } ?: throw ImportNotAwaitingArchiveError()
-    }
+    private fun enqueued(importId: UUID): Task =
+        enqueueTask.enqueue(
+            kind = UserDataImportTask.KIND,
+            payload = importId.toString(),
+            maxAttempts = UserDataImportTask.MAX_ATTEMPTS,
+            priority = UserDataImportTask.PRIORITY,
+        )
 }

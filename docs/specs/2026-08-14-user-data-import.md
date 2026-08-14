@@ -345,8 +345,20 @@ recycle bin would try to create a board whose name is already taken and hit the 
   field. The storage key is written **before** the promote, as the export
   builder does, so bytes are reclaimable even if the row is never written again.
 
-**Both upload writes are fenced on `AWAITING_ARCHIVE`, and a lost fence answers
-`IMPORT_NOT_AWAITING_ARCHIVE`.** This was not specified, and its absence left two unfenced writes
+  **The transition, the enqueue and the task id write are one transaction**, under the same
+  `AWAITING_ARCHIVE` fence as the storage key write before them. Split in two, a crash or a database
+  error between the `PENDING` write and the enqueue leaves a row `PENDING` with no task, which no sweep
+  rescues: `findAbandonableBefore` is `AWAITING_ARCHIVE`-only, `findReclaimableTerminal` is
+  terminal-only, and the reaper's third path only rescues a `RUNNING` row whose task is dead. That row
+  holds the account's only active slot through the partial unique index and its bytes are never
+  reclaimed. Joined, a failure anywhere in the hand-over leaves the row `AWAITING_ARCHIVE`, which the
+  upload-grace sweep does cover. It also settles a second question: a `PENDING` or `RUNNING` row always
+  carries its `taskId`, since the task and the id that names it commit together.
+
+**The upload writes are fenced on `AWAITING_ARCHIVE`, and a lost fence answers
+`IMPORT_NOT_AWAITING_ARCHIVE`.** That is one fence in the receiver and two in the completer, the second
+of which guards the whole hand-over; each takes the same predicate, and the completer's three row
+writes therefore sit behind two reads of it. This was not specified, and its absence left two unfenced writes
 standing while the rest of the feature was fenced. The windows are wide, not theoretical: the receiver
 streams a chunk to disk between its read and its write, and the completer fsyncs and digests up to
 twenty gigabytes before promoting. A `DELETE` landing in either window writes `CANCELLED`, and an
