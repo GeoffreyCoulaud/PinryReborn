@@ -9,6 +9,7 @@ import io.mockk.mockk
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.UriInfo
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
@@ -199,6 +200,52 @@ class BaseErrorMapperTest {
     @Test
     fun `Given EXPORT_GONE, Then status is GONE`() {
         assertEquals(Response.Status.GONE, statusFor(ErrorCode.EXPORT_GONE))
+    }
+
+    @Test
+    fun `Given IMPORT_ALREADY_IN_PROGRESS, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.IMPORT_ALREADY_IN_PROGRESS))
+    }
+
+    @Test
+    fun `Given IMPORT_DOES_NOT_EXIST, Then status is NOT_FOUND`() {
+        assertEquals(Response.Status.NOT_FOUND, statusFor(ErrorCode.IMPORT_DOES_NOT_EXIST))
+    }
+
+    @Test
+    fun `Given IMPORT_INSUFFICIENT_PERMISSIONS, Then status is FORBIDDEN`() {
+        assertEquals(Response.Status.FORBIDDEN, statusFor(ErrorCode.IMPORT_INSUFFICIENT_PERMISSIONS))
+    }
+
+    @Test
+    fun `Given IMPORT_NOT_AWAITING_ARCHIVE, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.IMPORT_NOT_AWAITING_ARCHIVE))
+    }
+
+    @Test
+    fun `Given IMPORT_CHUNK_OFFSET_MISMATCH, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.IMPORT_CHUNK_OFFSET_MISMATCH))
+    }
+
+    @Test
+    fun `Given IMPORT_ARCHIVE_TOO_LARGE, Then status is 413 REQUEST_ENTITY_TOO_LARGE`() {
+        assertEquals(Response.Status.REQUEST_ENTITY_TOO_LARGE, statusFor(ErrorCode.IMPORT_ARCHIVE_TOO_LARGE))
+    }
+
+    @Test
+    fun `Given IMPORT_INSUFFICIENT_STORAGE, Then status is 507 and the title is not the 422 one`() {
+        // jakarta.ws.rs has no INSUFFICIENT_STORAGE constant, so the title comes from the mapper's
+        // own table; hardcoded to the 422 wording it would have shipped "Unprocessable Entity".
+        val exception = BaseError(message = "boom", code = ErrorCode.IMPORT_INSUFFICIENT_STORAGE)
+
+        val response = mapper.toResponse(exception)
+
+        assertEquals(507, response.status)
+        val body = response.entity as ProblemDetail
+        assertEquals("Insufficient Storage", body.title)
+        assertNotEquals("Unprocessable Entity", body.title)
+        assertEquals(507, body.status)
+        assertEquals("IMPORT_INSUFFICIENT_STORAGE", body.code)
     }
 
     @Test
