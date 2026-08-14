@@ -464,8 +464,10 @@ class UserDataImportRunner(
         this.runToken == runToken && state == UserDataImportState.RUNNING
 
     private fun applied(walk: PinWalk, line: Int, outcome: PinOutcome, current: UserDataImport): UserDataImport {
-        outcome.issues.forEach { walk.recorder.record(it.kind, line, it.subject, it.detail) }
+        // The rows first, the report after: the recorder counts in memory and cannot roll back, so a
+        // settlement that throws here must not leave it holding an issue the transaction discards.
         val created = outcome.created?.also { createPin(walk, it) }
+        outcome.issues.forEach { walk.recorder.record(it.kind, line, it.subject, it.detail) }
         val delta = if (created == null) 0 else 1
         return current.copy(
             processedPins = current.processedPins + 1,
