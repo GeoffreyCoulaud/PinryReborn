@@ -334,6 +334,100 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given a cancellation landing before the manifest is recorded, Then no walk runs`() {
+        // Given: the tag and board stubs are deliberately absent, so a walk that runs anyway fails here
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags = listOf(TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant))),
+                boards = listOf(TestLine(1, aBoard("Summer"))),
+            )
+        stubWalk(source)
+        cancelWhen { stored.state == UserDataImportState.RUNNING }
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then: the row the user was answered on stands, and the manifest write did not restore the run
+        assertEquals(UserDataImportState.CANCELLED, stored.state)
+        assertNull(stored.formatVersion)
+        assertNull(stored.announcedPins)
+    }
+
+    @Test
+    fun `Given a cancellation landing during the tag walk, Then the tally is dropped and the boards are left`() {
+        // Given: the board stubs are absent, so a board walk that runs after the cancellation fails here
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags = listOf(TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant))),
+                boards = listOf(TestLine(1, aBoard("Summer"))),
+            )
+        stubWalk(source)
+        stubTagLookup()
+        stubTagCreation()
+        cancelWhen { savedTags.isNotEmpty() }
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then: the tag the walk created stays, since an import is not a transaction, but the tally goes
+        assertEquals(UserDataImportState.CANCELLED, stored.state)
+        assertEquals(1, savedTags.size)
+        assertEquals(0, stored.createdTags)
+    }
+
+    @Test
+    fun `Given a cancellation landing during the board walk, Then the pin walk never starts`() {
+        // Given: a pin line the walk must never reach, since the per-pin catch-all would absorb a
+        // refusal from the media stubs and report it as a rejected line rather than fail the test
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                boards = listOf(TestLine(1, aBoard("Summer"))),
+                pins = listOf(TestLine(1, aPin())),
+                media = everyMedium,
+            )
+        stubWalk(source)
+        stubBoardLookup()
+        stubBoardCreation()
+        cancelWhen { savedBoards.isNotEmpty() }
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then
+        assertEquals(UserDataImportState.CANCELLED, stored.state)
+        assertEquals(0, stored.createdBoards)
+        assertEquals(0, stored.processedPins)
+        verify(exactly = 0) { imageStore.digest(any(), any()) }
+    }
+
+    @Test
+    fun `Given a board this walk recycled itself, Then a second line naming it is a plain skip`() {
+        // Given: spec section 8 step 5 reports a name held by a recycled board the import did not create.
+        // The issue repository is left unstubbed, so a report written here fails the test.
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                boards =
+                    listOf(TestLine(1, aBoard("Winter", deletedAt = pastInstant)), TestLine(2, aBoard("Winter"))),
+            )
+        stubWalk(source)
+        stubBoardLookup()
+        stubBoardCreation()
+
+        // When
+        runner.run(importId, renewLease)
+
+        // Then
+        assertEquals(1, savedBoards.size)
+        assertEquals(1, stored.createdBoards)
+        assertEquals(1, stored.skippedBoards)
+        assertEquals(0, stored.issueCount)
+    }
+
+    @Test
     fun `Given an account already holding the archive's tags, Then a second walk doubles the skip counter`() {
         // Given: against a fresh account the total would be the line count either way, which proves nothing
         val names = listOf("voyage", "ete")

@@ -182,6 +182,19 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     /** How a re-read of the row answers, null included. The fence cases replace it instead of restubbing. */
     protected var reread: (UserDataImport) -> UserDataImport? = { it }
 
+    /**
+     * The canceller landing at the next fenced re-read, which is how a `DELETE` reaches a running walk:
+     * the state is written, the token is left alone, and the runner is told by the row, not by a call.
+     */
+    protected fun cancelWhen(landed: () -> Boolean) {
+        reread = { row ->
+            when {
+                landed() -> row.copy(state = UserDataImportState.CANCELLED).also { seedRow(it) }
+                else -> row
+            }
+        }
+    }
+
     /** What the archive store hands back. Replaced between two runs by the resumption case. */
     protected var archive = FakeArchiveSource(manifest = null)
 
