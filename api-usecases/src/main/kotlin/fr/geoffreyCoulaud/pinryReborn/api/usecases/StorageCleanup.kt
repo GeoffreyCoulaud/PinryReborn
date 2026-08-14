@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.RenditionCache
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.UUID
@@ -36,3 +37,7 @@ fun RenditionCache.evictImageQuietly(imageId: UUID) =
 /** Best-effort [ExportArchiveStore.delete]: logs WARN and swallows on failure. */
 fun ExportArchiveStore.deleteQuietly(storageKey: String) =
     StorageCleanup.runQuietly("export $storageKey") { delete(storageKey) }
+
+/** Best-effort [ImportArchiveStore.delete]: logs WARN and swallows on failure. */
+fun ImportArchiveStore.deleteQuietly(storageKey: String) =
+    StorageCleanup.runQuietly("import $storageKey") { delete(storageKey) }

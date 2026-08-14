@@ -67,12 +67,51 @@ class UserDataImportRunner(
      * The `account.import` task's entry point. A row that is neither `PENDING` nor `RUNNING` is left
      * alone: it was cancelled, swept or already finished, and running it would resurrect it.
      */
-    fun run(importId: UUID, renewLease: () -> Unit) {
+    fun run(importId: UUID, isLastAttempt: Boolean, renewLease: () -> Unit) {
         val userDataImport = importRepository.findById(importId)?.takeIf { it.state.isRunnable() } ?: return
         val user = requireUser(userDataImport)
         val runToken = UUID.randomUUID()
         val claimed = claim(userDataImport, runToken)
-        walkArchive(project(claimed, runToken), claimed, user, renewLease)
+        replay(project(claimed, runToken), claimed, user, isLastAttempt, renewLease)
+    }
+
+    /**
+     * Steps 3 to 8. An unenumerated throw marks the row only on the last attempt, and always rethrows so
+     * the queue counts the attempt; a permanent refusal already marked it, which the fence reads.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    // Caught as broadly as `UserDataExportBuilder.stageOrFail` does: a row left RUNNING for ever holds
+    // the account's only import slot, which outweighs anything this arm can catch by mistake.
+    private fun replay(
+        runnable: RunnableImport,
+        claimed: UserDataImport,
+        user: User,
+        isLastAttempt: Boolean,
+        renewLease: () -> Unit,
+    ) {
+        try {
+            walkArchive(runnable, claimed, user, renewLease)
+            complete(runnable)
+        } catch (error: Throwable) {
+            if (isLastAttempt) advance(runnable) { failed(it, IMPORT_FAILED) }
+            throw error
+        } finally {
+            releaseArchive(runnable)
+        }
+    }
+
+    /** Step 7: `COMPLETED` lands only while the row still holds the run, never over a cancellation. */
+    private fun complete(runnable: RunnableImport) {
+        advance(runnable) { it.copy(state = UserDataImportState.COMPLETED, completedAt = clock.now()) }
+    }
+
+    /**
+     * Step 8. The bytes go once the row is terminal or gone, and stay while it is `RUNNING`: a retry
+     * resumes from the cursor, and a row a second runner has claimed is being read right now.
+     */
+    private fun releaseArchive(runnable: RunnableImport) {
+        val current = importRepository.findById(runnable.importId)
+        if (current == null || current.state.isTerminal) archiveStore.deleteQuietly(runnable.storageKey)
     }
 
     private fun UserDataImportState.isRunnable(): Boolean =
@@ -186,9 +225,12 @@ class UserDataImportRunner(
     }
 
     private fun markFailed(userDataImport: UserDataImport, failureCode: String, reason: String): Nothing {
-        importRepository.save(userDataImport.copy(state = UserDataImportState.FAILED, failureCode = failureCode))
+        importRepository.save(failed(userDataImport, failureCode))
         throw PermanentTaskException(reason)
     }
+
+    private fun failed(current: UserDataImport, failureCode: String): UserDataImport =
+        current.copy(state = UserDataImportState.FAILED, failureCode = failureCode)
 
     private fun <T : Any> walkLines(
         source: ArchiveSource,
@@ -625,6 +667,7 @@ class UserDataImportRunner(
         const val TAGS_FIELD = "tags"
         const val BOARDS_FIELD = "boards"
         const val USER_GONE = "USER_GONE"
+        const val IMPORT_FAILED = "IMPORT_FAILED"
         const val ARCHIVE_UNREADABLE = "ARCHIVE_UNREADABLE"
         const val MANIFEST_MISSING = "MANIFEST_MISSING"
         const val UNSUPPORTED_FORMAT_VERSION = "UNSUPPORTED_FORMAT_VERSION"

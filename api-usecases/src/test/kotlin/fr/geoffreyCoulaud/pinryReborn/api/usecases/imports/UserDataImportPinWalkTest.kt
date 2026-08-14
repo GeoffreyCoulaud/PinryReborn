@@ -48,7 +48,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubMediaPath()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the medium's own bytes decide the stored type and hash, never the manifest
         val created = savedPins.first()
@@ -85,13 +85,13 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
             )
         stubWalk(source)
         stubMediaPath()
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
         val first = projection()
         val stagedOnce = stageCalls
 
         // When
         seedRow(anImport(UserDataImportState.PENDING, id = secondImportId))
-        runner.run(secondImportId, renewLease)
+        runner.run(secondImportId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(2, stagedOnce)
@@ -118,14 +118,16 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
                     ),
                 media = everyMedium,
             )
-        stubWalk(source)
+        // No release stub: the row is still RUNNING, under the token of the runner now reading these bytes
+        stubOpen(source)
+        every { issueRepository.countForImport(any()) } returns 0
         stubMediaPath()
         stubDiscard()
         stubDelete()
         reread = { row -> if (savedPins.size < 2) row else row.copy(runToken = randomUUID()) }
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the third pin's bytes were promoted before the fence answered, and both halves go
         assertEquals(2, savedPins.size)
@@ -133,6 +135,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         assertEquals(2, stored.createdPins)
         assertEquals(savedImages.map { it.storageKey }.toSet(), promoted)
         assertTrue(stagedPaths.isEmpty())
+        verify(exactly = 0) { archiveStore.delete(any()) }
     }
 
     @Test
@@ -156,7 +159,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         }
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(1, savedPins.size)
@@ -182,7 +185,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         reread = { row -> if (savedPins.isEmpty()) row else null }
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(1, savedPins.size)
@@ -208,7 +211,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         every { imageRepository.save(any()) } throws IllegalStateException("constraint violation")
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the pin row's own fate is the real transaction's, which this passthrough cannot roll back
         assertTrue(promoted.isEmpty())
@@ -232,9 +235,9 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubMediaPath()
 
         // When
-        assertThrows(IllegalStateException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(IllegalStateException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         archive = FakeArchiveSource(aManifest(), pins = pins, media = everyMedium)
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: three pins, not five, and the counters are the sums of both attempts
         assertEquals(3, savedPins.size)
@@ -255,7 +258,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.PIN_HAS_NO_MEDIA), kinds())
@@ -272,7 +275,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.MEDIA_ENTRY_MISSING), kinds())
@@ -297,7 +300,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(List(2) { UserDataImportIssueKind.ENTRY_PATH_INVALID }, kinds())
@@ -319,7 +322,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.LINE_MALFORMED), kinds())
@@ -339,7 +342,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         every { imageStore.digest(any(), MAX_IMAGE_BYTES) } throws ImageTooLargeException("over the bound")
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.MEDIA_TOO_LARGE), kinds())
@@ -360,7 +363,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         every { imageProbe.probe(any(), MAX_PIXELS) } throws ImageTooManyPixelsException("too many pixels")
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.MEDIA_TOO_MANY_PIXELS), kinds())
@@ -382,7 +385,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         every { imageProbe.probe(any(), MAX_PIXELS) } throws UndecodableImageException("not an image")
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.MEDIA_UNREADABLE), kinds())
@@ -401,7 +404,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.MEDIA_AMBIGUOUS), kinds())
@@ -419,7 +422,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: reporting, not acting; the bytes are the authority
         assertEquals(listOf(UserDataImportIssueKind.MEDIA_DIGEST_MISMATCH), kinds())
@@ -449,7 +452,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(List(4) { UserDataImportIssueKind.FIELD_INVALID }, kinds())
@@ -471,7 +474,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(listOf(UserDataImportIssueKind.LINE_REJECTED), kinds())
@@ -493,7 +496,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(REPORT_DETAIL_LIMIT, savedIssues.size)
@@ -514,7 +517,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(REPORT_DETAIL_LIMIT - 1, savedIssues.size)
@@ -526,17 +529,20 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
     fun `Given a store that cannot write, Then the failure is rethrown and the row is left alone`() {
         // Given: a full disk is transient, and the retry budget outlasts an operator (spec section 9)
         val source = FakeArchiveSource(aManifest(), pins = listOf(TestLine(1, aPin())), media = everyMedium)
-        stubWalk(source)
+        // No release stub: the row is left RUNNING, so the retry resumes rather than re-uploading
+        stubOpen(source)
+        every { issueRepository.countForImport(any()) } returns 0
         stubDigest()
         stubHashLookup()
         every { imageStore.stage(any(), MAX_IMAGE_BYTES) } throws IOException("No space left on device")
 
         // When / Then
-        assertThrows(IOException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(IOException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals(UserDataImportState.RUNNING, stored.state)
         assertNull(stored.failureCode)
         assertEquals(0, stored.processedPins)
         assertTrue(promoted.isEmpty())
         assertTrue(stagedPaths.isEmpty())
+        verify(exactly = 0) { archiveStore.delete(any()) }
     }
 }

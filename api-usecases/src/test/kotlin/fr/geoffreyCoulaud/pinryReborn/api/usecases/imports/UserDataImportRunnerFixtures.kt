@@ -325,10 +325,14 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
         every { archiveStore.open(any()) } answers { archive }
     }
 
-    /** A run that reaches the walks, where the report cap asks how many rows the report already holds. */
+    /**
+     * A run that reaches the walks, where the report cap asks how many rows the report already holds and
+     * whose row ends terminal, so the runner releases the archive as it returns (spec section 8 step 8).
+     */
     protected fun stubWalk(source: FakeArchiveSource, row: UserDataImport = anImport(UserDataImportState.PENDING)) {
         stubOpen(source, row)
         every { issueRepository.countForImport(any()) } returns 0
+        stubArchiveRelease()
     }
 
     /** Step 2: the entry is hashed where it lies, with nothing written. */

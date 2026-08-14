@@ -27,7 +27,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         every { importRepository.findById(importId) } returns null
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         verify(exactly = 0) { importRepository.save(any()) }
@@ -40,7 +40,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubRow(anImport(UserDataImportState.COMPLETED))
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         verify(exactly = 0) { importRepository.save(any()) }
@@ -55,7 +55,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         every { userRepository.findUserById(user.id) } returns null
 
         // When / Then
-        assertThrows(PermanentTaskException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals(UserDataImportState.FAILED, stored.state)
         assertEquals("USER_GONE", stored.failureCode)
         verify(exactly = 0) { archiveStore.open(any()) }
@@ -67,7 +67,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubRunUpToOpen(anImport(UserDataImportState.PENDING, storageKey = null))
 
         // When / Then
-        assertThrows(PermanentTaskException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals(UserDataImportState.FAILED, stored.state)
         assertEquals("ARCHIVE_UNREADABLE", stored.failureCode)
         assertNotNull(stored.runToken)
@@ -82,7 +82,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         every { archiveStore.open(storageKey) } throws ZipException("not a zip file")
 
         // When / Then
-        assertThrows(PermanentTaskException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals(UserDataImportState.FAILED, stored.state)
         assertEquals("ARCHIVE_UNREADABLE", stored.failureCode)
         assertEquals(0, stored.processedPins)
@@ -97,7 +97,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         every { archiveStore.open(storageKey) } returns source
 
         // When / Then
-        assertThrows(PermanentTaskException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals("ARCHIVE_UNREADABLE", stored.failureCode)
         assertCreatedNothing()
     }
@@ -110,7 +110,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         every { archiveStore.open(storageKey) } returns source
 
         // When / Then
-        assertThrows(PermanentTaskException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals(UserDataImportState.FAILED, stored.state)
         assertEquals("MANIFEST_MISSING", stored.failureCode)
         assertEquals(0, stored.processedPins)
@@ -126,7 +126,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         every { archiveStore.open(storageKey) } returns source
 
         // When / Then
-        assertThrows(PermanentTaskException::class.java) { runner.run(importId, renewLease) }
+        assertThrows(PermanentTaskException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
         assertEquals(UserDataImportState.FAILED, stored.state)
         assertEquals("UNSUPPORTED_FORMAT_VERSION", stored.failureCode)
         assertEquals(0, stored.processedPins)
@@ -150,7 +150,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubTagCreation()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the archive's own instant survives, which a runner stamping clock.now() would not leave
         assertEquals(pastInstant, savedTag("past").createdAt)
@@ -187,7 +187,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubBoardCreation()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the first line is what survives, since a row that already exists is never modified
         assertEquals(1, stored.createdTags)
@@ -217,7 +217,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubBoardCreation()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(pastInstant, savedBoard("old").updatedAt)
@@ -242,7 +242,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubBoardLookup()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: no write at all is what "left untouched" means, state, description and updatedAt included
         verify(exactly = 0) { boardRepository.saveBoard(any()) }
@@ -262,7 +262,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         verify(exactly = 0) { boardRepository.saveBoard(any()) }
@@ -291,7 +291,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertCreatedNothing()
@@ -323,7 +323,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubIssues()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(List(2) { UserDataImportIssueKind.LINE_MALFORMED }, kinds())
@@ -347,7 +347,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         cancelWhen { stored.state == UserDataImportState.RUNNING }
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the row the user was answered on stands, and the manifest write did not restore the run
         assertEquals(UserDataImportState.CANCELLED, stored.state)
@@ -370,7 +370,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         cancelWhen { savedTags.isNotEmpty() }
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then: the tag the walk created stays, since an import is not a transaction, but the tally goes
         assertEquals(UserDataImportState.CANCELLED, stored.state)
@@ -395,7 +395,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         cancelWhen { savedBoards.isNotEmpty() }
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(UserDataImportState.CANCELLED, stored.state)
@@ -419,7 +419,7 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         stubBoardCreation()
 
         // When
-        runner.run(importId, renewLease)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(1, savedBoards.size)
@@ -429,21 +429,19 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
-    fun `Given an account already holding the archive's tags, Then a second walk doubles the skip counter`() {
+    fun `Given an account already holding the archive's tags, Then a resumed attempt adds to the skip counter`() {
         // Given: against a fresh account the total would be the line count either way, which proves nothing
         val names = listOf("voyage", "ete")
         names.forEach { existingTags[it] = Tag(randomUUID(), user, it, accountCreatedAt) }
-        val source =
-            FakeArchiveSource(
-                manifest = aManifest(pins = null),
-                tags = names.mapIndexed { index, name -> TestLine(index + 1, ImportedTag(name, pastInstant)) },
-            )
-        stubWalk(source)
+        val tags = names.mapIndexed { index, name -> TestLine(index + 1, ImportedTag(name, pastInstant)) }
+        val pins = listOf(TestLine(1, aPin()))
+        stubWalk(FakeArchiveSource(aManifest(pins = null), tags = tags, pins = pins, failAtPinLine = 1))
         stubTagLookup()
 
-        // When: the row is left RUNNING by the first walk, which is where a retried attempt re-enters
-        runner.run(importId, renewLease)
-        runner.run(importId, renewLease)
+        // When: the interruption leaves the row RUNNING, which is where the retried attempt re-enters
+        assertThrows(IllegalStateException::class.java) { runner.run(importId, isLastAttempt = false, renewLease) }
+        archive = FakeArchiveSource(aManifest(pins = null), tags = tags)
+        runner.run(importId, isLastAttempt = false, renewLease)
 
         // Then
         assertEquals(names.size * 2, stored.skippedTags)
