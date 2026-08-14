@@ -482,6 +482,15 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
   the three attempts of the first draft were consumed in about three seconds, which no operator can
   use. The archive survives until the row is terminal, so a retry does not re-upload.
 
+  **It is not, however, named as its own failure code.** An earlier revision listed `DISK_FULL` among
+  the row's failure codes, copying the export, which can use it because it asks `hasFreeSpace` before
+  building and therefore knows. The walk does not ask: a full disk reaches it as an `IOException`
+  whose message is platform-dependent, so telling it apart from a permission error or a truncated
+  read means matching on text. The code is dropped rather than shipped unreachable or shipped lying.
+  A disk-full walk retries like any other transient failure and, if space never returns, ends
+  `IMPORT_FAILED`. The real guard is upstream, where `IMPORT_INSUFFICIENT_STORAGE` refuses a chunk
+  against a measured margin.
+
 | Key | Default | Meaning |
 |---|---|---|
 | `imports.data_dir` | `/var/lib/pinry/imports` | Uploaded archives (a new volume) |
@@ -536,7 +545,9 @@ chunk raised `NoSuchFileException` and reached its owner as a `500`. The row's `
 settles it in the use case, before the store is touched.
 
 Failure codes on the row: `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
-`UNSUPPORTED_FORMAT_VERSION`, `DISK_FULL`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`.
+`UNSUPPORTED_FORMAT_VERSION`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`. `DISK_FULL` was listed here in
+an earlier revision and is dropped: see section 9 for why the walk cannot honestly tell a full disk
+from any other I/O failure.
 
 Each new code is an arm of `BaseErrorMapper`'s exhaustive `when`, landing in the same commit as the
 enum value. `jakarta.ws.rs` has **no** `INSUFFICIENT_STORAGE` constant (verified with `javap` on
