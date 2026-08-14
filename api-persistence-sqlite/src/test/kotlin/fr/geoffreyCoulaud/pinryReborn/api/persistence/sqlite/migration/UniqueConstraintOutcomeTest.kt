@@ -41,6 +41,10 @@ class UniqueConstraintOutcomeTest {
                 "rename) and at restoreBoard; BoardCreator, BoardUpdater and BoardRecycleBin.restore each " +
                 "rethrow BoardNameAlreadyExistsError, so the client sees 409 BOARD_NAME_ALREADY_EXISTS at all " +
                 "three sites.",
+            "uq_user_data_imports_active" to
+                "UserDataImportRepository translates it to ImportAlreadyInProgressException and " +
+                "UserDataImportCreator rethrows ImportAlreadyInProgressError, so the client sees 409 " +
+                "IMPORT_ALREADY_IN_PROGRESS. The index is the only authority: no read asks the question first.",
             "ix_tags_author_name_nocase" to
                 "No translation, deliberately: TagCreator.findOrCreate reads through the same fold before " +
                 "writing, and holds that pair in one transaction, which ADR 0009 measured is what serialises " +

@@ -32,6 +32,7 @@ class PartialUniqueIndexStatesTest {
         mapOf(
             "ux_tasks_dedup" to PartialUniqueIndexStates.liveTaskStates,
             "uq_user_data_exports_pending" to PartialUniqueIndexStates.pendingExportStates,
+            "uq_user_data_imports_active" to PartialUniqueIndexStates.activeImportStates,
         )
 
     private val uniqueCreation = Regex("""create\s+unique\s+index""", RegexOption.IGNORE_CASE)
