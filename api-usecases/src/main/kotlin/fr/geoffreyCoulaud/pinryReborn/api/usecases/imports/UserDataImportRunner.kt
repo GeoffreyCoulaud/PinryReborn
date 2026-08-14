@@ -149,8 +149,8 @@ class UserDataImportRunner(
 
     private fun walkArchive(runnable: RunnableImport, user: User, renewLease: () -> Unit) {
         readingArchive(runnable) { archiveStore.open(runnable.storageKey) }.use { source ->
-            // Read where the central directory already is, so it costs nothing and no walk has run yet:
-            // its refusal is the archive's, and marking the row from the claim reverts nothing.
+            // Read where the central directory already is, so it costs nothing: an archive past the
+            // bound is refused before a walk has created anything, rather than after both of them.
             val entryNames = readingArchive(runnable) { source.entryNames(maxEntries) }
             val opened = recordManifest(source, runnable) ?: return
             walkContent(source, runnable, user, renewLease, recorderFor(opened), entryNames)
