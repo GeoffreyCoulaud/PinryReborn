@@ -342,9 +342,13 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
      * A run that reaches the walks, where the report cap asks how many rows the report already holds and
      * whose row ends terminal, so the runner releases the archive as it returns (spec section 8 step 8).
      */
-    protected fun stubWalk(source: FakeArchiveSource, row: UserDataImport = anImport(UserDataImportState.PENDING)) {
+    protected fun stubWalk(
+        source: FakeArchiveSource,
+        row: UserDataImport = anImport(UserDataImportState.PENDING),
+        storedIssues: Int = 0,
+    ) {
         stubOpen(source, row)
-        every { issueRepository.countForImport(any()) } returns 0
+        every { issueRepository.countForImport(any()) } returns storedIssues
         stubArchiveRelease()
     }
 

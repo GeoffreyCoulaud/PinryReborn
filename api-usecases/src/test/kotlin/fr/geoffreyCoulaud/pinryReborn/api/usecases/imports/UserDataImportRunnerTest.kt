@@ -452,6 +452,42 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given a report the previous attempt filled, Then the cap counts those rows and stores none`() {
+        // Given: the cap is seeded from what the report already holds, so a resumed attempt does not start
+        // it over. The issue repository's save is left unstubbed, so one row written here fails the test.
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags = listOf(TestLine(1, null, failure = "unexpected end of input")),
+            )
+        val resumed = anImport(UserDataImportState.RUNNING).copy(issueCount = REPORT_DETAIL_LIMIT)
+        stubWalk(source, resumed, storedIssues = REPORT_DETAIL_LIMIT)
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then: the count still climbs, which is what tells a capped report from a lost one
+        assertTrue(savedIssues.isEmpty())
+        assertEquals(REPORT_DETAIL_LIMIT + 1, stored.issueCount)
+        assertTrue(stored.issueDetailTruncated)
+    }
+
+    @Test
+    fun `Given a report already flagged truncated, Then an attempt with no anomaly leaves the flag alone`() {
+        // Given: the other half of the seed. A walk writes the flag on every row write, so an unseeded
+        // recorder would answer "not truncated" and quietly unflag a report that is still short of detail.
+        val resumed = anImport(UserDataImportState.RUNNING).copy(issueDetailTruncated = true)
+        stubWalk(FakeArchiveSource(aManifest()), resumed)
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then
+        assertEquals(UserDataImportState.COMPLETED, stored.state)
+        assertTrue(stored.issueDetailTruncated)
+    }
+
+    @Test
     fun `Given an account already holding the archive's tags, Then a resumed attempt adds to the skip counter`() {
         // Given: against a fresh account the total would be the line count either way, which proves nothing
         val names = listOf("voyage", "ete")
