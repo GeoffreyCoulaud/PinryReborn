@@ -8,6 +8,7 @@ import io.quarkus.test.junit.QuarkusTest
 import io.restassured.RestAssured.given
 import io.restassured.http.ContentType
 import jakarta.inject.Inject
+import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.Matchers.emptyIterable
 import org.hamcrest.Matchers.hasSize
@@ -194,6 +195,39 @@ class BoardRecycleBinIntegrationTest : IntegrationTest() {
             .statusCode(200)
             .body("pins", hasSize<Any>(1))
             .body("pins[0].id", equalTo(pin.id.toString()))
+    }
+
+    // --- Names ---
+
+    @Test
+    fun `Given a recycled board, Then it holds its name until the bin is emptied`() {
+        // Given
+        val auth = createAuthenticatedUser()
+        val board = boardCreator.create(author = auth.user, name = "voyage", description = "")
+        given().authenticatedAs(auth).delete("/api/v1/boards/${board.id}")
+
+        // When / Then - the recycled homonym blocks the new board, and the detail says so
+        given()
+            .authenticatedAs(auth)
+            .contentType(ContentType.JSON)
+            .body("""{"name": "Voyage", "description": ""}""")
+            .`when`()
+            .post("/api/v1/boards")
+            .then()
+            .statusCode(409)
+            .body("code", equalTo("BOARD_NAME_ALREADY_EXISTS"))
+            .body("detail", containsString("recycle bin"))
+
+        // Then - emptying the bin releases the name
+        given().authenticatedAs(auth).delete("/api/v1/boards/recycled").then().statusCode(204)
+        given()
+            .authenticatedAs(auth)
+            .contentType(ContentType.JSON)
+            .body("""{"name": "Voyage", "description": ""}""")
+            .`when`()
+            .post("/api/v1/boards")
+            .then()
+            .statusCode(201)
     }
 
     // --- Permanent delete ---

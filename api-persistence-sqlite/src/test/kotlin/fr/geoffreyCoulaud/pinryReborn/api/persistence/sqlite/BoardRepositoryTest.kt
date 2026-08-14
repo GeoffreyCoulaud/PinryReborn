@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.boards.BoardNameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
@@ -357,6 +358,125 @@ class BoardRepositoryTest : RepositoryTest() {
         assertNull(result)
     }
 
+    // --- Names as identities ---
+
+    @Test
+    fun `Given a name already held up to ASCII case, Then saveBoard throws BoardNameAlreadyTakenException`() {
+        // Given: ix_boards_author_name_nocase folds A to Z, so the store sees these two names as one
+        val user = createAndSaveUser()
+        createAndSaveBoard("voyage", user)
+
+        // When / Then
+        assertThrows<BoardNameAlreadyTakenException> { createAndSaveBoard("Voyage", user) }
+    }
+
+    @Test
+    fun `Given two authors, Then each may hold the same board name`() {
+        // Given: the index is scoped to the author, so a name is an identity per account
+        val first = createAndSaveUser()
+        val second = createAndSaveUser()
+        createAndSaveBoard("voyage", first)
+
+        // When
+        val board = createAndSaveBoard("voyage", second)
+
+        // Then
+        assertEquals("voyage", board.name)
+    }
+
+    @Test
+    fun `Given a recycled board, Then an active board cannot take its name`() {
+        // Given: the index covers every row, so the recycle bin holds the name
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("voyage", user)
+        boardRepository.softDeleteBoard(board, storableNow())
+
+        // When / Then
+        assertThrows<BoardNameAlreadyTakenException> { createAndSaveBoard("Voyage", user) }
+    }
+
+    @Test
+    fun `Given an active board, Then findBoardForUserByName finds it whatever the ASCII case`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("voyage", user)
+
+        // When
+        val found = boardRepository.findBoardForUserByName(user = user, name = "VOYAGE")
+
+        // Then
+        assertEquals(board.id, found?.id)
+    }
+
+    @Test
+    fun `Given a recycled board, Then findBoardForUserByName still returns it`() {
+        // Given
+        val user = createAndSaveUser()
+        val board = createAndSaveBoard("voyage", user)
+        boardRepository.softDeleteBoard(board, storableNow())
+
+        // When
+        val found = boardRepository.findBoardForUserByName(user = user, name = "Voyage")
+
+        // Then
+        assertEquals(board.id, found?.id)
+        assertNotNull(found?.softDeletedAt)
+    }
+
+    @Test
+    fun `Given another author's board, Then findBoardForUserByName does not return it`() {
+        // Given
+        val owner = createAndSaveUser()
+        val other = createAndSaveUser()
+        createAndSaveBoard("voyage", owner)
+
+        // When
+        val found = boardRepository.findBoardForUserByName(user = other, name = "voyage")
+
+        // Then
+        assertNull(found)
+    }
+
+    @Test
+    fun `Given a lowercase accented name, Then its uppercase lookup misses`() {
+        // Given: `collate nocase` folds A to Z and nothing else, so these stay two names. Ebean's
+        // `ieq` lowercases the bind in Java, which is Unicode aware, and would have matched here.
+        val user = createAndSaveUser()
+        createAndSaveBoard(LOWERCASE_ACCENTED_NAME, user)
+
+        // When
+        val found = boardRepository.findBoardForUserByName(user = user, name = UPPERCASE_ACCENTED_NAME)
+
+        // Then
+        assertNull(found)
+    }
+
+    @Test
+    fun `Given an uppercase accented name, Then its lowercase lookup misses`() {
+        // Given: the other fold direction, where `ieq` and `collate nocase` already agree
+        val user = createAndSaveUser()
+        createAndSaveBoard(UPPERCASE_ACCENTED_NAME, user)
+
+        // When
+        val found = boardRepository.findBoardForUserByName(user = user, name = LOWERCASE_ACCENTED_NAME)
+
+        // Then
+        assertNull(found)
+    }
+
+    @Test
+    fun `Given names differing only outside ASCII, Then both may be held by one author`() {
+        // Given: the index folds exactly as the lookup does, so an ASCII-only fold keeps these apart
+        val user = createAndSaveUser()
+        createAndSaveBoard(LOWERCASE_ACCENTED_NAME, user)
+
+        // When
+        val board = createAndSaveBoard(UPPERCASE_ACCENTED_NAME, user)
+
+        // Then
+        assertEquals(UPPERCASE_ACCENTED_NAME, board.name)
+    }
+
     // --- Creation timestamps ---
 
     @Test
@@ -371,5 +491,12 @@ class BoardRepositoryTest : RepositoryTest() {
         // Then
         assertNotNull(found?.createdAt)
         assertNotNull(found?.updatedAt)
+    }
+
+    private companion object {
+        // Precomposed U+00E9 / U+00C9 (not e + combining acute): the pair `collate nocase` leaves
+        // alone and Java's `lowercase()` folds, which is the disagreement these cases pin.
+        const val LOWERCASE_ACCENTED_NAME = "été"
+        const val UPPERCASE_ACCENTED_NAME = "ÉTÉ"
     }
 }

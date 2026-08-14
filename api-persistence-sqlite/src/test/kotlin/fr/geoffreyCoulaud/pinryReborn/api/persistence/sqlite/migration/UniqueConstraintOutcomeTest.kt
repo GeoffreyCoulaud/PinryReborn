@@ -36,6 +36,16 @@ class UniqueConstraintOutcomeTest {
             "ix_user_password_hashes_user_created" to
                 "UserPasswordHashRepository translates it to PasswordChangeCollisionException, so the client " +
                 "sees 409 PASSWORD_CHANGE_COLLISION.",
+            "ix_boards_author_name_nocase" to
+                "BoardRepository translates it to BoardNameAlreadyTakenException at saveBoard (creation and " +
+                "rename) and at restoreBoard; BoardCreator, BoardUpdater and BoardRecycleBin.restore each " +
+                "rethrow BoardNameAlreadyExistsError, so the client sees 409 BOARD_NAME_ALREADY_EXISTS at all " +
+                "three sites.",
+            "ix_tags_author_name_nocase" to
+                "No translation, deliberately: TagCreator.findOrCreate reads through the same fold before " +
+                "writing, so the violation is unreachable from the API; the single connection serialises a " +
+                "concurrent pair, and a violation with no read behind it is a broken invariant, so 500 is the " +
+                "honest answer.",
         )
 
     // Uniqueness has two spellings: a standalone `create unique index`, and an inline constraint at table creation.

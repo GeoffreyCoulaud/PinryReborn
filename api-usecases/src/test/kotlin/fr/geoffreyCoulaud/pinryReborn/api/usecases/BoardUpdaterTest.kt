@@ -1,9 +1,12 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.boards.BoardNameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BoardNameAlreadyExistsError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
 import io.mockk.every
@@ -12,6 +15,7 @@ import io.mockk.verify
 import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
 class BoardUpdaterTest {
@@ -52,5 +56,32 @@ class BoardUpdaterTest {
                 board.copy(name = newName, description = newDescription, updatedAt = clockInstant),
             )
         }
+    }
+
+    @Test
+    fun `Given the new name held by another board, Then update rethrows BoardNameAlreadyExistsError`() {
+        // Given: renaming is the second of the three sites the index refuses
+        val user = User(id = randomUUID(), name = createRandomString(), createdAt = TestTime.now)
+        val board = Board(
+            id = randomUUID(),
+            author = user,
+            name = createRandomString(),
+            description = createRandomString(),
+            createdAt = TestTime.now,
+            updatedAt = TestTime.now,
+        )
+        val takenName = createRandomString()
+        every { boardGetter.getActiveBoardForUser(boardId = board.id, reader = user) } returns board
+        every { boardRepository.saveBoard(any()) } throws BoardNameAlreadyTakenException(cause = Exception("boom"))
+        every { boardRepository.findBoardForUserByName(user = user, name = takenName) } returns
+            board.copy(id = randomUUID(), name = takenName)
+
+        // When
+        val error = assertThrows<BoardNameAlreadyExistsError> {
+            useCase.update(boardId = board.id, name = takenName, description = createRandomString(), user = user)
+        }
+
+        // Then
+        assertEquals(ErrorCode.BOARD_NAME_ALREADY_EXISTS, error.code)
     }
 }

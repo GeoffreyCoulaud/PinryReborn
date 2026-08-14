@@ -7,12 +7,14 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.PinRep
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.TagRepository
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.UserRepository
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
+import jakarta.persistence.PersistenceException
 import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.UUID.randomUUID
 
 class TagRepositoryTest : RepositoryTest() {
@@ -145,6 +147,89 @@ class TagRepositoryTest : RepositoryTest() {
         assertEquals(emptyList<Tag>(), repository.findAllTagsForUser(user))
     }
 
+    // --- Names as identities ---
+
+    private fun saveTag(name: String, user: User) =
+        repository.saveTag(Tag(id = randomUUID(), author = user, name = name, createdAt = storableNow()))
+
+    @Test
+    fun `Given a tag owned by the user, Then findUserTagByName finds it whatever the ASCII case`() {
+        // Given
+        val user = createAndSaveUser()
+        val tag = saveTag("landscape", user)
+
+        // When
+        val found = repository.findUserTagByName(user = user, name = "LandScape")
+
+        // Then
+        assertEquals(tag.id, found?.id)
+    }
+
+    @Test
+    fun `Given a tag name already held up to ASCII case, Then saveTag is refused by the store`() {
+        // Given: no translation, deliberately. TagCreator.findOrCreate reads through the same fold
+        // first, so this violation is unreachable from the API and stays a PersistenceException.
+        val user = createAndSaveUser()
+        saveTag("landscape", user)
+
+        // When / Then
+        assertThrows<PersistenceException> { saveTag("Landscape", user) }
+    }
+
+    @Test
+    fun `Given two authors, Then each may hold the same tag name`() {
+        // Given
+        val first = createAndSaveUser()
+        val second = createAndSaveUser()
+        saveTag("landscape", first)
+
+        // When
+        val tag = saveTag("landscape", second)
+
+        // Then
+        assertEquals("landscape", tag.name)
+    }
+
+    @Test
+    fun `Given a lowercase accented tag name, Then its uppercase lookup misses`() {
+        // Given: `collate nocase` folds A to Z and nothing else, so these stay two names. Ebean's
+        // `ieq` lowercases the bind in Java, which is Unicode aware, and would have matched here.
+        val user = createAndSaveUser()
+        saveTag(LOWERCASE_ACCENTED_NAME, user)
+
+        // When
+        val found = repository.findUserTagByName(user = user, name = UPPERCASE_ACCENTED_NAME)
+
+        // Then
+        assertNull(found)
+    }
+
+    @Test
+    fun `Given an uppercase accented tag name, Then its lowercase lookup misses`() {
+        // Given: the other fold direction, where `ieq` and `collate nocase` already agree
+        val user = createAndSaveUser()
+        saveTag(UPPERCASE_ACCENTED_NAME, user)
+
+        // When
+        val found = repository.findUserTagByName(user = user, name = LOWERCASE_ACCENTED_NAME)
+
+        // Then
+        assertNull(found)
+    }
+
+    @Test
+    fun `Given tag names differing only outside ASCII, Then both may be held by one author`() {
+        // Given: the index folds exactly as the lookup does, so an ASCII-only fold keeps these apart
+        val user = createAndSaveUser()
+        saveTag(LOWERCASE_ACCENTED_NAME, user)
+
+        // When
+        val tag = saveTag(UPPERCASE_ACCENTED_NAME, user)
+
+        // Then
+        assertEquals(UPPERCASE_ACCENTED_NAME, tag.name)
+    }
+
     // --- Creation timestamps ---
 
     @Test
@@ -158,5 +243,12 @@ class TagRepositoryTest : RepositoryTest() {
 
         // Then
         assertNotNull(found?.createdAt)
+    }
+
+    private companion object {
+        // Precomposed U+00E9 / U+00C9 (not e + combining acute): the pair `collate nocase` leaves
+        // alone and Java's `lowercase()` folds, which is the disagreement these cases pin.
+        const val LOWERCASE_ACCENTED_NAME = "été"
+        const val UPPERCASE_ACCENTED_NAME = "ÉTÉ"
     }
 }

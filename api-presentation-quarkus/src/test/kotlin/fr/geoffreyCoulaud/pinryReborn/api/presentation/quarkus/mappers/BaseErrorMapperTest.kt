@@ -136,6 +136,11 @@ class BaseErrorMapperTest {
     }
 
     @Test
+    fun `Given BOARD_NAME_ALREADY_EXISTS, Then status is CONFLICT`() {
+        assertEquals(Response.Status.CONFLICT, statusFor(ErrorCode.BOARD_NAME_ALREADY_EXISTS))
+    }
+
+    @Test
     fun `Given REAUTHENTICATION_FAILED, Then status is FORBIDDEN`() {
         assertEquals(Response.Status.FORBIDDEN, statusFor(ErrorCode.REAUTHENTICATION_FAILED))
     }

@@ -40,6 +40,61 @@ class BoardsIntegrationTest : IntegrationTest() {
             .body("pinCount", equalTo(0))
     }
 
+    @Test
+    fun `Given a name already held up to case, Then creating another board returns 409`() {
+        // Given: the unique index folds A to Z, so these two names are one name
+        val auth = createAuthenticatedUser()
+        boardCreator.create(author = auth.user, name = "voyage", description = "")
+
+        // When / Then
+        given()
+            .authenticatedAs(auth)
+            .contentType(ContentType.JSON)
+            .body("""{"name": "Voyage", "description": ""}""")
+            .`when`()
+            .post("/api/v1/boards")
+            .then()
+            .statusCode(409)
+            .body("code", equalTo("BOARD_NAME_ALREADY_EXISTS"))
+    }
+
+    @Test
+    fun `Given two boards, Then renaming one onto the other's name returns 409`() {
+        // Given
+        val auth = createAuthenticatedUser()
+        boardCreator.create(author = auth.user, name = "voyage", description = "")
+        val renamed = boardCreator.create(author = auth.user, name = "cuisine", description = "")
+
+        // When / Then
+        given()
+            .authenticatedAs(auth)
+            .contentType(ContentType.JSON)
+            .body("""{"name": "Voyage", "description": ""}""")
+            .`when`()
+            .put("/api/v1/boards/${renamed.id}")
+            .then()
+            .statusCode(409)
+            .body("code", equalTo("BOARD_NAME_ALREADY_EXISTS"))
+    }
+
+    @Test
+    fun `Given another user holding the name, Then creating a board with it succeeds`() {
+        // Given: the index is scoped to the author, so a name is an identity per account
+        val other = createAuthenticatedUser()
+        val auth = createAuthenticatedUser()
+        boardCreator.create(author = other.user, name = "voyage", description = "")
+
+        // When / Then
+        given()
+            .authenticatedAs(auth)
+            .contentType(ContentType.JSON)
+            .body("""{"name": "voyage", "description": ""}""")
+            .`when`()
+            .post("/api/v1/boards")
+            .then()
+            .statusCode(201)
+    }
+
     // --- Get ---
 
     @Test
