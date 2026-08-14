@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.createRandomString
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -23,7 +25,12 @@ class TagCreatorTest {
     private val tagRepository = mockk<TagRepositoryInterface>()
     private val clockInstant = Instant.parse("2026-07-23T10:00:00Z")
     private val clock = mockk<Clock> { every { now() } returns clockInstant }
-    private val useCase = TagCreator(tagRepository = tagRepository, clock = clock)
+    private val useCase =
+        TagCreator(
+            tagRepository = tagRepository,
+            transactionRunner = PassthroughTransactionRunner(),
+            clock = clock,
+        )
 
     @Test
     fun `When creating a new tag, should succeed`() {
@@ -62,7 +69,12 @@ class TagCreatorTest {
         val name = createRandomString()
         val bothRead = CountDownLatch(2)
         val repository = IndexedTagRepository(bothRead)
-        val racingUseCase = TagCreator(tagRepository = repository, clock = FixedClock(clockInstant))
+        val racingUseCase =
+            TagCreator(
+                tagRepository = repository,
+                transactionRunner = SerialisingTransactionRunner(bothRead),
+                clock = FixedClock(clockInstant),
+            )
         val failures = ConcurrentLinkedQueue<Throwable>()
         val taggings =
             List(2) {
@@ -79,18 +91,39 @@ class TagCreatorTest {
         assertEquals(1, repository.rowCount)
     }
 
+    /** The ambient transaction the other tests do not exercise: run the block, own nothing. */
+    private class PassthroughTransactionRunner : TransactionRunner {
+        override fun <T> inTransaction(block: () -> T): T = block()
+    }
+
+    /**
+     * Serialises a pair the way one transaction on the single connection does. A thread finding the
+     * lock taken releases [bothRead] as it queues, so the holder never pays the rendezvous timeout.
+     */
+    private class SerialisingTransactionRunner(private val bothRead: CountDownLatch) : TransactionRunner {
+        private val lock = ReentrantLock()
+
+        override fun <T> inTransaction(block: () -> T): T {
+            if (!lock.tryLock()) {
+                bothRead.countDown()
+                lock.lock()
+            }
+            try {
+                return block()
+            } finally {
+                lock.unlock()
+            }
+        }
+    }
+
     /** A clock a second thread can read: MockK's stubs are not what this test is measuring. */
     private class FixedClock(private val instant: Instant) : Clock {
         override fun now(): Instant = instant
     }
 
     /**
-     * Stands in for `ix_tags_author_name_nocase`: one row per author and folded name, a second insert
-     * refused the way the untranslated violation reaches a client, as a 500.
-     *
-     * [bothRead] is what makes the race deterministic rather than sampled: each read announces itself
-     * and waits for the other, so both miss before either writes. The wait is bounded, so a pair the
-     * implementation serialises proceeds on the timeout instead of deadlocking.
+     * Stands in for `ix_tags_author_name_nocase`, refusing a second row as the untranslated violation
+     * does. Each read waits at [bothRead] for the other, bounded, so the race is forced, not sampled.
      */
     private class IndexedTagRepository(private val bothRead: CountDownLatch) : TagRepositoryInterface {
         private val rows = ConcurrentHashMap<String, Tag>()

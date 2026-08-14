@@ -43,9 +43,9 @@ class UniqueConstraintOutcomeTest {
                 "three sites.",
             "ix_tags_author_name_nocase" to
                 "No translation, deliberately: TagCreator.findOrCreate reads through the same fold before " +
-                "writing, so a client tagging in sequence never reaches it. That pair holds no transaction, " +
-                "and ADR 0009 measured that the single connection alone does not serialise one, so two " +
-                "concurrent taggings of one new name still collide and the client then sees 500.",
+                "writing, and holds that pair in one transaction, which ADR 0009 measured is what serialises " +
+                "a pair on the single connection. Every write path resolving a tag goes through it, so the " +
+                "violation is unreachable and a concurrent tagging converges on one row rather than a 500.",
         )
 
     // Uniqueness has two spellings: a standalone `create unique index`, and an inline constraint at table creation.
