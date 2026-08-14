@@ -37,6 +37,7 @@ class ImportLifecycle(
         )
     }
 
+    // The sweep can throw anything (database, disk, a store refusal); one bad hour must not end the schedule.
     @Suppress("TooGenericExceptionCaught")
     fun safeReap() {
         try {
