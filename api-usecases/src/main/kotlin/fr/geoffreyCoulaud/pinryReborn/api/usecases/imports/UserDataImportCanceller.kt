@@ -25,6 +25,10 @@ class UserDataImportCanceller(
                 archiveStore.discardPartialUpload(importId)
                 markCancelled(userDataImport)
             }
+            // The Boolean is dropped deliberately: cancel() answers true both for a task cancelled
+            // before it ran and for one already RUNNING, so it cannot say whether a runner holds these
+            // bytes. Accepted race: a worker that claimed the task while the row still read PENDING
+            // loses its archive and lands on FAILED rather than CANCELLED, costing no data and no bytes.
             UserDataImportState.PENDING -> {
                 userDataImport.taskId?.let { cancelTask.cancel(it) }
                 archiveStore.delete(ImportArchiveKey.forImport(importId))

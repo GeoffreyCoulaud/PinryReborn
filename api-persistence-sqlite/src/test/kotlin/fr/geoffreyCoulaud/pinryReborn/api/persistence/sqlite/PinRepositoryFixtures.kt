@@ -17,8 +17,8 @@ import java.util.UUID.randomUUID
  * The fixtures the `PinRepository` suite shares, declared once instead of copied into each slice.
  *
  * The suite is split across [PinRepositoryTest], [PinRepositorySoftDeleteTest],
- * [PinRepositoryPaginationTest] and [PinRepositoryRecycledMembershipTest] to keep every class under
- * detekt's `LargeClass` threshold.
+ * [PinRepositoryPaginationTest], [PinRepositoryRecycledMembershipTest] and
+ * [PinRepositoryContentHashTest] to keep every class under detekt's `LargeClass` threshold.
  */
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base for the slices above.
 abstract class PinRepositoryFixtures : RepositoryTest() {

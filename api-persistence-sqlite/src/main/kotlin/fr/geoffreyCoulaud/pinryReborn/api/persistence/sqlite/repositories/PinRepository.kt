@@ -155,8 +155,8 @@ class PinRepository(
         pinIdsByContentHashQuery(user, contentHash).findSingleAttributeList()
 
     /**
-     * The subquery keeps the author and the state on the pin side while `ix_images_content_hash` still
-     * serves the read. `internal` so its test reads the plan of this SQL, not of a transcription.
+     * The subquery keeps author and state on the pin side while `ix_images_content_hash` serves the read.
+     * `internal` so its plan test reads this SQL, and the override above must keep delegating to it.
      */
     internal fun pinIdsByContentHashQuery(user: User, contentHash: String) =
         PinQueries
