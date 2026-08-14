@@ -5,8 +5,9 @@ import io.smallrye.config.WithDefault
 import java.time.Duration
 
 /** Spec section 9's table, which this mapping is the single source of. Next to [ExportsConfig]. */
-// One accessor per key of that table, which trips the per-interface threshold. Splitting is not
-// available: a nested group renames its keys (imports.sweep.interval), and the keys are the contract.
+// One accessor per key of that table, which trips the per-interface threshold. A nested group would
+// keep the keys, since @WithParentName exists for exactly that; it would invent a grouping the table
+// does not have, which is the reason not to, rather than any renaming.
 @Suppress("TooManyFunctions")
 @ConfigMapping(prefix = "imports", namingStrategy = ConfigMapping.NamingStrategy.SNAKE_CASE)
 interface ImportsConfig {
@@ -16,8 +17,9 @@ interface ImportsConfig {
     @WithDefault("21474836480") // 20 GiB
     fun maxArchiveBytes(): Long
 
-    // Strictly under quarkus.http.limits.max-body-size, which the framework enforces first: a chunk
-    // equal to it is refused before this bound ever answers. ImportsConfigIntegrationTest holds that.
+    // Read by no use case, deliberately: the framework's body limit is the enforcer and refuses an
+    // oversize chunk before any import code runs. This key records the size a client is told to send,
+    // and its invariant against that limit, which ImportsConfigIntegrationTest holds.
     @WithDefault("16777216") // 16 MiB
     fun maxChunkBytes(): Long
 

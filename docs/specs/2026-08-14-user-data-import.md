@@ -521,7 +521,7 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
 |---|---|---|
 | `imports.data_dir` | `/var/lib/pinry/imports` | Uploaded archives (a new volume) |
 | `imports.max_archive_bytes` | `21474836480` (20 GiB) | Refused past this, per import |
-| `imports.max_chunk_bytes` | `16777216` (16 MiB) | Strictly under `quarkus.http.limits.max-body-size`, which is `32M`, meaning 33554432 bytes. The 32 MiB this table first carried was exactly equal to it, so the invariant was violated by its own default |
+| `imports.max_chunk_bytes` | `16777216` (16 MiB) | Strictly under `quarkus.http.limits.max-body-size`, which is `32M`, meaning 33554432 bytes. The 32 MiB this table first carried was exactly equal to it, so the invariant was violated by its own default. **No use case reads this key**: the framework's body limit is the enforcer and refuses an oversize chunk before any import code runs, so the key records the size a client is told to send and the invariant against that limit, which `ImportsConfigIntegrationTest` holds |
 | `imports.max_entries` | `200000` | Archive entry-count bound |
 | `imports.max_metadata_bytes` | `16777216` (16 MiB) | Per non-image entry read whole |
 | `imports.max_line_bytes` | `1048576` (1 MiB) | Per JSONL line |

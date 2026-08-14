@@ -31,6 +31,8 @@ class ImportProducers {
     fun importArchiveStore(config: ImportsConfig): ImportArchiveStore =
         FilesystemZipImportArchiveStore(config.dataDir(), config.maxLineBytes())
 
+    // A producer's parameter list is the injection points of what it builds, and this receiver takes
+    // four ports plus the config its two bounds come from. Grouping them would only hide them.
     @Suppress("LongParameterList")
     @Produces
     @ApplicationScoped
@@ -48,8 +50,8 @@ class ImportProducers {
         )
 
     /**
-     * `images.max_file_bytes` and `images.max_pixels` are reused rather than given import twins: an
-     * archived medium is bounded by what this instance hosts, which is [ImagesConfig]'s to say.
+     * The `images.*` bounds are reused rather than given import twins: an archived medium is bounded by
+     * what this instance hosts, [ImagesConfig]'s to say. `LongParameterList`: ten ports and two configs.
      */
     @Suppress("LongParameterList")
     @Produces
