@@ -40,6 +40,22 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 
 ### P2: Operational debt
 
+- **No model carries a version, so every entity two actors can write is exposed.** `Persistor.merge`
+  writes every column, so saving an entity read earlier restores that entity's whole state, including
+  whatever another actor committed in between. The user data import found **seven sites of that one
+  defect in a single lot**, each reported and fixed as a particular case, before the read and the write
+  were made one transaction everywhere (`docs/specs/2026-08-14-user-data-import.md` section 8, branch
+  `feat/user-data-import`). What holds it is a fence written by hand for one entity, plus the
+  `ImportStateMergedOutsideTransaction` detekt rule whose reach is that one package: nothing covers the
+  exports, the tasks, the pins, the boards or the users, and four export use cases write the same shape
+  today. The general answer is **optimistic locking**: a version column, an Ebean `@Version` field, and a
+  domain exception for the lost update, which replaces "fence each writer by hand" with "the database
+  refuses the stale write". To decide: every model or only those a task can reach; what a caller that
+  loses gets (a retry, or a `409`); and what the append-only migration history costs, since this adds a
+  column to every table it touches. Two known unfenced import writes ride on this item and are named
+  where they are: `UserDataImportArchiveCompleter`'s `PENDING` transition (suppressed inline, because
+  fencing it has to decide what a client is told when a cancellation lands during `finishUpload`) and
+  `UserDataImportChunkReceiver`'s counter write, which a cancellation during an upload reverts.
 - **Re-measure the review regime after three lots.** `docs/adr/0014-review-budget-upstream.md` moved
   the review budget upstream on figures taken from the session transcripts, and nothing in this
   repository reproduces them. After three lots have run under the new regime, re-measure the three
