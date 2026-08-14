@@ -187,6 +187,33 @@ class FilesystemZipExportArchiveStoreTest {
     }
 
     @Test
+    fun `Given an instant written through the sink, Then the archive carries it as ISO-8601 text`() {
+        // Given: `disable(WRITE_DATES_AS_TIMESTAMPS)` on the writer's mapper is what decides how every
+        // timestamp of the published format is written, and until this test nothing failed when that
+        // line was deleted: the golden test in api-usecases builds a replica mapper carrying the same
+        // setting, and the cross-adapter round trip carries only Int and String.
+        val staged = store.stage { sink ->
+            sink.putJsonEntry("manifest.json", mapOf("generatedAt" to TestTime.now))
+            sink.putJsonLinesEntry("pins.jsonl", sequenceOf(mapOf("createdAt" to TestTime.now)))
+        }
+
+        // When
+        store.promote(staged, "exports/temporal.zip")
+
+        // Then: the raw entry text, never a value read back through a mapper that would undo it
+        ZipFile(tempDir.resolve("exports/temporal.zip").toFile()).use { zip ->
+            assertEquals(
+                """{"generatedAt":"2026-07-23T10:00:00Z"}""",
+                zip.getInputStream(zip.getEntry("manifest.json")).readBytes().decodeToString(),
+            )
+            assertEquals(
+                """{"createdAt":"2026-07-23T10:00:00Z"}""",
+                zip.getInputStream(zip.getEntry("pins.jsonl")).readBytes().decodeToString().trim(),
+            )
+        }
+    }
+
+    @Test
     fun `Given the archive format, Then it advertises ZIP media type and extension`() {
         // Given / When / Then
         assertEquals("application/zip", store.format.mediaType)
