@@ -217,12 +217,22 @@ class MeImportControllerTest {
 
     @Test
     fun `Given a cursor and a page size, Then listIssues uses them`() {
-        // Given
+        // Given: a page with a row and a cursor in it, since an empty one is also what a controller
+        // answering a constant empty list returns, and the status alone cannot tell the two apart.
         val user = aUser()
         val importId = randomUUID()
         val pivotId = randomUUID()
         val cursorInput = CursorDto(pivotId = pivotId, direction = CursorDirectionDto.BACKWARD)
-        val page = Page<UserDataImportIssue>(items = emptyList(), previousCursor = null, nextCursor = null)
+        val issue = UserDataImportIssue(
+            id = randomUUID(),
+            importId = importId,
+            kind = UserDataImportIssueKind.MEDIA_DIGEST_MISMATCH,
+            line = 7,
+            subject = "images/one.png",
+            detail = "digest mismatch",
+        )
+        val previousCursor = Cursor(pivotId = issue.id, direction = CursorDirection.BACKWARD)
+        val page = Page(items = listOf(issue), previousCursor = previousCursor, nextCursor = null)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { issueLister.list(user, importId, match { it.pivotId == pivotId }, 5) } returns page
 
@@ -231,6 +241,10 @@ class MeImportControllerTest {
 
         // Then
         assertEquals(200, response.status)
+        val entity = response.entity as UserDataImportIssueListOutputDto
+        assertEquals(issue.id, entity.issues.single().id)
+        assertEquals("MEDIA_DIGEST_MISMATCH", entity.issues.single().kind)
+        assertEquals(issue.id, entity.pagination.previousCursor?.pivotId)
     }
 
     @Test
