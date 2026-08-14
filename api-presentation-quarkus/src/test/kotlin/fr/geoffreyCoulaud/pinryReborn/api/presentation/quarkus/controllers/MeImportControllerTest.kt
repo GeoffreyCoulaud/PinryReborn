@@ -1,14 +1,17 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.controllers
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Cursor
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Page
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImportIssue
+import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.CursorDirection
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportIssueKind
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.common.CursorDirectionDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.common.CursorDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserDataImportIssueListOutputDto
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserDataImportListOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserDataImportOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportArchiveCompleter
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportCanceller
@@ -74,9 +77,11 @@ class MeImportControllerTest {
 
     @Test
     fun `Given no cursor and no page size, Then listImports uses the default page size`() {
-        // Given
+        // Given: a page with a row in it, since an empty one is also what a controller answering a
+        // constant empty list returns, and the status alone cannot tell the two apart.
         val user = aUser()
-        val page = Page<UserDataImport>(items = emptyList(), previousCursor = null, nextCursor = null)
+        val userDataImport = awaitingImport(user.id)
+        val page = Page(items = listOf(userDataImport), previousCursor = null, nextCursor = null)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { getter.list(user, null, MeImportController.DEFAULT_PAGE_SIZE) } returns page
 
@@ -85,6 +90,9 @@ class MeImportControllerTest {
 
         // Then
         assertEquals(200, response.status)
+        val entity = response.entity as UserDataImportListOutputDto
+        assertEquals(userDataImport.id, entity.imports.single().id)
+        assertEquals("AWAITING_ARCHIVE", entity.imports.single().state)
     }
 
     @Test
@@ -93,7 +101,9 @@ class MeImportControllerTest {
         val user = aUser()
         val pivotId = randomUUID()
         val cursorInput = CursorDto(pivotId = pivotId, direction = CursorDirectionDto.FORWARD)
-        val page = Page<UserDataImport>(items = emptyList(), previousCursor = null, nextCursor = null)
+        val userDataImport = awaitingImport(user.id).copy(state = UserDataImportState.COMPLETED)
+        val nextCursor = Cursor(pivotId = userDataImport.id, direction = CursorDirection.FORWARD)
+        val page = Page(items = listOf(userDataImport), previousCursor = null, nextCursor = nextCursor)
         every { securityIdentity.getAttribute<User>("user") } returns user
         every { getter.list(user, match { it.pivotId == pivotId }, 5) } returns page
 
@@ -102,6 +112,10 @@ class MeImportControllerTest {
 
         // Then
         assertEquals(200, response.status)
+        val entity = response.entity as UserDataImportListOutputDto
+        assertEquals(userDataImport.id, entity.imports.single().id)
+        assertEquals("COMPLETED", entity.imports.single().state)
+        assertEquals(userDataImport.id, entity.pagination.nextCursor?.pivotId)
     }
 
     @Test
