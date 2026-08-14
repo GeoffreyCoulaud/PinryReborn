@@ -17,9 +17,10 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
     override fun toResponse(exception: BaseError): Response {
         val status = statusFor(exception.code)
         val resolvedStatus = Response.Status.fromStatusCode(status)
-        // Fall back for status codes with no matching Response.Status constant (e.g. 422
-        // Unprocessable Entity, not part of jakarta.ws.rs 4.0's Response.Status enum).
-        val title = if (resolvedStatus == null) UNPROCESSABLE_ENTITY_TITLE else resolvedStatus.reasonPhrase
+        // A status with no Response.Status constant takes its title from the table below. `getValue`
+        // rather than a default: a new such status is a missing entry, not a wrong title to ship.
+        val title =
+            if (resolvedStatus == null) TITLES_WITHOUT_CONSTANT.getValue(status) else resolvedStatus.reasonPhrase
         val builder = problemResponse(status, title, exception.message, exception.code.name, uriInfo)
         if (exception is ThrottledError) {
             builder.header("Retry-After", exception.retryAfterSeconds)
@@ -65,12 +66,26 @@ class BaseErrorMapper : ExceptionMapper<BaseError> {
             ErrorCode.EXPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
             ErrorCode.EXPORT_NOT_READY -> Response.Status.CONFLICT.statusCode
             ErrorCode.EXPORT_GONE -> Response.Status.GONE.statusCode
+            ErrorCode.IMPORT_ALREADY_IN_PROGRESS -> Response.Status.CONFLICT.statusCode
+            ErrorCode.IMPORT_DOES_NOT_EXIST -> Response.Status.NOT_FOUND.statusCode
+            ErrorCode.IMPORT_INSUFFICIENT_PERMISSIONS -> Response.Status.FORBIDDEN.statusCode
+            ErrorCode.IMPORT_NOT_AWAITING_ARCHIVE -> Response.Status.CONFLICT.statusCode
+            ErrorCode.IMPORT_CHUNK_OFFSET_MISMATCH -> Response.Status.CONFLICT.statusCode
+            ErrorCode.IMPORT_ARCHIVE_TOO_LARGE -> Response.Status.REQUEST_ENTITY_TOO_LARGE.statusCode
+            ErrorCode.IMPORT_INSUFFICIENT_STORAGE -> INSUFFICIENT_STORAGE_STATUS_CODE
             ErrorCode.TOO_MANY_AUTHENTICATION_ATTEMPTS -> Response.Status.TOO_MANY_REQUESTS.statusCode
         }
 
     private companion object {
-        // jakarta.ws.rs 4.0's Response.Status has no UNPROCESSABLE_ENTITY constant (RFC 9110 422).
+        // jakarta.ws.rs 4.0's Response.Status stops at NETWORK_AUTHENTICATION_REQUIRED, so it holds
+        // neither of these (RFC 9110 422, RFC 4918 507).
         const val UNPROCESSABLE_ENTITY_STATUS_CODE = 422
-        const val UNPROCESSABLE_ENTITY_TITLE = "Unprocessable Entity"
+        const val INSUFFICIENT_STORAGE_STATUS_CODE = 507
+
+        val TITLES_WITHOUT_CONSTANT =
+            mapOf(
+                UNPROCESSABLE_ENTITY_STATUS_CODE to "Unprocessable Entity",
+                INSUFFICIENT_STORAGE_STATUS_CODE to "Insufficient Storage",
+            )
     }
 }
