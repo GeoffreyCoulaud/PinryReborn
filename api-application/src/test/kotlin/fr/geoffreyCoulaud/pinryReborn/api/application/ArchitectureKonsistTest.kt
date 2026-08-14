@@ -3,13 +3,16 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.architecture.KoArchitectureCreator.assertArchitecture
 import com.lemonappdev.konsist.api.architecture.Layer
+import com.lemonappdev.konsist.api.ext.list.withAnnotationNamed
 import com.lemonappdev.konsist.api.ext.list.withImport
 import com.lemonappdev.konsist.api.ext.list.withName
 import com.lemonappdev.konsist.api.ext.list.withNameStartingWith
 import com.lemonappdev.konsist.api.ext.list.withPackage
+import com.lemonappdev.konsist.api.ext.list.withParameter
 import com.lemonappdev.konsist.api.ext.list.withParent
 import com.lemonappdev.konsist.api.ext.list.withParentInterfaceOf
 import com.lemonappdev.konsist.api.ext.list.withPropertyNamed
+import com.lemonappdev.konsist.api.ext.list.withoutAnnotationNamed
 import com.lemonappdev.konsist.api.ext.list.withoutName
 import com.lemonappdev.konsist.api.ext.list.withoutNameStartingWith
 import com.lemonappdev.konsist.api.ext.list.withoutParentInterfaceOf
@@ -39,6 +42,31 @@ class ArchitectureKonsistTest {
             .scopeFromProduction(moduleName = "api-persistence-sqlite")
             .classes()
             .withParentInterfaceOf(SoftDeletableModel::class)
+
+    /**
+     * The endpoints that take the request body as a raw stream, matched on the parameter's simple type
+     * name, which is why the assertion below is paired with one that fails when this list is empty.
+     */
+    private val requestBodyStreamEndpoints =
+        Konsist
+            .scopeFromProduction()
+            .functions(includeNested = true)
+            .withAnnotationNamed("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS")
+            .withParameter { it.type.name.substringAfterLast(".") == "InputStream" }
+
+    @Test
+    fun `Given production sources, Then some endpoint takes its request body as a stream`() {
+        requestBodyStreamEndpoints.assertNotEmpty()
+    }
+
+    @Test
+    fun `Given the endpoints taking a request body stream, Then each one is annotated blocking`() {
+        // Quarkus REST reads such a body lazily only while the method runs on a worker thread, and a
+        // method that stops being blocking buffers the upload in memory instead, silently. The
+        // annotation is what this asserts; the other half of the condition (no extension installing a
+        // global Vert.x body handler) is not visible from any source declaration.
+        requestBodyStreamEndpoints.withoutAnnotationNamed("Blocking").assertEmpty()
+    }
 
     @Test
     fun `Given api-usecases production, Then its scope is not empty`() {
