@@ -79,6 +79,9 @@ internal class ZipArchiveSource(
                     yield(ZipArchiveLine<T>(number, null, "Line is longer than the $maxLineBytes bytes allowed"))
                     continue
                 }
+                // A line of no bytes holds no entry, so it is not an entry that failed. It still counts
+                // for the numbering, so a later failure names the line the file holds.
+                if (line.bytes.isEmpty()) continue
                 yield(parse(number, line.bytes, type))
             }
         }
