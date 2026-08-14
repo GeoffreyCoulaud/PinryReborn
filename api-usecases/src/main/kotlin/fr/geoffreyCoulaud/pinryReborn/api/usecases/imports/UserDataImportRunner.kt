@@ -73,7 +73,7 @@ class UserDataImportRunner(
         val user = requireUser(userDataImport)
         val runToken = UUID.randomUUID()
         val claimed = claim(userDataImport, runToken)
-        replay(project(claimed, runToken), claimed, user, isLastAttempt, renewLease)
+        replay(project(claimed, runToken), user, isLastAttempt, renewLease)
     }
 
     /**
@@ -85,13 +85,12 @@ class UserDataImportRunner(
     // the account's only import slot, which outweighs anything this arm can catch by mistake.
     private fun replay(
         runnable: RunnableImport,
-        claimed: UserDataImport,
         user: User,
         isLastAttempt: Boolean,
         renewLease: () -> Unit,
     ) {
         try {
-            walkArchive(runnable, claimed, user, renewLease)
+            walkArchive(runnable, user, renewLease)
             complete(runnable)
         } catch (error: Throwable) {
             if (isLastAttempt) advance(runnable) { failed(it, IMPORT_FAILED) }
@@ -118,9 +117,10 @@ class UserDataImportRunner(
     private fun UserDataImportState.isRunnable(): Boolean =
         this == UserDataImportState.PENDING || this == UserDataImportState.RUNNING
 
+    /** Before the claim, so the fence is the state alone: no attempt holds this row yet. */
     private fun requireUser(userDataImport: UserDataImport): User =
         userRepository.findUserById(userDataImport.userId)
-            ?: markFailed(userDataImport, USER_GONE, "the account no longer exists")
+            ?: markFailed(userDataImport.id, USER_GONE, "the account no longer exists") { it.state.isRunnable() }
 
     /** Step 2: one transaction writes the fence token, the state and the first attempt's instant. */
     private fun claim(userDataImport: UserDataImport, runToken: UUID): UserDataImport =
@@ -140,21 +140,19 @@ class UserDataImportRunner(
             importId = claimed.id,
             userId = claimed.userId,
             storageKey =
-                claimed.storageKey ?: markFailed(claimed, ARCHIVE_UNREADABLE, "the import names no archive"),
+                claimed.storageKey
+                    ?: markFailed(claimed.id, ARCHIVE_UNREADABLE, "the import names no archive") {
+                        it.holds(runToken)
+                    },
             runToken = runToken,
         )
 
-    private fun walkArchive(
-        runnable: RunnableImport,
-        claimed: UserDataImport,
-        user: User,
-        renewLease: () -> Unit,
-    ) {
-        readingArchive(claimed) { archiveStore.open(runnable.storageKey) }.use { source ->
+    private fun walkArchive(runnable: RunnableImport, user: User, renewLease: () -> Unit) {
+        readingArchive(runnable) { archiveStore.open(runnable.storageKey) }.use { source ->
             // Read where the central directory already is, so it costs nothing and no walk has run yet:
             // its refusal is the archive's, and marking the row from the claim reverts nothing.
-            val entryNames = readingArchive(claimed) { source.entryNames(maxEntries) }
-            val opened = recordManifest(source, runnable, claimed) ?: return
+            val entryNames = readingArchive(runnable) { source.entryNames(maxEntries) }
+            val opened = recordManifest(source, runnable) ?: return
             walkContent(source, runnable, user, renewLease, recorderFor(opened), entryNames)
         }
     }
@@ -180,11 +178,16 @@ class UserDataImportRunner(
      * written only while the row still holds the run, since a blind merge restores state and token.
      */
     private fun advance(runnable: RunnableImport, update: (UserDataImport) -> UserDataImport): UserDataImport? =
+        fenced(runnable.importId, { it.holds(runnable.runToken) }, update)
+
+    /** Read and write in one transaction, on the row as it is now: no caller ever merges its own copy. */
+    private fun fenced(
+        importId: UUID,
+        held: (UserDataImport) -> Boolean,
+        update: (UserDataImport) -> UserDataImport,
+    ): UserDataImport? =
         transactionRunner.inTransaction {
-            importRepository
-                .findById(runnable.importId)
-                ?.takeIf { it.holds(runnable) }
-                ?.let { importRepository.save(update(it)) }
+            importRepository.findById(importId)?.takeIf(held)?.let { importRepository.save(update(it)) }
         }
 
     /** The cap counts the rows already stored, which a lost counter write would over-report. */
@@ -201,34 +204,40 @@ class UserDataImportRunner(
      * Every way an archive refuses to be read is the same answer: the bytes will not change, so no
      * attempt is spent on them. A bound exceeded is not an [IOException], deliberately.
      */
-    private fun <T> readingArchive(claimed: UserDataImport, read: () -> T): T =
+    private fun <T> readingArchive(runnable: RunnableImport, read: () -> T): T =
         try {
             read()
         } catch (error: IOException) {
-            markFailed(claimed, ARCHIVE_UNREADABLE, "the archive could not be read: $error")
+            markFailed(runnable, ARCHIVE_UNREADABLE, "the archive could not be read: $error")
         } catch (error: ArchiveBoundExceededException) {
-            markFailed(claimed, ARCHIVE_UNREADABLE, "the archive read past its bound: $error")
+            markFailed(runnable, ARCHIVE_UNREADABLE, "the archive read past its bound: $error")
         }
 
     /** Step 3. The count is display only, so a manifest disagreeing with the real line count is no error. */
-    private fun recordManifest(
-        source: ArchiveSource,
-        runnable: RunnableImport,
-        claimed: UserDataImport,
-    ): UserDataImport? {
+    private fun recordManifest(source: ArchiveSource, runnable: RunnableImport): UserDataImport? {
         val manifest =
-            readingArchive(claimed) { source.readJson(MANIFEST_ENTRY, ImportedManifest::class.java, maxMetadataBytes) }
-                ?: markFailed(claimed, MANIFEST_MISSING, "the archive carries no manifest")
+            readingArchive(runnable) { source.readJson(MANIFEST_ENTRY, ImportedManifest::class.java, maxMetadataBytes) }
+                ?: markFailed(runnable, MANIFEST_MISSING, "the archive carries no manifest")
         if (manifest.formatVersion != UserDataExportRequester.EXPORT_FORMAT_VERSION) {
-            markFailed(claimed, UNSUPPORTED_FORMAT_VERSION, "format version ${manifest.formatVersion}")
+            markFailed(runnable, UNSUPPORTED_FORMAT_VERSION, "format version ${manifest.formatVersion}")
         }
         return advance(runnable) {
             it.copy(formatVersion = manifest.formatVersion, announcedPins = manifest.counts?.pins)
         }
     }
 
-    private fun markFailed(userDataImport: UserDataImport, failureCode: String, reason: String): Nothing {
-        importRepository.save(failed(userDataImport, failureCode))
+    /** The same refusal, fenced on the run: every site holding the projection reads it from there. */
+    private fun markFailed(runnable: RunnableImport, failureCode: String, reason: String): Nothing =
+        markFailed(runnable.importId, failureCode, reason) { it.holds(runnable.runToken) }
+
+    /** A refusal is a write like any other: on the row as it is now, and only while it is still ours. */
+    private fun markFailed(
+        importId: UUID,
+        failureCode: String,
+        reason: String,
+        held: (UserDataImport) -> Boolean,
+    ): Nothing {
+        fenced(importId, held) { failed(it, failureCode) }
         throw PermanentTaskException(reason)
     }
 
@@ -451,8 +460,8 @@ class UserDataImportRunner(
         advance(walk.runnable) { applied(walk, line, outcome, it) } != null
 
     /** Cancellation keeps the token and only writes the state, so both are read. */
-    private fun UserDataImport.holds(runnable: RunnableImport): Boolean =
-        runToken == runnable.runToken && state == UserDataImportState.RUNNING
+    private fun UserDataImport.holds(runToken: UUID): Boolean =
+        this.runToken == runToken && state == UserDataImportState.RUNNING
 
     private fun applied(walk: PinWalk, line: Int, outcome: PinOutcome, current: UserDataImport): UserDataImport {
         outcome.issues.forEach { walk.recorder.record(it.kind, line, it.subject, it.detail) }
