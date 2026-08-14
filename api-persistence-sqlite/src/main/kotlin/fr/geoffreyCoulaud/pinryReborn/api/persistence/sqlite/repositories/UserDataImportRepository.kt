@@ -90,6 +90,12 @@ class UserDataImportRepository(
             .findList()
             .map { it.toDomain() }
 
+    override fun findRunning(): List<UserDataImport> =
+        QUserDataImportModel()
+            .state.equalTo(UserDataImportState.RUNNING.name)
+            .findList()
+            .map { it.toDomain() }
+
     override fun findAllImportIdsForUser(userId: UUID): List<UUID> =
         QUserDataImportModel().user.id.equalTo(userId).findList().map { it.id }
 

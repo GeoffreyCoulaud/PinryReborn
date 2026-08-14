@@ -35,6 +35,9 @@ interface UserDataImportRepositoryInterface {
     /** Terminal rows that still hold archive bytes, so the sweep reclaims each one exactly once. */
     fun findReclaimableTerminal(): List<UserDataImport>
 
+    /** `RUNNING` rows, which the sweep pairs with their task to tell a live attempt from a dead one. */
+    fun findRunning(): List<UserDataImport>
+
     fun findAllImportIdsForUser(userId: UUID): List<UUID>
 
     /**

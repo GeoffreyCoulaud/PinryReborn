@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInt
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportIssueRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
@@ -14,6 +15,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInte
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
 import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipImportArchiveStore
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapAbandonedUserDataImports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportChunkReceiver
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportRunner
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ImportsConfig
@@ -30,6 +32,24 @@ class ImportProducers {
     @ApplicationScoped
     fun importArchiveStore(config: ImportsConfig): ImportArchiveStore =
         FilesystemZipImportArchiveStore(config.dataDir(), config.maxLineBytes())
+
+    // LongParameterList: four ports, the clock, and the two Durations ARC cannot resolve on its own.
+    @Suppress("LongParameterList")
+    @Produces
+    @ApplicationScoped
+    fun reapAbandonedUserDataImports(
+        repository: UserDataImportRepositoryInterface,
+        archiveStore: ImportArchiveStore,
+        taskQueue: TaskQueueInterface,
+        clock: Clock,
+        transactionRunner: TransactionRunner,
+        config: ImportsConfig,
+    ): ReapAbandonedUserDataImports =
+        ReapAbandonedUserDataImports(
+            repository, archiveStore, taskQueue, clock, transactionRunner,
+            uploadGrace = config.uploadGrace(),
+            stagedFileMaxAge = config.stagedFileMaxAge(),
+        )
 
     // A producer's parameter list is the injection points of what it builds, and this receiver takes
     // four ports plus the config its two bounds come from. Grouping them would only hide them.

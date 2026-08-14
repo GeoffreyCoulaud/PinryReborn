@@ -70,13 +70,13 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
         every { clock.now() } returns now
         every { repository.findAbandonableBefore(any()) } answers {
             abandonCutoff = firstArg()
-            rows.values.filter { it.state == UserDataImportState.AWAITING_ARCHIVE }
+            rows.values.filter { row -> row.state == UserDataImportState.AWAITING_ARCHIVE }
         }
         every { repository.findRunning() } answers {
-            rows.values.filter { it.state == UserDataImportState.RUNNING }
+            rows.values.filter { row -> row.state == UserDataImportState.RUNNING }
         }
         every { repository.findReclaimableTerminal() } answers {
-            rows.values.filter { it.state.isTerminal && it.storageKey != null }
+            rows.values.filter { row -> row.state.isTerminal && row.storageKey != null }
         }
         every { archiveStore.discardOrphanedStagedFiles(any()) } answers { orphanCutoff = firstArg(); 0 }
     }
@@ -84,7 +84,9 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
     /** Only the runs that act on a row reach these, and `BaseTest` fails a stub nothing reached. */
     private fun stubRowWrites() {
         every { repository.findById(any()) } answers { rows[firstArg<UUID>()] }
-        every { repository.save(any()) } answers { firstArg<UserDataImport>().also { rows[it.id] = it } }
+        every { repository.save(any()) } answers {
+            firstArg<UserDataImport>().also { row -> rows[row.id] = row }
+        }
     }
 
     private fun stubUploadDiscard() {
@@ -241,6 +243,44 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
         // Then
         assertEquals(1, reaped)
         assertEquals(UserDataImportState.FAILED, stored(running.id).state)
+    }
+
+    @Test
+    fun `Given a walk that finished while the sweep read it, Then no failure is written over it`() {
+        // Given: the runner writes COMPLETED between the selection and the fence, and the task it has
+        // just finished is on its way out of the queue
+        stubSweep()
+        val task = aTask(TaskState.DEAD)
+        val running = anImport(UserDataImportState.RUNNING, taskId = task.id)
+        every { taskQueue.findById(task.id) } returns task
+        every { repository.findById(running.id) } answers {
+            stored(running.id).copy(state = UserDataImportState.COMPLETED)
+        }
+
+        // When
+        val reaped = sweep.reap()
+
+        // Then
+        assertEquals(0, reaped)
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given an import erased while its archive was reclaimed, Then only the bytes go`() {
+        // Given: the account deletion cleaner drops the row between the selection and the stamp, so
+        // there is nothing left to stamp and the bytes it named are already gone
+        stubSweep()
+        stubArchiveDeletion()
+        val erased = anImport(UserDataImportState.CANCELLED, storageKey = "imports/erased.zip")
+        every { repository.findById(erased.id) } returns null
+
+        // When
+        val reaped = sweep.reap()
+
+        // Then
+        assertEquals(0, reaped)
+        assertEquals(listOf(ImportArchiveKey.forImport(erased.id)), deletedArchives)
+        verify(exactly = 0) { repository.save(any()) }
     }
 
     @Test

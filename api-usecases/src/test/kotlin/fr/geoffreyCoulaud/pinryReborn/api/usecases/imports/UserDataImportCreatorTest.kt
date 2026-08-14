@@ -82,6 +82,8 @@ class UserDataImportCreatorTest : BaseTest() {
 
         override fun findReclaimableTerminal() = refuse("findReclaimableTerminal")
 
+        override fun findRunning() = refuse("findRunning")
+
         override fun findAllImportIdsForUser(userId: UUID) = refuse("findAllImportIdsForUser")
 
         override fun findMissingImportIds(candidates: Collection<UUID>) = refuse("findMissingImportIds")

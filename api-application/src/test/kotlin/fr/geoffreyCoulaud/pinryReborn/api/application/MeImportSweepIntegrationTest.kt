@@ -21,9 +21,8 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * The import sweep against real bytes on disk (spec `docs/specs/2026-08-14-user-data-import.md` §6),
- * driven through the injected bean rather than the fixed-delay scheduler, as
- * [MeExportCompletionIntegrationTest] drives the export purge for the same reason.
+ * The import sweep against real bytes on disk (spec §6), driven through the injected beans rather than
+ * the fixed-delay scheduler, as [MeExportCompletionIntegrationTest] drives the export purge.
  */
 @QuarkusTest
 @TestProfile(MeImportTestProfile::class)
