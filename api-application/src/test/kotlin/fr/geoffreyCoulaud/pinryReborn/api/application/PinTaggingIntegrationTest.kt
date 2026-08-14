@@ -44,6 +44,49 @@ class PinTaggingIntegrationTest : IntegrationTest() {
     }
 
     @Test
+    fun `Given a stored tag, Then tagging with a different case reuses it and returns its spelling`() {
+        // Given: a pin already carrying `landscape`, stored in that spelling.
+        val auth = createAuthenticatedUser()
+        val pin = pinCreator.createPin(
+            author = auth.user,
+            sourceContextUrl = "https://example.com/page",
+            sourceMediaUrl = "https://example.com/image.jpg",
+            description = "My pin",
+            tags = listOf("landscape"),
+        )
+
+        // When: the client tags a second pin with the same name in another case.
+        val other = pinCreator.createPin(
+            author = auth.user,
+            sourceContextUrl = "https://example.com/other",
+            sourceMediaUrl = "https://example.com/other.jpg",
+            description = "Another pin",
+            tags = emptyList(),
+        )
+        given()
+            .authenticatedAs(auth)
+            .contentType(ContentType.JSON)
+            .body("""{"tags": ["Landscape"]}""")
+            .`when`()
+            .put("/api/v1/pins/${other.id}/tags")
+            .then()
+            .statusCode(200)
+            // Then: the stored spelling comes back, not the one that was sent. Before the fold
+            // reached the read, this created a second tag named `Landscape`.
+            .body("tags", hasSize<Any>(1))
+            .body("tags.name", containsInAnyOrder("landscape"))
+
+        // And: the first pin still carries the one tag, which is the same row.
+        given()
+            .authenticatedAs(auth)
+            .`when`()
+            .get("/api/v1/pins/${pin.id}")
+            .then()
+            .statusCode(200)
+            .body("tags.name", containsInAnyOrder("landscape"))
+    }
+
+    @Test
     fun `setting tags replaces existing tags`() {
         val auth = createAuthenticatedUser()
 

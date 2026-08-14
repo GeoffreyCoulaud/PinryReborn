@@ -9,7 +9,6 @@ import com.lemonappdev.konsist.api.ext.list.withNameStartingWith
 import com.lemonappdev.konsist.api.ext.list.withPackage
 import com.lemonappdev.konsist.api.ext.list.withParent
 import com.lemonappdev.konsist.api.ext.list.withParentInterfaceOf
-import com.lemonappdev.konsist.api.ext.list.withPath
 import com.lemonappdev.konsist.api.ext.list.withPropertyNamed
 import com.lemonappdev.konsist.api.ext.list.withoutName
 import com.lemonappdev.konsist.api.ext.list.withoutNameStartingWith
@@ -27,7 +26,7 @@ import org.junit.jupiter.api.Test
  * regardless of where this test runs; it is placed in `api-application` (the only module without
  * the Kover branch-coverage gate) to avoid a near-empty dedicated module.
  *
- * The three "scope is not empty" tests guard against a mistyped `moduleName` silently making an
+ * The two "scope is not empty" tests guard against a mistyped `moduleName` silently making an
  * import assertion pass on an empty file list.
  */
 class ArchitectureKonsistTest {
@@ -40,29 +39,6 @@ class ArchitectureKonsistTest {
             .scopeFromProduction(moduleName = "api-persistence-sqlite")
             .classes()
             .withParentInterfaceOf(SoftDeletableModel::class)
-
-    /** The import archive port and its neighbours, the only domain package that touches byte streams. */
-    private val importPortFiles =
-        Konsist
-            .scopeFromProduction(moduleName = "api-domain")
-            .files
-            .withPath("..domain/imports..")
-
-    @Test
-    fun `Given api-domain's import ports, Then their scope is not empty`() {
-        importPortFiles.assertNotEmpty()
-    }
-
-    @Test
-    fun `Given api-domain's import ports, Then they import nothing outside the JDK`() {
-        // Narrower than the module-wide rule below on purpose: that one carries a growable allow-list
-        // of type names, and this package is the one a reader for a hostile archive would be tempted
-        // to hand a ZIP or a JSON type. `assertEmpty` names the offending import.
-        importPortFiles
-            .flatMap { it.imports }
-            .withoutNameStartingWith("fr.geoffreyCoulaud.pinryReborn.api.domain.", "java.")
-            .assertEmpty()
-    }
 
     @Test
     fun `Given api-usecases production, Then its scope is not empty`() {

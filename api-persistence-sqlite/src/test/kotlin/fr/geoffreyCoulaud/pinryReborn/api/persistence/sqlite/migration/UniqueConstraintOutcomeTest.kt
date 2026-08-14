@@ -37,10 +37,12 @@ class UniqueConstraintOutcomeTest {
                 "UserPasswordHashRepository translates it to PasswordChangeCollisionException, so the client " +
                 "sees 409 PASSWORD_CHANGE_COLLISION.",
             "ix_boards_author_name_nocase" to
-                "BoardRepository translates it to BoardNameAlreadyTakenException at saveBoard (creation and " +
-                "rename) and at restoreBoard; BoardCreator, BoardUpdater and BoardRecycleBin.restore each " +
-                "rethrow BoardNameAlreadyExistsError, so the client sees 409 BOARD_NAME_ALREADY_EXISTS at all " +
-                "three sites.",
+                "BoardRepository translates it to BoardNameAlreadyTakenException at saveBoard, the one write " +
+                "that can collide; BoardCreator and BoardUpdater rethrow BoardNameAlreadyExistsError, so the " +
+                "client sees 409 BOARD_NAME_ALREADY_EXISTS on creation and on rename. Restoring is not a third " +
+                "site: the index covers recycled rows, so no homonym can exist while a board sits in the bin, " +
+                "and restoreBoard writes no indexed column. A recycled board therefore holds its name until " +
+                "the bin is emptied, and the 409 detail says so.",
             "uq_user_data_imports_active" to
                 "UserDataImportRepository translates it to ImportAlreadyInProgressException and " +
                 "UserDataImportCreator rethrows ImportAlreadyInProgressError, so the client sees 409 " +

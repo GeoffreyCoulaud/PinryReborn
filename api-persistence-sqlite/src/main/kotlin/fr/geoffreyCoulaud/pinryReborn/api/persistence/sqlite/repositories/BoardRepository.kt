@@ -17,7 +17,7 @@ import java.time.Instant
 import java.util.UUID
 
 @ApplicationScoped
-// BoardRepositoryInterface's surface (10 methods) plus the private sortedForListing helper trips
+// BoardRepositoryInterface's surface (12 methods) plus the private sortedForListing helper trips
 // detekt's default per-class threshold. Suppressed rather than split, since splitting would
 // fragment one cohesive adapter across artificial classes for no readability gain (mirrors
 // PinRepository's precedent for the same rule).

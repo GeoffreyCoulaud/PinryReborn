@@ -570,8 +570,13 @@ States are stored as plain `String` columns converted in the mapper, following `
 
 The import needs a name to be an identity. Today it is not one.
 
-- **Tags.** `TagCreator.findOrCreate` already reads before writing, so `(author_id, name collate
-  nocase)` changes nothing observable on that path and closes the race. Its outcome is named: no
+- **Tags.** `(author_id, name collate nocase)` closes the race, but **it does change something
+  observable**, contrary to what an earlier revision claimed. The index alone changes nothing; making
+  the read fold with it does: `PUT /api/v1/pins/{id}/tags` with `Landscape` when `landscape` is
+  stored now returns the stored spelling and creates no second tag. That change is not optional. With
+  the case-sensitive read left in place, the same request produces an untranslated constraint
+  violation and the client gets a `500` (measured by reverting the read and running
+  `PinTaggingIntegrationTest`). Its outcome is named: no
   translation, deliberately, because the read-then-write inside one transaction makes the violation
   unreachable from the API; a concurrent pair is serialised by the single connection.
 - **Boards.** `BoardCreator.create` checks nothing, so `POST /api/v1/boards` with a taken name
