@@ -452,6 +452,35 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given a fenced write, Then the row it reads is read inside the transaction that writes`() {
+        // Given: a row that answers CANCELLED to anyone reading it outside a transaction. A runner
+        // re-reading before it opens one would believe that answer and stop, which is exactly the shape
+        // the fence exists to forbid: between such a read and its write, another worker writes.
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags = listOf(TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant))),
+            )
+        stubWalk(source)
+        stubTagLookup()
+        stubTagCreation()
+        reread = { row ->
+            when {
+                row.state == UserDataImportState.RUNNING && !transactions.inside ->
+                    row.copy(state = UserDataImportState.CANCELLED)
+                else -> row
+            }
+        }
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then: every fenced write landed, so none of them read the row before opening its transaction
+        assertEquals(UserDataImportState.COMPLETED, stored.state)
+        assertEquals(1, stored.createdTags)
+    }
+
+    @Test
     fun `Given a report the previous attempt filled, Then the cap counts those rows and stores none`() {
         // Given: the cap is seeded from what the report already holds, so a resumed attempt does not start
         // it over. The issue repository's save is left unstubbed, so one row written here fails the test.

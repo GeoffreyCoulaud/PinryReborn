@@ -38,9 +38,23 @@ import java.util.HexFormat
 import java.util.UUID
 import java.util.UUID.randomUUID
 
-/** The ambient transaction the claim runs in; this suite owns no connection. */
+/**
+ * The ambient transaction the claim runs in; this suite owns no connection. It runs the block inline,
+ * so [inside] is the only channel a case has to tell a read within the transaction from one before it.
+ */
 internal class PassthroughTransactionRunner : TransactionRunner {
-    override fun <T> inTransaction(block: () -> T): T = block()
+    private var depth = 0
+
+    val inside: Boolean get() = depth > 0
+
+    override fun <T> inTransaction(block: () -> T): T {
+        depth++
+        return try {
+            block()
+        } finally {
+            depth--
+        }
+    }
 }
 
 internal data class TestLine<out T>(
@@ -145,6 +159,8 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     protected val futureInstant: Instant = Instant.parse("2027-01-01T00:00:00Z")
     protected val beforeAccount: Instant = Instant.parse("2019-05-05T00:00:00Z")
 
+    protected val transactions = PassthroughTransactionRunner()
+
     protected val user = User(id = randomUUID(), name = "alice", createdAt = accountCreatedAt)
     protected val importId: UUID = randomUUID()
     protected val storageKey: String = ImportArchiveKey.forImport(importId)
@@ -167,7 +183,7 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
             archiveStore = archiveStore,
             imageStore = imageStore,
             imageProbe = imageProbe,
-            transactionRunner = PassthroughTransactionRunner(),
+            transactionRunner = transactions,
             clock = clock,
             maxMetadataBytes = MAX_METADATA_BYTES,
             maxEntries = MAX_ENTRIES,
