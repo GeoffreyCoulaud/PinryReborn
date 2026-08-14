@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.core.StreamReadConstraints
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -36,8 +37,8 @@ class FilesystemZipImportArchiveStore(
     private val tmpDir: Path get() = Path.of(dataDir).resolve("tmp")
 
     /**
-     * Reader only, and never handed to a writer. The Kotlin module is what makes a missing or null JSON
-     * field a parse failure instead of a null sitting inside a non-nullable property.
+     * Reader only, never handed to a writer. The Kotlin module turns a missing or null field into a parse
+     * failure, not a null in a non-nullable property; an undeclared field is ignored, as the format says.
      */
     private val mapper: ObjectMapper =
         ObjectMapper(
@@ -56,6 +57,7 @@ class FilesystemZipImportArchiveStore(
                 ).build(),
         ).registerModule(JavaTimeModule())
             .registerKotlinModule()
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 
     override fun hasFreeSpace(requiredBytes: Long): Boolean {
         Files.createDirectories(tmpDir)
