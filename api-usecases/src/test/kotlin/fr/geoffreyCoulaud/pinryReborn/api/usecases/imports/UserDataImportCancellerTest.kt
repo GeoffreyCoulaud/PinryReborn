@@ -157,6 +157,42 @@ class UserDataImportCancellerTest : BaseTest() {
     }
 
     @Test
+    fun `Given a pending import claimed while the request ran, Then the archive is left to the walk`() {
+        // Given: the runner claims the row between the read and the fence, so the walk holds the archive.
+        // The PENDING arm would delete it from under a live read, which is what the RUNNING arm refuses.
+        val read = importWith(state = UserDataImportState.PENDING, taskId = randomUUID())
+        every { repository.findById(importId) } answers {
+            if (transactions.inside) read.copy(state = UserDataImportState.RUNNING) else read
+        }
+        every { repository.save(any()) } answers { firstArg() }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
+        verifyCancelled()
+        verify(exactly = 0) { archiveStore.delete(any()) }
+        verify(exactly = 0) { cancelTask.cancel(any()) }
+    }
+
+    @Test
+    fun `Given an upload completed while the request ran, Then the partial upload is left where it is`() {
+        // Given: the completer promotes and moves the row on in that window, so unlinking the upload
+        // here would take the source of an archive being promoted. The sweep fences on the same reason.
+        val read = importWith(state = UserDataImportState.AWAITING_ARCHIVE)
+        every { repository.findById(importId) } answers {
+            if (transactions.inside) read.copy(state = UserDataImportState.COMPLETED) else read
+        }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
+        verify(exactly = 0) { archiveStore.discardPartialUpload(any()) }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
     fun `Given a pending import with no task id, Then no cancellation is attempted and the archive still goes`() {
         // Given: the column is nullable because the row exists before its task does, so nothing here
         // may depend on it being set, whatever the hand-over now guarantees
