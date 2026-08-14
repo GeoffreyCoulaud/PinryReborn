@@ -72,7 +72,7 @@ class UserDataImportRunner(
         val userDataImport = importRepository.findById(importId)?.takeIf { it.state.isRunnable() } ?: return
         val user = requireUser(userDataImport)
         val runToken = UUID.randomUUID()
-        val claimed = claim(userDataImport, runToken)
+        val claimed = claim(importId, runToken) ?: return
         replay(project(claimed, runToken), user, isLastAttempt, renewLease)
     }
 
@@ -122,15 +122,16 @@ class UserDataImportRunner(
         userRepository.findUserById(userDataImport.userId)
             ?: markFailed(userDataImport.id, USER_GONE, "the account no longer exists") { it.state.isRunnable() }
 
-    /** Step 2: one transaction writes the fence token, the state and the first attempt's instant. */
-    private fun claim(userDataImport: UserDataImport, runToken: UUID): UserDataImport =
-        transactionRunner.inTransaction {
-            importRepository.save(
-                userDataImport.copy(
-                    state = UserDataImportState.RUNNING,
-                    runToken = runToken,
-                    startedAt = userDataImport.startedAt ?: clock.now(),
-                ),
+    /**
+     * Step 2, on the row as it is now: null when it stopped being runnable while the account was looked
+     * up, which a merge of the copy read before that lookup would have restored to RUNNING instead.
+     */
+    private fun claim(importId: UUID, runToken: UUID): UserDataImport? =
+        fenced(importId, { it.state.isRunnable() }) {
+            it.copy(
+                state = UserDataImportState.RUNNING,
+                runToken = runToken,
+                startedAt = it.startedAt ?: clock.now(),
             )
         }
 
