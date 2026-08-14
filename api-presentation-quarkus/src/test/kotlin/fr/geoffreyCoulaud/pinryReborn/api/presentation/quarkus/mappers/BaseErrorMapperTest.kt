@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.Probl
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.BaseError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ErrorCode
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ExportTooSoonError
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportChunkOffsetMismatchError
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.ws.rs.core.Response
@@ -275,5 +276,33 @@ class BaseErrorMapperTest {
         val exception = BaseError(message = "boom", code = ErrorCode.USERNAME_ALREADY_EXISTS)
         val response = mapper.toResponse(exception)
         assertNull(response.getHeaderString("Retry-After"))
+    }
+
+    @Test
+    fun `Given an ImportChunkOffsetMismatchError, Then the problem names the current length as a member`() {
+        // Given: a client resumes from that length, and parsing it out of an English sentence is not a
+        // contract. RFC 7807 extension members are what `code` already uses.
+        val exception = ImportChunkOffsetMismatchError(currentLength = 4096, cause = IllegalStateException())
+
+        // When
+        val response = mapper.toResponse(exception)
+
+        // Then
+        assertEquals(409, response.status)
+        val body = response.entity as ProblemDetail
+        assertEquals("IMPORT_CHUNK_OFFSET_MISMATCH", body.code)
+        assertEquals(4096L, body.currentLength)
+    }
+
+    @Test
+    fun `Given a plain BaseError, Then the problem carries no current length`() {
+        // Given: the member belongs to one refusal, so every other payload keeps the shape it had
+        val exception = BaseError(message = "boom", code = ErrorCode.USERNAME_ALREADY_EXISTS)
+
+        // When
+        val response = mapper.toResponse(exception)
+
+        // Then
+        assertNull((response.entity as ProblemDetail).currentLength)
     }
 }

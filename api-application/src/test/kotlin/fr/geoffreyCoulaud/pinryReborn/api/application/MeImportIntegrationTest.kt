@@ -343,9 +343,9 @@ class MeImportIntegrationTest : IntegrationTest() {
             .then().statusCode(409).body("code", equalTo("IMPORT_CHUNK_OFFSET_MISMATCH")).extract().jsonPath()
 
         // Then: the client resumes from the length the refusal reported, and the archive still reads.
-        // The refusal carries that length in its `detail` sentence and nowhere else, so this is what a
-        // client has to read to resume.
-        val reportedLength = replayed.getString("detail").takeLastWhile { it.isDigit() }.toLong()
+        // Read off the problem's own member, since a number a client has to parse out of an English
+        // sentence is not a contract.
+        val reportedLength = replayed.getLong("currentLength")
         assertEquals(afterSecond.getLong("uploadedBytes"), reportedLength)
         uploadChunk(auth, importId, chunks[2], reportedLength).then().statusCode(200)
         completeArchive(auth, importId)
