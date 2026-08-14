@@ -112,6 +112,25 @@ class UserDataImportCancellerTest : BaseTest() {
     }
 
     @Test
+    fun `Given a pending import whose key column was never written, Then the derived key is still deleted`() {
+        // Given: the fixture above stores exactly what the key derives, so it cannot tell one from the
+        // other; with the column null, only a derived key names those bytes.
+        val taskId = randomUUID()
+        every { repository.findById(importId) } returns
+            importWith(state = UserDataImportState.PENDING, taskId = taskId).copy(storageKey = null)
+        every { cancelTask.cancel(taskId) } returns true
+        every { archiveStore.delete(storageKey) } just runs
+        every { repository.save(any()) } answers { firstArg() }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
+        verify { archiveStore.delete(storageKey) }
+        verifyCancelled()
+    }
+
+    @Test
     fun `Given a pending import with no task id, Then no cancellation is attempted and the archive still goes`() {
         // Given: a completer that died between the PENDING write and the task id write leaves this row
         every { repository.findById(importId) } returns
