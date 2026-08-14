@@ -19,6 +19,9 @@ interface ArchiveSource : AutoCloseable {
      */
     fun <T : Any> readJsonLines(name: String, type: Class<T>, block: (Sequence<ArchiveLine<T>>) -> Unit)
 
-    /** The raw bytes of one entry, or null when absent. The caller closes the stream. */
+    /**
+     * The raw bytes of one entry, or null when absent. The caller closes the stream, and every failure of
+     * that stream is an [ArchiveEntryUnreadableException]: one line's business, never the whole archive's.
+     */
     fun openEntry(name: String): InputStream?
 }

@@ -15,6 +15,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooManyPixelsException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ProbeResult
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveBoundExceededException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveEntryUnreadableException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveLine
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveSource
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
@@ -402,16 +403,21 @@ class UserDataImportRunner(
     }
 
     /**
-     * `LINE_REJECTED` makes "one bad entry never fails an import" structural: every per-line failure with
-     * no better kind lands there. Caught at [RuntimeException], so a full disk still escapes and retries.
+     * `LINE_REJECTED` makes "one bad entry never fails an import" structural: the archive's own
+     * [ArchiveEntryUnreadableException] lands there too, while a write failure escapes and retries.
      */
     @Suppress("TooGenericExceptionCaught")
     private fun importPin(walk: PinWalk, line: ArchiveLine<ImportedPin>): Boolean =
         try {
             settle(walk, line.line, outcomeFor(walk, line))
         } catch (error: RuntimeException) {
-            settle(walk, line.line, reported(UserDataImportIssueKind.LINE_REJECTED, null, error.toString()))
+            rejected(walk, line.line, error)
+        } catch (error: ArchiveEntryUnreadableException) {
+            rejected(walk, line.line, error)
         }
+
+    private fun rejected(walk: PinWalk, line: Int, error: Exception): Boolean =
+        settle(walk, line, reported(UserDataImportIssueKind.LINE_REJECTED, null, error.toString()))
 
     private fun settle(walk: PinWalk, line: Int, outcome: PinOutcome): Boolean =
         when (val created = outcome.created) {

@@ -3,10 +3,12 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 import com.fasterxml.jackson.core.JacksonException
 import com.fasterxml.jackson.databind.ObjectMapper
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveBoundExceededException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveEntryUnreadableException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveLine
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ArchiveSource
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.util.zip.ZipFile
 
@@ -57,9 +59,31 @@ internal class ZipArchiveSource(
         BufferedInputStream(zip.getInputStream(entry)).use { stream -> block(lines(stream, type)) }
     }
 
-    override fun openEntry(name: String): InputStream? = zip.getEntry(name)?.let { zip.getInputStream(it) }
+    override fun openEntry(name: String): InputStream? =
+        zip.getEntry(name)?.let { entry -> EntryStream(name, reading(name) { zip.getInputStream(entry) }) }
 
     override fun close() = zip.close()
+
+    /** The entry's own failures, named as such: opening the stream raises like reading it does. */
+    private fun <T> reading(name: String, read: () -> T): T =
+        try {
+            read()
+        } catch (error: IOException) {
+            throw ArchiveEntryUnreadableException("Entry $name could not be read: $error", error)
+        }
+
+    /**
+     * Every read of an entry, and its close, translated. An inflater reaches corruption byte by byte,
+     * so the failure lands in the middle of a caller that is already writing what it read.
+     */
+    private inner class EntryStream(private val name: String, private val delegate: InputStream) : InputStream() {
+        override fun read(): Int = reading(name) { delegate.read() }
+
+        override fun read(destination: ByteArray, offset: Int, length: Int): Int =
+            reading(name) { delegate.read(destination, offset, length) }
+
+        override fun close() = reading(name) { delegate.close() }
+    }
 
     /**
      * A bad line is reported and walked past, never ending the walk: a walk that ends is
