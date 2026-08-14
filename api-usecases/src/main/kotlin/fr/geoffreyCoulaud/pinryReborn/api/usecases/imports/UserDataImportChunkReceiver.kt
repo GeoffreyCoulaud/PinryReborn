@@ -16,7 +16,7 @@ import java.util.UUID
 
 /**
  * Appends one chunk of an import archive (spec §6). Deliberately not `@ApplicationScoped`: its two
- * bounds are plain scalars with no producer until the wiring task, as the export's requester was.
+ * bounds are plain scalars ARC cannot resolve, so `ImportProducers` is the one place it is built.
  */
 class UserDataImportChunkReceiver(
     private val repository: UserDataImportRepositoryInterface,

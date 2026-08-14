@@ -7,12 +7,14 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.CancelTask
+import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 
 /**
  * Cancels an import (spec §6). Rows already written stay: an import is not a transaction, and what
- * it created belongs to the account. Not `@ApplicationScoped`: [ImportArchiveStore] has no producer yet.
+ * it created belongs to the account.
  */
+@ApplicationScoped
 class UserDataImportCanceller(
     private val getter: UserDataImportGetter,
     private val repository: UserDataImportRepositoryInterface,

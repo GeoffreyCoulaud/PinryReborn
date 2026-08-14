@@ -40,9 +40,9 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 /** Replays an import archive into its owner's account (spec section 8): a conflict is a skip. */
-// Not `@ApplicationScoped`: the bounds have no producer. LongParameterList and TooManyFunctions: the
-// ports plus the six bounds of spec section 9 have no type to group them, and each step being its own
-// named helper is what keeps every one of them under LongMethod.
+// Not `@ApplicationScoped`: `ImportProducers` builds it, since ARC resolves none of its six bounds.
+// LongParameterList and TooManyFunctions: those bounds have no type to group them with the ports, and
+// each step being its own named helper is what keeps every one of them under LongMethod.
 @Suppress("LongParameterList", "TooManyFunctions")
 class UserDataImportRunner(
     private val importRepository: UserDataImportRepositoryInterface,

@@ -12,8 +12,7 @@ import java.time.Duration
 
 /**
  * The one place both halves of the chunk bound are readable: `imports.*` is declared in the worker
- * module and the body limit is Quarkus's own, so only a booted container resolves the two together.
- * The default profile, so this joins the running instance rather than costing a second boot.
+ * module, the body limit is Quarkus's own. Default profile, so this joins the running instance.
  */
 @QuarkusTest
 class ImportsConfigIntegrationTest {

@@ -12,12 +12,11 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportArchiveEmpty
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportNotAwaitingArchiveError
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.UserDataImportTask
+import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 
-/**
- * Closes an upload and hands the archive to the worker (spec §6). Deliberately not
- * `@ApplicationScoped`: [ImportArchiveStore] has no producer until the wiring task.
- */
+/** Closes an upload and hands the archive to the worker (spec §6). */
+@ApplicationScoped
 class UserDataImportArchiveCompleter(
     private val repository: UserDataImportRepositoryInterface,
     private val archiveStore: ImportArchiveStore,
