@@ -92,7 +92,7 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     }
 
     private fun stubRowWrites() {
-        every { repository.save(any()) } answers { firstArg<UserDataImport>().also { row = it } }
+        every { repository.save(any()) } answers { firstArg<UserDataImport>().also { saved -> row = saved } }
     }
 
     private fun stubArchiveDeletion() {

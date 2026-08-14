@@ -42,3 +42,15 @@ internal fun UserDataImportRepositoryInterface.saveFenced(
     transactionRunner.inTransaction {
         findById(importId)?.takeIf(held)?.let { save(update(it)) }
     }
+
+/**
+ * The fence both upload writes take (spec §6): their windows are wide, a chunk streaming to disk and a
+ * digest of up to twenty gigabytes, so a caller that lost the phase is refused as a late one is.
+ */
+internal fun UserDataImportRepositoryInterface.saveWhileAwaitingArchive(
+    transactionRunner: TransactionRunner,
+    importId: UUID,
+    update: (UserDataImport) -> UserDataImport,
+): UserDataImport =
+    saveFenced(transactionRunner, importId, { it.state == UserDataImportState.AWAITING_ARCHIVE }, update)
+        ?: throw ImportNotAwaitingArchiveError()
