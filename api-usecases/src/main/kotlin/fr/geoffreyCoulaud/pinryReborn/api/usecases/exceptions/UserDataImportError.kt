@@ -12,8 +12,9 @@ class ImportDoesNotExistError : UserDataImportError("Import does not exist", Err
 class ImportPermissionError :
     UserDataImportError("Import belongs to another user", ErrorCode.IMPORT_INSUFFICIENT_PERMISSIONS)
 
-class ImportNotAwaitingArchiveError :
-    UserDataImportError("Import is past its upload phase", ErrorCode.IMPORT_NOT_AWAITING_ARCHIVE)
+/** [cause] is set when the upload file is what said so, the canceller having unlinked it first. */
+class ImportNotAwaitingArchiveError(cause: Throwable? = null) :
+    UserDataImportError("Import is past its upload phase", ErrorCode.IMPORT_NOT_AWAITING_ARCHIVE, cause)
 
 /** Carries [currentLength] so a client resumes from the reported offset rather than restarting. */
 class ImportChunkOffsetMismatchError(val currentLength: Long, cause: Throwable) :

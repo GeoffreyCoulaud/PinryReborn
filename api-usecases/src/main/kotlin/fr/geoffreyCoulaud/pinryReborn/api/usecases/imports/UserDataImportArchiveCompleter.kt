@@ -14,6 +14,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.exceptions.ImportNotAwaitingA
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.UserDataImportTask
 import jakarta.enterprise.context.ApplicationScoped
+import java.nio.file.NoSuchFileException
 import java.util.UUID
 
 /** Closes an upload and hands the archive to the worker (spec §6). */
@@ -34,7 +35,7 @@ class UserDataImportArchiveCompleter(
         // The row is the authority on what the upload received; with nothing behind it, the store would
         // open an upload file no chunk ever created and raise an untyped IOException.
         if (userDataImport.uploadedBytes == 0L) throw ImportArchiveEmptyError()
-        val staged = archiveStore.finishUpload(importId)
+        val staged = onTheUpload { archiveStore.finishUpload(importId) }
         val storageKey = ImportArchiveKey.forImport(importId)
         // Named before the bytes are there, as the export builder does: a completer that dies right
         // after the promote still leaves an archive some row points at. Fenced ahead of the promote, so
@@ -42,7 +43,7 @@ class UserDataImportArchiveCompleter(
         repository.saveWhileAwaitingArchive(transactionRunner, importId) {
             it.copy(storageKey = storageKey, byteSize = staged.byteSize)
         }
-        archiveStore.promote(staged, storageKey)
+        onTheUpload { archiveStore.promote(staged, storageKey) }
         return try {
             handOver(importId)
         } catch (error: ImportNotAwaitingArchiveError) {
@@ -52,6 +53,17 @@ class UserDataImportArchiveCompleter(
             throw error
         }
     }
+
+    /**
+     * The cancellation unlinks the upload before it writes `CANCELLED`, so the file goes while the row
+     * still reads `AWAITING_ARCHIVE`: the caller is told now what its next `GET` would tell it anyway.
+     */
+    private fun <T> onTheUpload(touch: () -> T): T =
+        try {
+            touch()
+        } catch (error: NoSuchFileException) {
+            throw ImportNotAwaitingArchiveError(error)
+        }
 
     /**
      * The transition, the task and the row naming it in one transaction: a failure anywhere leaves an

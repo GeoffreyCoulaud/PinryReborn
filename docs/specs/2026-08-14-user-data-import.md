@@ -570,6 +570,12 @@ completer went straight to `finishUpload`, which opens the upload file, so an im
 chunk raised `NoSuchFileException` and reached its owner as a `500`. The row's `uploadedBytes`
 settles it in the use case, before the store is touched.
 
+The row is not the only way that file goes. **A cancellation unlinks the partial upload before it
+writes `CANCELLED`**, so a `DELETE` landing between the owner read and `finishUpload`, or between the
+storage key fence and the atomic move, leaves the store opening a path that is gone while the state
+still reads `AWAITING_ARCHIVE`. The completer translates `NoSuchFileException` from either call into
+`IMPORT_NOT_AWAITING_ARCHIVE`, which is what the caller's next `GET` shows anyway.
+
 Failure codes on the row: `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
 `UNSUPPORTED_FORMAT_VERSION`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`. `DISK_FULL` was listed here in
 an earlier revision and is dropped: see section 9 for why the walk cannot honestly tell a full disk
