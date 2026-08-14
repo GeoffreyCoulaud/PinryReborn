@@ -1,11 +1,11 @@
 # User data import (portability)
 
 Date: 2026-08-14
-Status: draft, pending approval
-Depends on: the export archive format (`docs/specs/2026-07-22-user-data-export.md` §4, `formatVersion` 1),
-the task queue (`EnqueueTask`, `CancelTask`, `TaskHandler`, `renewLease`), `ImageStore`, `ImageProbe`,
-the pin / board / tag / image repositories, `TransactionRunner`, `Clock`. One new adapter-only
-dependency (`jackson-module-kotlin`, via the Quarkus BOM).
+Status: draft, revised after the six spec angles, pending approval
+Depends on: the export archive format (`docs/specs/2026-07-22-user-data-export.md` section 4,
+`formatVersion` 1), the task queue (`EnqueueTask`, `CancelTask`, `TaskHandler`, `renewLease`),
+`ImageStore`, `ImageProbe`, the pin / board / tag / image repositories, `TransactionRunner`, `Clock`.
+One new adapter-only dependency (`jackson-module-kotlin`, version-managed by the Quarkus BOM).
 
 ## 1. Goal
 
@@ -13,124 +13,154 @@ Let an authenticated user re-create their pins, boards, tags and images on this 
 export archive. Export shipped the first half of the "User data import / export (portability)"
 backlog item; this is the second.
 
-Three user scenarios are served, and after the design below they are **one code path**, not three:
+Three user scenarios are served by **one** code path:
 
 - **Moving house.** A user opens an account on another instance, or reinstalls their own, and pours
   their archive into an empty account.
 - **Merging accounts.** A user pours an archive into an account that already holds data.
-- **Restoring.** A user replays last week's archive after deleting things by mistake.
+- **Restoring.** A user replays an archive after losing data.
+
+Restoring is served **partially**, and section 14 says exactly how much: an import creates what is
+absent, so it recovers hard-deleted rows and never recovers an edit, a removed membership or a pin
+sitting in the recycle bin.
 
 ## 2. Scope
 
 **In scope:**
 
-- **Create an import** (`POST /api/v1/me/imports`), returning `202` and an import resource awaiting
-  its archive.
-- **Upload the archive** (`PUT /api/v1/me/imports/{id}/archive`), several gigabytes, streamed to
-  disk, enqueuing the `account.import` task.
-- **Track** (`GET /api/v1/me/imports`, `GET /api/v1/me/imports/{id}`) with a progress figure, and
-  **read the report** (`GET /api/v1/me/imports/{id}/issues`).
+- **Create an import** (`POST /api/v1/me/imports`), returning `202` and a resource awaiting its archive.
+- **Chunked archive upload** (`PUT /api/v1/me/imports/{id}/archive?offset=N`, then
+  `POST .../archive/complete`), each chunk bounded so the server-wide body limit does not move.
+  Interrupted uploads resume from the byte count the resource reports.
+- **Track** (`GET /api/v1/me/imports`, `GET /api/v1/me/imports/{id}`) and **read the report**
+  (`GET /api/v1/me/imports/{id}/issues`).
 - **Cancel** (`DELETE /api/v1/me/imports/{id}`), with the partial state it leaves.
-- **Asynchronous replay** in the worker: read the archive, create what is missing, skip what is
-  already there, record every anomaly.
-- **Two uniqueness constraints the import needs**: `(user, tag.name)` and `(user, board.name)`, both
-  case insensitive. The board one changes a public contract (§12).
-- **Account deletion erases imports** (rows, issues and archive bytes).
+- **Asynchronous replay** in the worker: create what is missing, skip what is already there, record
+  every anomaly, resume from a cursor after any interruption.
+- **Validation of archive content**, treated exactly as a request DTO is treated (section 4.1).
+- **Two uniqueness constraints**: `(author_id, name collate nocase)` on tags and on boards, covering
+  recycled rows. The board one changes a public contract at three sites (section 12).
+- **Account deletion erases imports** (rows, issues and archive bytes): section 10.
+- **A non-unique index on `images.content_hash`**, without which the pin lookup is a table scan per
+  pin (section 11).
 
-**Out of scope (deferred to the backlog):**
+**Out of scope (backlog):**
 
-- **Override mode.** Rejected in §3, with the reason.
-- **Selective import** (one board, skip the recycle bin), **partial export**, **merging metadata
-  onto an existing pin**, **resumable chunked upload**, **per-account storage quotas**, **importing
-  pins that carry no media**.
+- **Override mode.** Rejected in section 3, with the reason.
+- **Selective import** (one board, skip the recycle bin), **partial export**, **merging metadata onto
+  an existing pin**, **per-account storage quotas**, **importing pins that carry no medium**,
+  **forbidding duplicate media in an account**.
 
 ## 3. Key decisions
 
-- **The import is additive and never destructive.** It creates what is missing and leaves everything
-  else alone. It never modifies, deletes or re-parents an existing row.
-- **Override mode is rejected, and this is the load-bearing decision of the whole design.** An
-  earlier design had the server compute a plan of overwrites, present it, and apply only the
-  pre-approved set. It was dropped because no user scenario needs it: moving house lands in an empty
-  account, merging wants addition, and restoring wants what was lost back rather than what survived
-  replaced. Everything downstream follows from this: no step-up re-authentication (§9), no two-phase
-  approval, no transactional rollback, and idempotence for free (§8).
-- **A conflict means skip, and skipping is reported.** The alternatives (complete the existing
-  entity, create a duplicate) are backlog items, not v1 behaviour.
+- **The import never modifies or deletes anything that already exists.** It creates what is missing
+  and leaves everything else alone. Every rule below is subordinate to this one, including the
+  handling of recycled boards in section 8, which is where the first draft of this spec contradicted
+  it.
+- **Override mode is rejected, and this is the load-bearing decision.** An earlier design had the
+  server compute a plan of overwrites, present it, and apply only the pre-approved set. It was
+  dropped because no user scenario needs it: moving house lands in an empty account, merging wants
+  addition, and restoring wants what was lost back rather than what survived replaced. Everything
+  downstream follows: no two-phase approval, no transactional rollback, no step-up (section 9), and
+  idempotence (below).
+- **A conflict means skip, and every skip is counted.** Pin skips are counted and, when they are not
+  the ordinary "already present" case, detailed. Tag and board skips are counted too, so a merge can
+  distinguish "nothing to do" from "did nothing".
 - **Identity is a natural key, never an archive UUID.** Archive identifiers are read and discarded;
-  every created row gets a fresh `randomUUID()`. Reusing them would let a user choose their own
-  primary keys, and would make the same archive un-importable by two users on one instance, which is
-  a case this design supports.
-- **The natural keys are: tag by name, board by name, pin by the SHA-256 of its media.** All name
-  comparisons are case insensitive.
-- **A pin with no image in the archive is skipped and reported.** A pin is metadata over a medium;
-  with no medium there is nothing to anchor it to, and no identity to make a re-import idempotent.
-  The cost is stated as an accepted limit (§14): a pin whose image download was pending or had
-  failed does not survive the round trip, and neither does one whose bytes the exporter could not
-  write.
+  every created row gets a fresh `randomUUID()`. Reusing them would let a user choose primary keys,
+  and would stop two users of one instance importing the same file.
+- **The natural keys: tag by name, board by name, pin by the SHA-256 of its medium.** Name
+  comparisons fold ASCII case only (section 12 states the fold and its limit).
+- **A pin with no medium in the archive is skipped and reported.** A pin is metadata over a medium;
+  with no medium there is nothing to anchor it to and no identity to make a re-import idempotent.
 - **When the SHA-256 matches more than one existing pin, the import does nothing and reports it.**
-  Nothing today forbids two pins on the same medium (`uq_images_pin_id` binds a pin to at most one
-  image, but no constraint binds a medium to at most one pin), so the key can return several rows.
-  Inventing a winner would be arbitrary; a visible refusal is not. Whether the product should forbid
-  duplicate media at all is a backlog question, not this lot's.
-- **The archive's timestamps are restored**, clamped to the import instant when they are in the
-  future. This bends the project invariant that instants come from the `Clock` port, deliberately
-  and narrowly: the bend covers only what the import restores, never what it invents (identifiers,
-  the import's own timestamps). Without it, moving house re-dates three thousand pins to the same
-  second and destroys the chronology the export spec paid to preserve (its §3).
-- **Recycled pins and boards are imported and land in the recycle bin**, carrying their `deletedAt`.
-- **The manifest is never trusted for anything that has a consequence.** Every image is staged and
-  probed exactly like an upload: the stored `mimeType`, dimensions and `animated` flag come from
-  `ImageProbe`, never from the archive. `ImageController.serveOriginal` serves the stored media type,
-  so copying an unverified one is stored cross-site scripting by the shortest path. The manifest is
-  read for two harmless things: knowing which entries to expect, and displaying a progress figure.
-- **Verifying the SHA-256 is free and is done.** `ImageStore.stage` already computes size and digest
-  in one pass over bytes that must be written anyway; comparing the result costs a string equality.
-- **The digest is computed before the probe, and the probe runs only for new media.** Reading and
-  hashing is cheap, a libvips probe is not. A re-import of three thousand known images therefore
-  costs three thousand reads and zero probes.
-- **Upload is its own request.** `POST` creates the resource, `PUT` pours the bytes. The gain is
-  refusing early: a user on a slow link learns that an import is already running before spending
-  forty minutes uploading, not after. Note what this does **not** buy: `quarkus.http.limits.max-body-size`
-  is a single server-wide setting (`ServerLimitsConfig`, run-time phase) with no documented per-route
-  override, so accepting multi-gigabyte archives raises the limit for every route. The image path is
-  unaffected in practice: its 30 MiB bound is enforced by the use case, and `application.properties`
-  already states the framework is only a backstop there.
-- **The archive is destroyed when the import ends**, whatever the outcome.
-- **The import is idempotent, and that is what makes recovery correct.** Replaying an archive from
-  the start creates what is missing and skips what exists, which is exactly what it does against a
-  non-empty account. The cursor (§8) is therefore an optimisation and a progress source, not a
-  correctness mechanism.
+  Nothing binds a medium to at most one pin today, so the key can return several rows. Inventing a
+  winner would be arbitrary; a visible refusal is not.
+- **The archive's timestamps are restored, clamped at both ends.** Any restored instant earlier than
+  the account's `createdAt` is raised to it, any instant later than the import instant is lowered to
+  it, and `updatedAt` is floored at the clamped `createdAt`. Clamping only the future, as the first
+  draft did, let a syntactically valid `Instant` of year -999999999 reach a pagination sort key.
+- **The archive is a request payload and is validated as one.** Section 4.1 restates the bounds the
+  REST DTOs carry, because the import is a second write path into the same tables and no entity and
+  no use case enforces them today. Without this, an archive plants a 20 MB board name that then
+  becomes an index key its owner can never use again.
+- **The manifest is never trusted for anything with a consequence.** Every image is probed; the
+  stored `mimeType`, dimensions and `animated` flag come from `ImageProbe`, never from the archive.
+  `ImageController.serveOriginal` serves the stored media type, so copying an unverified one is
+  stored cross-site scripting by the shortest path. Two harmless uses remain: knowing which entries
+  to expect, and rendering progress.
+- **The declared digest is compared and a mismatch is reported, never acted on.** It costs one
+  string comparison against a digest the import computes anyway, and it is the only signal that an
+  archive was altered or truncated in transit. It changes no outcome: the bytes are the authority.
+- **The digest is computed without staging, and the file is staged only after the lookup misses.**
+  `ImageStore.stage` writes the whole entry to a temp file and calls `force(true)` before returning,
+  so digesting through it would cost a full write plus an fsync plus a delete for every image the
+  import is about to skip, which is the dominant path in merging and restoring. `ImageStore` gains a
+  read-only `digest` operation; the archive entry is reopened for the staging pass on a miss.
+- **The runner is fenced.** Each per-pin transaction re-reads the import row and proceeds only if it
+  still holds the run. Without this, a lease expiry hands the same import to a second worker, both
+  see no pin for a digest, both create one, and that medium is `MEDIA_AMBIGUOUS` for ever: a
+  transient delay permanently poisons the natural key. The same mechanism carries cancellation.
 - **A single bad entry never fails the import.** It is skipped, reported, and the walk continues.
-  A tar-style all-or-nothing failure would waste 2999 successful pins over one truncated file, and
-  since nothing is transactional across the archive the account would be left half filled under a
-  status that says "failed", which is the worst of both.
-- **The report details anomalies and counts the rest.** A re-import of a known archive produces
-  three thousand "already present" lines that teach nothing; a broken one produces three anomalies
-  that matter. Detail is capped (§9) so the table cannot grow without bound.
+  All-or-nothing would waste thousands of good pins over one truncated file and leave a half-filled
+  account under a status that reads "failed".
+- **The report details anomalies and counts the rest.** Detail is capped (section 9); the response
+  says when it was capped rather than lying by omission.
+- **Upload is chunked, and the server-wide body limit does not move.** `max-body-size` is declared
+  once in `ServerLimitsConfig` for the whole server, with no per-route override, and it is currently
+  the only bound on two `@PermitAll` routes (`POST /api/v1/users`, `POST /api/v1/sessions`) whose
+  bodies RESTEasy materialises before validation or attempt limiting runs. It is also the only bound
+  on the multipart image route, which spools the whole body to disk before `SetPinImage` sees a byte.
+  Raising it to multi-gigabyte would therefore hand an unauthenticated caller both heap exhaustion
+  and disk exhaustion. Chunking keeps every request under the existing limit and, as a side effect,
+  makes an interrupted upload resumable rather than a full re-transfer.
 
 ## 4. What the importer reads
 
-Input contract: the archive format of `docs/specs/2026-07-22-user-data-export.md` §4, `formatVersion`
-1. Any other value is refused (§10).
+Input contract: the archive format of `docs/specs/2026-07-22-user-data-export.md` section 4,
+`formatVersion` 1. Any other value is refused (section 10). The accepted version is a single constant
+shared with the writer rather than a second copy of the literal.
 
 | Entry | Read for | Ignored |
 |---|---|---|
-| `manifest.json` | `formatVersion` (a decision), `counts.pins` (progress display only) | `entries`, `generator`, digests, `excluded` |
+| `manifest.json` | `formatVersion` (a decision), `counts.pins` (progress display only) | `entries`, `generator`, `excluded` |
 | `tags.jsonl` | `name`, `createdAt` | `id` |
 | `boards.jsonl` | `name`, `description`, `createdAt`, `updatedAt`, `deletedAt` | `id` |
-| `pins.jsonl` | `description`, `sourceContextUrl`, `sourceMediaUrl`, timestamps, `deletedAt`, `tags[].name`, `boards[].name`, `image.path` | `image` metadata other than `path`, all `id` fields |
-| `images/*` | the bytes | the names, except to locate an entry |
+| `pins.jsonl` | `description`, `sourceContextUrl`, `sourceMediaUrl`, timestamps, `deletedAt`, `tags[].name`, `boards[].name`, `image.path`, `image.sha256` (reported only) | `image.mimeType`, `width`, `height`, `animated`, `byteSize`, all `id` fields |
+| `images/*` | the bytes | the entry name, except to locate an entry |
 | `user.json`, `README.md` | nothing | everything |
 
 `user.json` is not imported: the target account already exists with its own name and creation date.
 
-**Entry paths are validated, never trusted.** A pin's `image.path` is matched against
-`images/[A-Za-z0-9._-]+` and rejected otherwise. Structurally, path traversal cannot reach the disk
-anyway: an archive entry name is only ever used to look up an entry, and every write goes through
-`ImageStore` under a storage key the import builds itself from fresh identifiers. The check exists so
-a malformed archive is reported rather than silently skipped.
+**Entry paths are validated, never trusted.** A pin's `image.path` must match the anchored pattern
+`^images/[A-Za-z0-9._-]+$` and must not end in a segment of `.` or `..`. Structurally, traversal
+cannot reach the disk anyway: an entry name is only ever a ZIP lookup key, and every write goes
+through `ImageStore` under a key the import builds from fresh identifiers. The check exists so a
+malformed archive is reported rather than silently skipped, which is why it must actually report the
+paths a reader expects it to.
+
+### 4.1 Field validation
+
+The import writes to `pins`, `boards` and `tags` through the repositories. Every bound those tables
+enjoy today lives on a REST input DTO (`BoardInputDto`, `PinCreationInputDto`, `PinTagsInputDto`);
+no entity and no use case carries an invariant. The import therefore restates them, per line, before
+writing:
+
+| Field | Bound | Source of the bound |
+|---|---|---|
+| board / tag name | non-blank, at most 200 characters | `BoardInputDto`, `PinTagsInputDto` |
+| board / pin description | at most 2000 characters | `BoardInputDto`, `PinCreationInputDto` |
+| `sourceContextUrl` | non-blank | `PinCreationInputDto` |
+| `tags[]`, `boards[]` per pin | at most 100 entries each | new: nothing bounds them today, and the list is resolved inside one transaction |
+
+A line failing any of these yields `FIELD_INVALID` and is skipped. The bounds are stated here rather
+than lifted into the entities because lifting them is a change to a shipped write path and belongs to
+its own lot; the backlog carries it.
 
 ## 5. Domain and ports
+
+Packages: entities in `domain.entities`, enums in `domain.enums`, the store port and its exception in
+`domain.imports`, mirroring how the export splits `domain.exports` from `domain.enums`.
 
 ```kotlin
 data class UserDataImport(
@@ -139,7 +169,10 @@ data class UserDataImport(
     val state: UserDataImportState,
     val requestedAt: Instant,
     val taskId: UUID? = null,
-    val archiveUploadedAt: Instant? = null,
+    val runToken: UUID? = null,
+    val uploadedBytes: Long = 0,
+    val lastUploadActivityAt: Instant? = null,
+    val archiveCompletedAt: Instant? = null,
     val startedAt: Instant? = null,
     val completedAt: Instant? = null,
     val storageKey: String? = null,
@@ -150,19 +183,31 @@ data class UserDataImport(
     val createdPins: Int = 0,
     val skippedPins: Int = 0,
     val createdBoards: Int = 0,
+    val skippedBoards: Int = 0,
     val createdTags: Int = 0,
+    val skippedTags: Int = 0,
     val issueCount: Int = 0,
+    val issueDetailTruncated: Boolean = false,
     val failureCode: String? = null,
 ) : Identifiable
 ```
 
 `UserDataImportState`: `AWAITING_ARCHIVE`, `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`,
-`ABANDONED` (created but never fed an archive). `isActive` covers the first three, and is what the
-one-import-at-a-time rule tests.
+`ABANDONED`. `isActive` covers the first three and is what the one-import-at-a-time index tests.
 
-`processedPins` is the cursor: the number of `pins.jsonl` lines settled. `announcedPins` is
-`manifest.counts.pins`, kept only to render progress, and a mismatch with the real line count is not
-an error.
+`runToken` is the fence. A runner claims the row by writing a fresh token, and every subsequent
+per-pin transaction proceeds only if the persisted token is still its own (section 8). It is also how
+cancellation is observed: the canceller writes `CANCELLED`, and the next per-pin re-read stops the
+walk.
+
+`processedPins` is the cursor. Counters are **incremented**, never assigned, so a resumed attempt
+adds to what the interrupted one had already counted; `startedAt` is stamped only when null.
+
+**The runner works from a non-nullable projection.** `RunnableImport(importId, userId, storageKey,
+runToken)` is built at one validation site in step 1 of section 8; a `PENDING` row missing its
+`storageKey` throws there, from a single reachable branch, and the rest of the walk handles no
+nullables. This is `OpenedExport`'s answer to the same coverage trap, and it is preferred to the
+`!!` plus suppression that `UserDataExportDeleter` uses, which `agents/engineering.md` forbids.
 
 ### `UserDataImportIssue`
 
@@ -178,167 +223,277 @@ data class UserDataImportIssue(
 ```
 
 `UserDataImportIssueKind`: `PIN_HAS_NO_MEDIA`, `MEDIA_ENTRY_MISSING`, `MEDIA_UNREADABLE`,
-`MEDIA_TOO_LARGE`, `MEDIA_AMBIGUOUS` (several existing pins share the digest), `LINE_MALFORMED`,
-`ENTRY_PATH_INVALID`. "Already present" is **not** an issue kind: it is `skippedPins`.
+`MEDIA_TOO_LARGE`, `MEDIA_TOO_MANY_PIXELS`, `MEDIA_AMBIGUOUS`, `MEDIA_DIGEST_MISMATCH`,
+`LINE_MALFORMED`, `FIELD_INVALID`, `ENTRY_PATH_INVALID`, `NAME_TAKEN_BY_RECYCLED`, `LINE_REJECTED`.
+
+`LINE_REJECTED` is the catch-all that makes "a single bad entry never fails the import" structural
+rather than aspirational: any per-line failure with no more specific kind lands there with its cause
+in `detail`. "Already present" is not an issue kind; it is a counter.
+
+`subject` and `detail` are truncated to 200 characters before storage, so a hostile line cannot make
+the report itself the payload.
 
 ### `ImportArchiveStore` port
 
 ```kotlin
+interface ArchiveLine<out T> {
+    val line: Int
+    val value: T?
+    val failure: String?
+}
+
 interface ArchiveSource : AutoCloseable {
-    fun entryNames(): Set<String>
-    fun <T : Any> readJson(name: String, type: Class<T>): T?
+    fun entryNames(maxEntries: Int): Set<String>
+    fun <T : Any> readJson(name: String, type: Class<T>, maxBytes: Long): T?
     fun <T : Any> readJsonLines(name: String, type: Class<T>, block: (Sequence<ArchiveLine<T>>) -> Unit)
     fun openEntry(name: String): InputStream?
 }
 
 interface ImportArchiveStore {
-    fun stage(source: InputStream): StagedFile
+    fun hasFreeSpace(requiredBytes: Long): Boolean
+    fun appendChunk(importId: UUID, offset: Long, bytes: InputStream, maxTotalBytes: Long): Long
+    fun finishUpload(importId: UUID): StagedFile
     fun promote(staged: StagedFile, storageKey: String)
     fun open(storageKey: String): ArchiveSource
     fun delete(storageKey: String)
-    fun discard(staged: StagedFile)
+    fun discardPartialUpload(importId: UUID)
     fun discardOrphanedStagedFiles(olderThan: Instant): Int
     fun forEachStorageKeyOnDisk(block: (Sequence<String>) -> Unit)
 }
 ```
 
-Mirror of `ExportArchiveStore`, same stage-then-promote shape, same loan contract on the lazy
-sequence (the adapter owns the entry stream and closes it when `block` returns). `ArchiveLine<T>`
-carries the line number and either the parsed value or the parse failure, so a malformed line becomes
-a reported issue instead of an exception that ends the walk.
+`appendChunk` refuses an `offset` that is not the current length, refuses a chunk that would carry
+the total past `maxTotalBytes`, and returns the new length. `finishUpload` fsyncs and digests, giving
+the same `StagedFile` the export's staging produces. The lazy sequence keeps `ExportArchiveStore`'s
+loan contract: the adapter owns the entry stream and closes it when `block` returns.
 
-`readJsonLines` streams: a `pins.jsonl` larger than memory is read line by line, and the sequence is
-skipped forward to the cursor rather than materialised.
+**Every read is bounded**, because the archive is hostile input: `entryNames` refuses past
+`maxEntries`, `readJson` past `maxBytes`, and `readJsonLines` refuses a line longer than
+`imports.max_line_bytes` rather than allocating until the heap is gone. Jackson's
+`StreamReadConstraints` are configured explicitly on the reader-only mapper rather than left at their
+defaults, which bound a single string but not a document.
 
-**Deserialization needs `jackson-module-kotlin`**, which is not on `api-storage-filesystem`'s
-classpath today (verified: `./gradlew :api-storage-filesystem:dependencies --configuration runtimeClasspath`
-lists only `jackson-core`, `-databind`, `-annotations` and `-datatype-jsr310`). A Kotlin data class has
-no no-argument constructor, so Jackson alone cannot instantiate one. The module is registered on a
-**reader-only `ObjectMapper`**; the export's mapper is built explicitly
-(`ObjectMapper().registerModule(JavaTimeModule())`, no `findAndRegisterModules()`), so the written
-format cannot move, and `ExportContentGoldenJsonTest` remains the proof.
+**Deserialization needs `jackson-module-kotlin`.** Not, as the first draft claimed, because Jackson
+cannot instantiate a data class: the build sets `javaParameters` and `jackson-module-parameter-names`
+is already present, so constructor binding works without it. The reason is **null safety**: without
+the Kotlin module, a missing or null JSON field lands as `null` inside a non-nullable Kotlin property
+and fails later at an unrelated site, which is precisely what an archive-driven test suite must not
+depend on. Verified absent from the module's classpath
+(`./gradlew :api-storage-filesystem:dependencies --configuration runtimeClasspath` resolves
+`jackson-core`, `-databind`, `-annotations`, `-datatype-jsr310` and nothing else). It is registered
+on a reader-only `ObjectMapper`; the export builds its own explicitly, with no
+`findAndRegisterModules()`, so the written format cannot move and `ExportContentGoldenJsonTest`
+remains the proof.
+
+`ImportAlreadyInProgressException` lives in `domain.imports`, not in `api-usecases`: the persistence
+adapter throws it and the use case rethrows `ImportAlreadyInProgressError`. `api-persistence-sqlite`
+cannot see a `BaseError`, which is why `ExportAlreadyInProgressException` exists in the domain.
 
 ### Repository ports
 
 `UserDataImportRepositoryInterface`: `save`, `findById`, `findAllForUser(userId, cursor, pageSize)`,
-`findActiveForUser`, `findAbandonedBefore(instant)`, `findAllImportIdsForUser`, `deleteAllForUser`.
+`findAbandonableBefore(instant)`, `findReclaimableTerminal()`, `findMissingImportIds(candidates)`,
+`findAllImportIdsForUser`, `deleteAllForUser`.
+
+There is deliberately **no** `findActiveForUser` used as a pre-insert check. ADR 0009 decision 2
+forbids a read that exists solely to answer a uniqueness question an index already answers, and the
+export's retained read is that ADR's one written exception, kept because it orders a `409` ahead of a
+`429`. This import has no minimum interval and therefore no second refusal to order, so the index is
+the only authority and the adapter translates its violation.
 
 `UserDataImportIssueRepositoryInterface`: `save`, `findAllForImport(importId, cursor, pageSize)`,
 `countForImport`, `deleteAllForImport`, `deleteAllForUser`.
 
-`ImageRepositoryInterface` gains **`findPinIdsByContentHashForUser(user, contentHash): List<UUID>`**.
-It returns a list rather than a nullable single row, because that is what makes the ambiguous case
-(§3) visible instead of arbitrary.
+`PinRepositoryInterface` gains **`findPinIdsByContentHashForUser(user, contentHash): List<UUID>`**,
+and it lives there rather than on `ImageRepositoryInterface` because `ImageModel` carries `pinId` as
+a plain column with no association to `PinModel`, so a query rooted on images can reach neither the
+author nor the soft-delete state. It reads **every state** (`PinQueries.any()`), per ADR 0008's
+requirement that a read name its state: filtering to active pins would silently create a second copy
+of a pin the user had recycled, which breaks idempotence. It returns a list, not a nullable row,
+because no constraint guarantees at most one.
 
-`TagRepositoryInterface.findUserTagByName` becomes case insensitive (§12).
+`BoardRepositoryInterface` gains **`findBoardForUserByName(user, name): Board?`**, case insensitive,
+reading **every state**: a recycled board holds its name (section 12), so a finder blind to the
+recycle bin would try to create a board whose name is already taken and hit the index.
+
+`TagRepositoryInterface.findUserTagByName` becomes case insensitive, following `UserRepository`'s
+`ieq` against `ix_users_name_nocase`.
 
 ## 6. Use cases
 
-- **`UserDataImportCreator.create(user)`**: refuses when an active import exists
-  (`IMPORT_ALREADY_IN_PROGRESS`), inserts an `AWAITING_ARCHIVE` row. No step-up factor (§9).
-- **`UserDataImportArchiveReceiver.receive(user, importId, bytes)`**: owner check, state check
-  (`AWAITING_ARCHIVE` only), stages the bytes, promotes them under a key derived from the import id,
-  writes `PENDING` with `storageKey`, `byteSize` and `archiveUploadedAt`, enqueues `account.import`
-  and stores the returned task id. The storage key is written **before** the promote, same reasoning
-  as the export builder: a key derived from the id keeps the bytes reclaimable even if the row is
-  never written again.
-- **`UserDataImportRunner.run(importId, isLastAttempt, renewLease)`**: the worker path (§8).
-- **`UserDataImportGetter`**: by id (owner checked) and the user's paginated history.
-- **`UserDataImportIssueLister.list(user, importId, cursor, pageSize)`**: owner checked.
-- **`UserDataImportCanceller.cancel(user, importId)`**: owner check; `AWAITING_ARCHIVE` and
-  `PENDING` cancel the task and move to `CANCELLED`; `RUNNING` sets a cancellation flag the runner
-  observes between two pins, so the walk stops at a settled boundary; terminal states are a no-op.
-  The rows already written stay: an import is not a transaction, and the report says where it stopped.
-- **`ReapAbandonedUserDataImports.reap()`**: moves `AWAITING_ARCHIVE` rows older than
-  `imports.upload_grace` to `ABANDONED` so one forgotten upload cannot block the account forever,
-  deletes the archive bytes of every terminal row, and sweeps orphaned staged files.
-- **`UserDataImportTask`**: `KIND = "account.import"`, `MAX_ATTEMPTS = 3`.
+- **`UserDataImportCreator.create(user)`**: inserts an `AWAITING_ARCHIVE` row, letting the partial
+  unique index refuse a second active import. No step-up (section 9), no task yet.
+- **`UserDataImportChunkReceiver.receive(user, importId, offset, bytes)`**: owner check, then state
+  check (`AWAITING_ARCHIVE` only), then a free-space check, then `appendChunk`, then stamps
+  `uploadedBytes` and `lastUploadActivityAt`. Refuses an out-of-order offset with the current length
+  so a client can resume without guessing.
+- **`UserDataImportArchiveCompleter.complete(user, importId)`**: `finishUpload`, write `storageKey`
+  and `byteSize`, promote, move to `PENDING`, enqueue `account.import` below `account.deletion`'s
+  priority, store the task id. The storage key is written **before** the promote, as the export
+  builder does, so bytes are reclaimable even if the row is never written again.
+- **`UserDataImportRunner.run(importId, isLastAttempt, renewLease)`**: the worker path (section 8).
+- **`UserDataImportGetter`**, **`UserDataImportIssueLister`**: owner-checked reads.
+- **`UserDataImportCanceller.cancel(user, importId)`**: owner check; `AWAITING_ARCHIVE` discards the
+  partial upload and moves to `CANCELLED` (no task exists yet, so none is cancelled); `PENDING`
+  cancels the task, deletes the archive and moves to `CANCELLED`; `RUNNING` writes `CANCELLED` and
+  lets the fence stop the walk at the next pin, the runner deleting the archive as it returns;
+  terminal states are a no-op. Rows already written stay: an import is not a transaction.
+- **`ReapAbandonedUserDataImports.reap()`**: moves `AWAITING_ARCHIVE` rows whose
+  `lastUploadActivityAt` (falling back to `requestedAt`) is older than `imports.upload_grace` to
+  `ABANDONED`, discarding their partial uploads; deletes the archive bytes of terminal rows that
+  still have some, stamping the row so the same bytes are not re-deleted every hour; moves a
+  `RUNNING` row whose task is `DEAD` or absent to `FAILED` with `IMPORT_INTERRUPTED`; and sweeps
+  orphaned staged files.
+- **`ReapOrphanedStorage`** gains the import half, pairing `forEachStorageKeyOnDisk` with
+  `findMissingImportIds`, exactly as it already does for exports. Without it, an archive promoted by
+  a completer that died before writing its row is unreclaimable, and ADR 0003 makes the sweep the
+  guarantor of residue.
+- **`AccountDeletionCleaner`** deletes issues, then import rows, inside its transaction (before the
+  user row), and the archive bytes after the commit, keyed on the **derived** key rather than the
+  stored column, so an archive promoted by a completer that died is still reclaimed. This mirrors the
+  export half already in that class.
+- **`UserDataImportTask`**: `KIND = "account.import"`, `MAX_ATTEMPTS = 5`.
 
 ## 7. REST surface
 
-All endpoints `@Authenticated` and owner-scoped (`403` for a non-owner, `404` for an unknown id).
+All endpoints `@Authenticated` and owner-scoped (`403` for a non-owner, `404` for an unknown id),
+owner checked before state.
 
 | Method | Path | Notes |
 |---|---|---|
 | `POST` | `/api/v1/me/imports` | `202`, state `AWAITING_ARCHIVE` |
-| `PUT` | `/api/v1/me/imports/{id}/archive` | `application/zip`, streamed; `202` |
+| `PUT` | `/api/v1/me/imports/{id}/archive?offset=N` | `application/octet-stream`, one chunk, `200` with the new length |
+| `POST` | `/api/v1/me/imports/{id}/archive/complete` | `202`, state `PENDING` |
 | `GET` | `/api/v1/me/imports` | Paginated history (cursor) |
-| `GET` | `/api/v1/me/imports/{id}` | State, counters, progress |
+| `GET` | `/api/v1/me/imports/{id}` | State and counters |
 | `GET` | `/api/v1/me/imports/{id}/issues` | Paginated report |
 | `DELETE` | `/api/v1/me/imports/{id}` | `204` |
 
-Response DTO: `id`, `state`, `requestedAt`, `startedAt`, `completedAt`, `byteSize`, `formatVersion`,
-`announcedPins`, `processedPins`, `createdPins`, `skippedPins`, `createdBoards`, `createdTags`,
-`issueCount`, `failureCode`.
+Response DTO: `id`, `state`, `requestedAt`, `uploadedBytes`, `byteSize`, `archiveCompletedAt`,
+`startedAt`, `completedAt`, `formatVersion`, `announcedPins`, `processedPins`, `createdPins`,
+`skippedPins`, `createdBoards`, `skippedBoards`, `createdTags`, `skippedTags`, `issueCount`,
+`issueDetailTruncated`, `failureCode`.
 
-The archive body is consumed as an `InputStream` and streamed straight to `ImportArchiveStore.stage`,
-never buffered. `quarkus.http.limits.max-body-size` is raised in `application.properties` with a
-comment naming what it protects and what it no longer protects.
+**No progress field.** The two counters ship raw and the client renders what it wants; a server-side
+ratio would add two degenerate branches (`announcedPins` null or zero) to publish nothing the client
+cannot compute.
+
+A chunk body is consumed as an `InputStream` and streamed to `appendChunk`. Streaming holds while the
+endpoint stays blocking and while no extension installs a global Vert.x body handler; both would
+buffer silently, so the endpoint is annotated blocking deliberately and the condition is written here.
 
 ## 8. The `account.import` task
 
 `UserDataImportTaskHandler` delegates to the runner with
-`isLastAttempt = context.attempt >= context.maxAttempts`, the same comparison the export handler uses.
+`isLastAttempt = context.attempt >= context.maxAttempts`, the comparison the export handler uses.
 
-1. Load the import; return if absent or not `PENDING`/`RUNNING`.
-2. Load the user; if gone or tombstoned, `FAILED` with `USER_GONE` and `PermanentTaskException`.
-3. Open the archive. Unreadable, no manifest, or `formatVersion != 1`: `FAILED` with the matching
-   code and `PermanentTaskException`. Retrying cannot help.
-4. Mark `RUNNING`, stamp `startedAt` and `announcedPins`.
-5. Walk `tags.jsonl`: find-or-create by name, restoring `createdAt` on creation.
-6. Walk `boards.jsonl`: find-or-create by name, restoring description and timestamps on creation,
-   and soft-deleting the board when the archive carries a `deletedAt`.
-7. Walk `pins.jsonl` from `processedPins`, one pin at a time (below). `renewLease()` after each.
-8. `COMPLETED`, stamp `completedAt`, delete the archive bytes.
+1. Load the import; return unless `PENDING` or `RUNNING`. Load the user; if gone, `FAILED` with
+   `USER_GONE` and `PermanentTaskException`. Build the `RunnableImport` projection.
+2. Claim the run: in one transaction, write a fresh `runToken`, move to `RUNNING`, stamp `startedAt`
+   if null.
+3. Open the archive. Unreadable, manifest absent, or `formatVersion != 1`: `FAILED` with the matching
+   code and `PermanentTaskException`. Retrying cannot help. Record `announcedPins`.
+4. Walk `tags.jsonl`: validate the line, then find-or-create by name, restoring `createdAt` on
+   creation. `renewLease()` every `imports.lease_renewal_lines` lines.
+5. Walk `boards.jsonl` the same way. **A board that already exists is left untouched and counted in
+   `skippedBoards`, whatever its state and whatever the archive says.** Only a board the import
+   creates carries the archive's description, timestamps and, when the archive has a `deletedAt`,
+   its recycled state. A name held by a recycled board the import did not create yields
+   `NAME_TAKEN_BY_RECYCLED`.
+6. Walk `pins.jsonl` from `processedPins`, one pin at a time (below), renewing the lease per pin and
+   during the forward skip to the cursor.
+7. In one transaction, re-read the row and write `COMPLETED` **only if it still holds the run**
+   (`runToken` unchanged and state `RUNNING`). Otherwise return without writing. A blind write would
+   resurrect an import the user was told was cancelled, or re-insert a row for a deleted account,
+   which foreign keys would not stop since enforcement is off on this datasource.
+8. Delete the archive bytes.
 
 Per pin, in order:
 
-1. No `image`: issue `PIN_HAS_NO_MEDIA`, advance, next.
-2. `image.path` malformed: `ENTRY_PATH_INVALID`. Entry absent from the archive: `MEDIA_ENTRY_MISSING`.
-3. `imageStore.stage(entry, images.max_file_bytes)`: reads, sizes and digests in one pass. Over the
-   bound: `MEDIA_TOO_LARGE`.
-4. `findPinIdsByContentHashForUser`: one hit means already present, discard the staged file, count it
-   in `skippedPins`; more than one means `MEDIA_AMBIGUOUS`, same discard.
-5. Zero hits: `imageProbe.probe` (failure gives `MEDIA_UNREADABLE` and a discard), then promote the
-   bytes, then in **one transaction** create the pin with the archive's timestamps, create the image
-   row, resolve tags and boards by name, apply `deletedAt`, and advance the cursor and counters.
-   Promote-then-transaction with compensation on failure is `SetPinImage`'s existing pattern.
+1. Validate the line (section 4.1). No `image`: `PIN_HAS_NO_MEDIA`. Path malformed:
+   `ENTRY_PATH_INVALID`. Entry absent: `MEDIA_ENTRY_MISSING`.
+2. `imageStore.digest(entry, images.max_file_bytes)`: reads and hashes without writing. Over the
+   bound: `MEDIA_TOO_LARGE`. Compare with the archive's declared `image.sha256`; a mismatch is
+   recorded as `MEDIA_DIGEST_MISMATCH` and changes nothing else.
+3. `findPinIdsByContentHashForUser`: one hit is already present and counts in `skippedPins`; more
+   than one is `MEDIA_AMBIGUOUS`. Either way, nothing is staged and nothing is written.
+4. Zero hits: reopen the entry, `imageStore.stage(entry, images.max_file_bytes)`, then
+   `imageProbe.probe(staged, images.max_pixels)`. Probe failure is `MEDIA_UNREADABLE`, a pixel-count
+   refusal is `MEDIA_TOO_MANY_PIXELS`; both discard the staged file.
+5. Promote the bytes, then in **one transaction**: re-read the row, proceed only if it still holds
+   the run, create the pin with the clamped timestamps, create the image row, resolve tags and boards
+   by name, write memberships **without passing through `Pin.boards`** (the mapped value drops
+   recycled boards, so saving it back would delete those join rows), apply `deletedAt`, and increment
+   the cursor and counters. If the fence fails or the transaction throws, delete the promoted bytes
+   and discard the staged file, as `SetPinImage`'s compensation does.
 
-**The cursor and the counters move in the same transaction as the pin.** They could be written
-periodically instead, since idempotence would repair any replayed lines, but replayed lines would be
-counted twice (once created, once skipped) and the report would drift after every crash. One extra
-column write per pin is negligible next to a libvips probe and an image write.
+Every issue row is written in the same transaction as the cursor increment that settles its line, so
+a crash cannot duplicate or lose it.
 
-`TaskProcessor` swallows handler exceptions without logging, so the import row's state, `failureCode`
-and issues are the operator-visible truth, exactly as for exports.
+**Any unexpected throw marks the row `FAILED` with `IMPORT_FAILED` when `isLastAttempt`**, then
+rethrows. Without it, an unenumerated failure leaves the row `RUNNING` for ever, the archive
+unreclaimed, and the account locked out of importing by the partial unique index.
+
+`TaskProcessor` logs handler failures at WARN and logs dead-lettering, but nothing asserts logs and
+no alerting is wired, so the import row's state, `failureCode` and issues remain the surface a user
+and an operator read. The first draft of this spec inherited a claim from the export spec that
+`TaskProcessor` swallows exceptions silently; that was true when the export spec was written and
+stopped being true on 2026-08-01. The dated document keeps its sentence; this one does not repeat it.
 
 ## 9. Quotas, configuration and lifecycle
 
-- **No step-up re-authentication.** The export requires it because it turns a pin-by-pin grind into
-  one file holding everything; an import exfiltrates nothing, and since override was dropped it
-  cannot destroy anything either. The worst a stolen token achieves is adding unwanted data and
-  consuming disk. **If override ever returns, step-up returns with it.**
-- **One active import per user**, enforced in the use case and by a partial unique index
-  (`unique(user_id) where state in ('AWAITING_ARCHIVE','PENDING','RUNNING')`), the adapter
-  translating the violation into `ImportAlreadyInProgressError`, mirroring the export precedent.
-- **No minimum interval between two imports**: someone repatriating three old accounts must be able
-  to chain them.
-- **No free-space precheck.** The export checks a fixed margin before building, but an importer
-  cannot estimate what it will write without believing the manifest, which it does not. A disk-full
-  failure mid-walk is therefore treated as **transient**: the task retries, the cursor resumes where
-  it stopped, and an operator who frees space in between loses nothing. After the last attempt it
-  ends `FAILED` with `DISK_FULL`.
+- **No step-up re-authentication.** Operator decision, taken with the counter-argument on the table.
+  The counter-argument, recorded because it is not weak: what this codebase gates is unbounded
+  effect, not exfiltration, and `AccountDeleter` is the precedent; undoing an unwanted import costs
+  one request per pin with no bulk operation available; and section 12 lets an archive take a board
+  name its owner then cannot use. The accepted worst case is written in section 14 rather than left
+  implicit, and the reopening condition in ADR 0015 is stated as a property, not as one feature's
+  return.
+- **One active import per user**, enforced by a partial unique index over the three active states and
+  translated by the adapter. Verified on `sqlite3` that an `IN`-list predicate accepts a second
+  terminal row and refuses a second active one.
+- **No minimum interval between two imports**: someone repatriating three old accounts chains them.
+- **Free space is checked before every chunk**, against a fixed margin. The first draft dropped the
+  check on the grounds that the extraction size cannot be estimated without believing the manifest.
+  That reasoning covered the walk and ignored the upload, which is where the danger is: the default
+  deployment points every data directory at the volume that also holds the SQLite database, so an
+  unbounded upload takes the whole instance down, not just the import.
+- **Disk-full during the walk is transient and retried**, with the cursor resuming. For that to mean
+  anything the retry budget must outlast an operator, so `account.import` uses
+  `MAX_ATTEMPTS = 5` with a backoff floor of `imports.retry_floor`; at the queue's default backoff
+  the three attempts of the first draft were consumed in about three seconds, which no operator can
+  use. The archive survives until the row is terminal, so a retry does not re-upload.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `imports.data_dir` | `/var/lib/pinry/imports` | Uploaded archives (a new volume, to document in deploy) |
-| `imports.upload_grace` | `PT1H` | Age past which an `AWAITING_ARCHIVE` row is abandoned |
+| `imports.data_dir` | `/var/lib/pinry/imports` | Uploaded archives (a new volume) |
+| `imports.max_archive_bytes` | `21474836480` (20 GiB) | Refused past this, per import |
+| `imports.max_chunk_bytes` | `33554432` (32 MiB) | Must stay under `quarkus.http.limits.max-body-size` |
+| `imports.max_entries` | `200000` | Archive entry-count bound |
+| `imports.max_metadata_bytes` | `16777216` (16 MiB) | Per non-image entry read whole |
+| `imports.max_line_bytes` | `1048576` (1 MiB) | Per JSONL line |
+| `imports.minimum_free_bytes` | `1073741824` (1 GiB) | Margin required before accepting a chunk |
+| `imports.upload_grace` | `PT24H` | Inactivity past which an upload is abandoned |
 | `imports.sweep_interval` | `PT1H` | How often the sweep runs |
-| `imports.staged_file_max_age` | `PT6H` | Age past which a staged temp file is orphaned |
-| `imports.report_detail_limit` | `500` | Issues stored per import; beyond it only `issueCount` grows |
+| `imports.staged_file_max_age` | `PT48H` | Age past which a partial upload is orphaned |
+| `imports.lease_renewal_lines` | `200` | Lines between two lease renewals in the metadata walks |
+| `imports.retry_floor` | `PT10M` | Backoff floor for this task kind |
+| `imports.report_detail_limit` | `500` | Issues stored per import; past it only `issueCount` grows |
 
-The sweep runs on its own single-thread scheduler, injected by type (`PeriodicScheduler`), following
-`docs/adr/0004`.
+`imports.upload_grace` counts **inactivity**, not age: a grace measured from creation would abandon a
+multi-hour upload while it was still streaming. Every default lives in the `@ConfigMapping`
+(`ImportsConfig` in `api-worker-quarkus`, next to `ExportsConfig`), and `application.properties` gains
+`imports.*` to its prefix inventory. `images.max_file_bytes` and `images.max_pixels` are **reused**,
+passed to the runner as constructor parameters wired at the composition root, since `ImagesConfig`
+lives in the presentation module and `api-usecases` cannot see it.
+
+The sweep runs on its own `PeriodicScheduler`, injected by type (ADR 0004).
+
+**Deployment**: `imports.data_dir` is a third dataset. The `Dockerfile` comment gains
+`IMPORTS_DATA_DIR` alongside the two it names, and the directory is checked writable at startup
+rather than on first write, so an unwritable volume refuses to boot instead of failing after a user
+has streamed twenty gigabytes. A reverse proxy needs no change, since every request stays under the
+existing body limit; that is a direct benefit of chunking.
 
 ## 10. Errors
 
@@ -347,86 +502,178 @@ The sweep runs on its own single-thread scheduler, injected by type (`PeriodicSc
 | `IMPORT_ALREADY_IN_PROGRESS` | `409` | An active import already exists |
 | `IMPORT_DOES_NOT_EXIST` | `404` | Unknown id |
 | `IMPORT_INSUFFICIENT_PERMISSIONS` | `403` | Not the owner |
-| `IMPORT_NOT_AWAITING_ARCHIVE` | `409` | `PUT` on an import that already has its archive, or is terminal |
-| `BOARD_NAME_ALREADY_TAKEN` | `409` | §12, and it applies to `POST /api/v1/boards` too |
+| `IMPORT_NOT_AWAITING_ARCHIVE` | `409` | A chunk or completion for an import past the upload phase |
+| `IMPORT_CHUNK_OFFSET_MISMATCH` | `409` | Offset is not the current length; the body names the current length |
+| `IMPORT_ARCHIVE_TOO_LARGE` | `413` | The chunk would carry the total past `imports.max_archive_bytes` |
+| `IMPORT_INSUFFICIENT_STORAGE` | `507` | Free space below the margin |
+| `BOARD_NAME_ALREADY_EXISTS` | `409` | Section 12, at all three sites |
 
-Failure codes on the row (not HTTP): `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
-`UNSUPPORTED_FORMAT_VERSION`, `DISK_FULL`.
+Naming follows `USERNAME_ALREADY_EXISTS` and its `UsernameAlreadyTakenException`, rather than
+inventing a second vocabulary for the same concept.
 
-Each new code is an arm of `BaseErrorMapper`'s exhaustive `when` and lands in the same commit as the
-enum value, since the `when` has no `else`.
+Failure codes on the row: `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
+`UNSUPPORTED_FORMAT_VERSION`, `DISK_FULL`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`.
+
+Each new code is an arm of `BaseErrorMapper`'s exhaustive `when`, landing in the same commit as the
+enum value. `jakarta.ws.rs` has an `INSUFFICIENT_STORAGE` constant; if it does not, the fallback title
+path is used and the spec says so once that is checked.
 
 ## 11. Persistence and migration
 
-Migration `1.20` creates `user_data_imports` and `user_data_import_issues`, and adds the two unique
-indexes of §12. The partial unique index is hand-written in its own migration file so a regeneration
-cannot silently drop it, following the export precedent. States are stored as plain `String` columns
-converted in the mapper, following `TaskModel` and `UserDataExportModel`.
+Migration `1.20` creates `user_data_imports` and `user_data_import_issues`, adds the two unique
+indexes of section 12, adds a **non-unique** index on `images (content_hash)`, and adds the partial
+unique index over the active import states.
 
-Unique indexes are declared through `@Index(definition = "create unique index ...")`, never
-`unique = true`, and each one gets its row in `UniqueConstraintOutcomeTest` naming the answer a
-client receives.
+**Every index is declared on its entity** with `@Index(name = ..., definition = "create unique index
+...")` and the migration is produced by `./gradlew :api-persistence-sqlite:generateDbMigration`, so
+each `.sql` has its paired `model/<version>.model.xml`. The first draft said the partial index would
+be hand-written "following the export precedent"; that precedent was removed on 2026-07-23, ADR 0009
+decision 5 emptied the hand-written allowlist, and `DbMigrationModelCoverageTest` holds
+`handWritten = emptySet()`. A hand-written file would fail the gate on the first commit, and the
+stated reason was inverted: it is hand-writing that lets a later regeneration drop an index.
 
-## 12. The two uniqueness constraints, and the contract they change
+Indexes for the reads this feature performs: `(user_id, state)` on imports, `(import_id)` on issues.
+Note that the partial unique index constrains but does not serve a query whose predicate binds a
+parameter, per `agents/engineering.md`.
+
+`content_hash` gets its index because `findPinIdsByContentHashForUser` runs once per pin, and today
+`ImageModel` carries no index on that column: without it the import is pins times images.
+
+States are stored as plain `String` columns converted in the mapper, following `TaskModel` and
+`UserDataExportModel`. Column names follow the tables they join: boards and tags key on `author_id`.
+
+## 12. The uniqueness constraints, and the contract they change
 
 The import needs a name to be an identity. Today it is not one.
 
-- **Tags.** `TagCreator.findOrCreate` already reads before writing, so `(user, name)` unique changes
-  nothing observable and only closes the race the project's own invariant forbids leaving open
-  (`docs/adr/0009`). `findUserTagByName` must become case insensitive in the same commit, otherwise
-  the read looks for `Voyage`, misses `voyage`, and the insert hits the index.
-- **Boards.** `BoardCreator.create` checks nothing: `POST /api/v1/boards` with a name already taken
-  currently succeeds and creates a homonym. Under the constraint it returns `409`. **This is a
-  breaking change to a public contract**, taken deliberately: alpha status allows it, no instance is
-  deployed, and an import cannot use a name as an identity while the name is not one.
+- **Tags.** `TagCreator.findOrCreate` already reads before writing, so `(author_id, name collate
+  nocase)` changes nothing observable on that path and closes the race. Its outcome is named: no
+  translation, deliberately, because the read-then-write inside one transaction makes the violation
+  unreachable from the API; a concurrent pair is serialised by the single connection.
+- **Boards.** `BoardCreator.create` checks nothing, so `POST /api/v1/boards` with a taken name
+  currently succeeds. Under the constraint it returns `409 BOARD_NAME_ALREADY_EXISTS`. This is a
+  deliberate breaking change to a public contract: alpha status allows it, no instance is deployed,
+  and a name cannot be an identity while the system lets it be ambiguous.
 
-Both indexes are `collate nocase`, following `ix_users_name_nocase`.
+**The constraint fires at three sites, not one.** Besides creation, `PUT /api/v1/boards/{boardId}`
+renames through `BoardUpdater` with no check, and `BoardRecycleBin.restore` re-activates a board. The
+translation therefore lives in `BoardRepository.saveBoard` (the `UserRepository.saveUser`
+precedent) and each use case rethrows the domain error, so no persistence exception reaches a
+controller from any of the three.
+
+**Recycled rows hold their name.** Operator decision. The index covers every row, like
+`ix_users_name_nocase`. Consequences, all deliberate: a board in the recycle bin blocks a new board
+of that name until the bin is emptied, so the `409` detail says the name is held by a recycled board
+rather than leaving the client guessing; restoring from the recycle bin can no longer collide, since
+no homonym can have been created meanwhile; and the import's board finder reads every state.
+
+**The fold is ASCII.** `collate nocase` folds A to Z and nothing else, so `ÉTÉ` and `été` remain two
+names. The read side uses the same fold, so read and index agree. This is a stated limit rather than
+a claim of case insensitivity in general.
 
 ## 13. Testing strategy
 
-TDD, 100% branch coverage per package. Beyond the mechanical unit tests, these carry the real risk:
+TDD, 100% branch coverage per package. Each scenario names where it lives, because a new
+`@QuarkusTest` costs a full boot and `agents/engineering.md` requires that to be justified.
 
-1. **Round trip against a real worker**: seed pins (one recycled), a recycled board holding a pin,
-   tags and real images; export, wipe, import, and assert the account is equivalent. This is the test
-   that would catch a format misreading, and it is written early, not last.
-2. **Import into a non-empty account**: existing tag, existing board, existing pin on the same
-   medium. Assert nothing existing moved, and that the report counts the skips.
-3. **Idempotence**: importing the same archive twice creates nothing the second time and reports
-   every pin as skipped.
-4. **Resumption**: kill the runner mid-walk, re-run the task, assert the final state equals the
-   uninterrupted one and that no pin is duplicated.
-5. **Hostile archive**: an entry path with `../`, a manifest announcing a `formatVersion` of 2, a
-   truncated JSONL line, an image entry declared by a pin but absent, a text file renamed `.jpg`.
-   Each produces its issue kind, and the import still completes.
-6. **Lying manifest**: an archive whose `image.mimeType` says `image/jpeg` over PNG bytes, asserting
-   the stored media type comes from the probe.
-7. **Ambiguous digest**: two existing pins on one medium, assert `MEDIA_AMBIGUOUS` and no write.
-8. **Timestamps**: an archive with a `createdAt` in the future, asserting the clamp.
-9. **Cancellation mid-walk**: state `CANCELLED`, pins written so far still present, archive gone.
-10. **Board name collision** through `POST /api/v1/boards`, pinning the new `409`.
+1. **Round trip** (integration, joins the export suite). Seed pins including one recycled, a recycled
+   board holding a pin, tags, real images, and **two pins sharing one image**. Export, download the
+   bytes, create a second account, upload and import. Equivalence is enumerated, not asserted as a
+   word: same pin count by natural key; per pin the same `description`, `sourceContextUrl`,
+   `sourceMediaUrl`, `createdAt`, `updatedAt`, `deletedAt`, tag-name set and board-name set including
+   the recycled board; same board set with their `deletedAt`; same tag set; image bytes byte-identical;
+   and every identifier different from the original. The duplicate-media pair must produce one pin and
+   one `MEDIA_AMBIGUOUS`-free skip, pinning the within-archive collision that section 14 records.
+2. **Timestamps** (use-case unit), three assertions in one archive: a past `createdAt` restored
+   exactly, a future one equal to the import instant, and the `UserDataImport` row's own timestamps
+   equal to the injected `Clock`. The first assertion is the one that fails an implementation that
+   re-dates everything, which the clamp-only test of the first draft did not.
+3. **Idempotence** (use-case unit). Import twice against a counting fake `ImageProbe`: the account
+   projection is identical after both runs, the second run's counters are `createdPins = 0`,
+   `skippedPins = N`, and the probe call count is unchanged, which pins the digest-before-stage
+   ordering that section 3 claims.
+4. **Resumption** (use-case unit). A fake `ArchiveSource` whose sequence throws on line three; a
+   second `run()` on the same repository state. Assert the account projection equals the
+   uninterrupted run's, `processedPins` and the counters are the sums rather than the last run's, no
+   pin is duplicated, no issue row is duplicated, and no orphan is left in the image store.
+5. **The fence** (use-case unit). A fake repository returning a different `runToken` from the third
+   pin on: two pins written, the third refused, the state left as the canceller wrote it.
+6. **Cancellation** (integration for `AWAITING_ARCHIVE` and `PENDING`, unit for `RUNNING`). The
+   deterministic cases assert `CANCELLED`, no task, and no bytes on disk; the `RUNNING` case is the
+   fence test above, since a real worker finishes a small archive before a test can act. That limit
+   is stated rather than papered over with a sleep.
+7. **Per-line anomalies** (integration, one archive): an entry path with `../`, a truncated JSONL
+   line, a pin declaring an absent image, a text file renamed `.jpg`, a pin with no image, a board
+   name of 300 characters, a pin with 200 tags. Assert the import reaches `COMPLETED`, the good pins
+   exist, and each of `ENTRY_PATH_INVALID`, `LINE_MALFORMED`, `MEDIA_ENTRY_MISSING`,
+   `MEDIA_UNREADABLE`, `PIN_HAS_NO_MEDIA`, `FIELD_INVALID` appears exactly once.
+8. **Rejected archives** (use-case unit), one per failure code: `formatVersion` 2, absent manifest,
+   unreadable ZIP. Each asserts `FAILED`, the code, `processedPins = 0`, and nothing created.
+9. **Bounds** (adapter unit): an entry count past `max_entries`, a metadata entry past
+   `max_metadata_bytes`, a single JSONL line past `max_line_bytes`. Each refuses without allocating
+   the whole entry, which is asserted by the refusal arriving before the stream is exhausted.
+10. **Oversize and over-pixel media** (use-case unit) with `imageStore.stage` throwing
+    `ImageTooLargeException` and the probe throwing the pixel refusal, following `SetPinImageTest`'s
+    existing shape rather than building a 30 MiB fixture.
+11. **Lying manifest** (integration): `image.mimeType` says `image/jpeg` over PNG bytes; the stored
+    media type is `image/png`. A wrong `sha256` in the same archive yields `MEDIA_DIGEST_MISMATCH`
+    while the pin is still created.
+12. **Ambiguous digest** (integration): two existing pins on one medium; assert no pin row, no image
+    row, no promoted object, no staged temp file, and exactly one `MEDIA_AMBIGUOUS`.
+13. **Non-empty account** (integration), with case differing: the account holds tag `voyage` and
+    board `Summer`, the archive carries `Voyage` and `summer`. Assert no tag and no board created,
+    `skippedTags` and `skippedBoards` at one each, and the existing board's `updatedAt`, description
+    and membership set unchanged.
+14. **Recycled board holds its name** (integration): the account has `Summer` in the recycle bin, the
+    archive an active `Summer`. Assert nothing created, `NAME_TAKEN_BY_RECYCLED` recorded, and the
+    recycled board untouched.
+15. **Board constraint at all three sites** (integration): `POST` with a taken name, `PUT` renaming
+    onto a taken name, and restoring from the recycle bin. Each returns `409
+    BOARD_NAME_ALREADY_EXISTS`, never a 500.
+16. **Report cap** (use-case unit) with the limit injected: 501 anomalies store 500 rows, report
+    `issueCount = 501`, and set `issueDetailTruncated`; 499 leave it false.
+17. **Chunked upload** (integration): three chunks, a replayed offset refused with the current
+    length, a chunk carrying the total past the maximum refused with `413`, and a resumed upload
+    completing from the reported length.
+18. **The sweep** (integration, calling the bean directly rather than waiting on the interval): a
+    stale `AWAITING_ARCHIVE` row becomes `ABANDONED` with its partial upload gone; a terminal row's
+    bytes are deleted once and not re-deleted on a second run; an orphaned staged file is swept.
+19. **Account deletion** (integration): an account with one `COMPLETED` and one `AWAITING_ARCHIVE`
+    import; assert no rows in either table and nothing left in `imports.data_dir`.
 
 ## 14. Risks and accepted trade-offs
 
-- **A pin with no media does not survive the round trip.** Pending and failed downloads, and images
-  the exporter could not write, are all reported and dropped. Making them travel needs the export to
-  carry `ImageDownload`, which is a backlog item.
-- **The report drifts if the detail cap is hit**: past `imports.report_detail_limit`, `issueCount`
-  keeps counting but the detail stops. The DTO says so with a flag rather than lying by omission.
-- **An import is not atomic and cancellation leaves partial state.** Stated in the API documentation,
-  not only here.
-- **Uploading several gigabytes is assumed cheap** (local network or fibre). A failed import means
-  re-uploading, since the archive is destroyed on termination.
-- **Raising `max-body-size` server-wide** removes the framework backstop from every route. Accepted
-  under the project's stated assumption that instance users are not malicious, which is itself a
-  recorded limit; invitation codes and quotas are backlog items.
-- **N+1 on a large import**: one digest lookup, one probe and several inserts per pin. An import is
-  rare, asynchronous, and one worker among several. Same trade-off the export took.
+- **A pin with no medium does not survive the round trip.** Pending and failed downloads, and images
+  the exporter could not write, are reported and dropped. Making them travel needs the export to
+  carry `ImageDownload`: a backlog item.
+- **Two pins sharing one medium in the archive import as one.** The second line finds the pin the
+  first just created and counts as a skip, losing its description, tags and memberships. Scenario 1
+  pins this so it is visible rather than discovered.
+- **Restoring recovers less than the word suggests.** Hard-deleted rows come back; a recycled pin
+  stays recycled (its digest matches, so it is skipped), an edited description keeps the edit, and a
+  removed board membership is not re-added.
+- **No step-up, and the accepted worst case is written here**: a stolen bearer token can fill the
+  account with unwanted rows, which are removable only one request at a time, and can take board and
+  tag names the owner then cannot reuse until they delete them.
+- **An import is not atomic and cancellation leaves partial state**, stated in the API documentation
+  and not only here.
+- **A long import holds one of four worker permits for hours**, and every write in the instance
+  queues behind one SQLite connection. Several concurrent imports can starve `pin.download` and
+  `account.export`; `account.deletion` is enqueued above them. No per-kind fairness exists.
+- **The report cap can hide detail**, flagged rather than silent.
+- **Lowering `images.max_file_bytes` later makes previously importable archives partly
+  un-importable**, as `MEDIA_TOO_LARGE`.
+- **`FIELD_INVALID` bounds are restated, not shared.** Until the bounds move into the entities, the
+  DTOs and this walk can drift apart. The backlog carries the consolidation.
 
 ## 15. References
 
-- Export format contract: `docs/specs/2026-07-22-user-data-export.md` §4.
-- Unique constraint outcomes: `docs/adr/0009-unique-index-named-outcomes.md`.
+- Export format contract: `docs/specs/2026-07-22-user-data-export.md` section 4. Two of its sentences
+  have since become false (task-queue logging, hand-written index migrations); it is a dated document
+  and keeps them.
+- Unique constraint outcomes and the empty hand-written allowlist: `docs/adr/0009-unique-index-named-outcomes.md`.
+- Soft-delete read isolation, and why a read names its state: `docs/adr/0008-structural-soft-delete-read-isolation.md`.
 - Scheduler injection: `docs/adr/0004-inject-schedulers-by-type.md`.
-- GDPR Article 20 (portability includes re-import): <https://gdpr-info.eu/art-20-gdpr/>
-- Quarkus body size limit (`ServerLimitsConfig`, `quarkus.http.limits.max-body-size`):
-  <https://quarkus.io/guides/all-config>
+- Quarkus body size limit: <https://quarkus.io/guides/http-reference#quarkus-vertx-http_quarkus-http-limits_quarkus-http-limits-max-body-size>
+- GDPR Article 20, which grants a right to receive and transmit personal data and imposes no duty on
+  a receiving controller to accept an import: <https://gdpr-info.eu/art-20-gdpr/>
