@@ -30,8 +30,15 @@ class UserDataImportCancellerTest : BaseTest() {
     // Left unstubbed on purpose: a cancellation this use case must not attempt blows the test up on
     // the call itself, before any `verify` gets to be forgotten.
     private val cancelTask = mockk<CancelTask>()
+    private val transactions = PassthroughTransactionRunner()
     private val canceller =
-        UserDataImportCanceller(UserDataImportGetter(repository), repository, archiveStore, cancelTask)
+        UserDataImportCanceller(
+            UserDataImportGetter(repository),
+            repository,
+            archiveStore,
+            cancelTask,
+            transactions,
+        )
     private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val importId = randomUUID()
     private val now = Instant.parse("2026-08-14T10:00:00Z")
@@ -182,6 +189,46 @@ class UserDataImportCancellerTest : BaseTest() {
     }
 
     @Test
+    fun `Given a running import whose walk advanced, Then only the state is written over it`() {
+        // Given: the runner settles a pin between the read that answers this request and the write that
+        // cancels it, and only a read taken inside that write's transaction sees the settlement
+        val read = importWith(state = UserDataImportState.RUNNING, taskId = randomUUID())
+        val advanced = read.copy(processedPins = SETTLED_PINS, createdPins = SETTLED_PINS)
+        every { repository.findById(importId) } answers { if (transactions.inside) advanced else read }
+        every { repository.save(any()) } answers { firstArg() }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then: merging the copy read first would have put both counters back to zero
+        verify {
+            repository.save(
+                match {
+                    it.state == UserDataImportState.CANCELLED &&
+                        it.processedPins == SETTLED_PINS &&
+                        it.createdPins == SETTLED_PINS
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `Given an import that finished while the request ran, Then no cancellation is written over it`() {
+        // Given: the runner writes COMPLETED in that same window, and a merge would take a finished
+        // import back to CANCELLED and tell its owner nothing was imported
+        val read = importWith(state = UserDataImportState.RUNNING, taskId = randomUUID())
+        every { repository.findById(importId) } answers {
+            if (transactions.inside) read.copy(state = UserDataImportState.COMPLETED) else read
+        }
+
+        // When
+        canceller.cancel(user, importId)
+
+        // Then
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
     fun `Given a terminal import, Then cancelling it releases nothing`() {
         // Given: enumerated from isTerminal, so a state added later is covered here rather than missed
         val terminalStates = UserDataImportState.entries.filter { it.isTerminal }
@@ -199,5 +246,10 @@ class UserDataImportCancellerTest : BaseTest() {
         verify(exactly = 0) { archiveStore.delete(any()) }
         verify(exactly = 0) { archiveStore.discardPartialUpload(any()) }
         verify(exactly = 0) { cancelTask.cancel(any()) }
+    }
+
+    private companion object {
+        /** What the walk had counted by the time the cancellation reached its write. */
+        private const val SETTLED_PINS = 3
     }
 }
