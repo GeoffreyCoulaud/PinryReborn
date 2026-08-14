@@ -2,8 +2,8 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ImportsConfig
 import io.quarkus.runtime.configuration.MemorySize
-import io.smallrye.config.WithDefault
 import io.quarkus.test.junit.QuarkusTest
+import io.smallrye.config.WithDefault
 import jakarta.inject.Inject
 import org.eclipse.microprofile.config.inject.ConfigProperty
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -59,5 +59,12 @@ class ImportsConfigIntegrationTest {
         assertEquals(200, config.leaseRenewalLines())
         assertEquals(Duration.ofMinutes(10), config.retryFloor())
         assertEquals(500, config.reportDetailLimit())
+    }
+
+    @Test
+    fun `Given the test properties, Then the data directory key is the one the mapping reads`() {
+        // Given / Then: the assertion above reads an annotation, which restates the source rather than
+        // exercising it. This one shows the key wired: an override under `imports.data_dir` arrives.
+        assertEquals("build/test-import-data/shared", config.dataDir())
     }
 }
