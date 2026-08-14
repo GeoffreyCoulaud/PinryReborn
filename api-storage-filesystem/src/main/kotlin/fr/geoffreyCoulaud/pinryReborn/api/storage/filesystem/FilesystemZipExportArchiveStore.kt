@@ -32,7 +32,9 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
 
     override val format = ArchiveFormat(mediaType = "application/zip", fileExtension = "zip")
 
-    private val mapper = ObjectMapper()
+    // Internal, so a test can read its registered module ids: jackson-module-kotlin now sits on this
+    // module's runtime classpath, and a stray registration here would move the published format.
+    internal val mapper = ObjectMapper()
         .registerModule(JavaTimeModule())
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 

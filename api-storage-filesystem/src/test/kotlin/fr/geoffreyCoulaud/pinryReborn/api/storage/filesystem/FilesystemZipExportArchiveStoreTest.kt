@@ -183,10 +183,7 @@ class FilesystemZipExportArchiveStoreTest {
         // without any golden test in another module noticing.
 
         // When / Then
-        assertEquals(
-            setOf<Any>("com.fasterxml.jackson.datatype.jsr310.JavaTimeModule"),
-            store.mapper.registeredModuleIds,
-        )
+        assertEquals(setOf<Any>("jackson-datatype-jsr310"), store.mapper.registeredModuleIds)
     }
 
     @Test

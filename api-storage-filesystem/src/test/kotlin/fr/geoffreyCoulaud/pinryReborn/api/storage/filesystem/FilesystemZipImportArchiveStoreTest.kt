@@ -356,10 +356,9 @@ class FilesystemZipImportArchiveStoreTest {
     @Test
     fun `Given JSON lines, Then readJsonLines yields each of them parsed and numbered`() {
         // Given
-        val storageKey =
-            promoteArchive("imports/lines.zip") { zip ->
-                writeEntry(zip, "pins.jsonl", """{"name":"first","count":1}""" + "\n" + """{"name":"second","count":2}""")
-            }
+        val first = """{"name":"first","count":1}"""
+        val second = """{"name":"second","count":2}"""
+        val storageKey = promoteArchive("imports/lines.zip") { writeEntry(it, "pins.jsonl", "$first\n$second") }
 
         // When
         val lines = readLines(storageKey)

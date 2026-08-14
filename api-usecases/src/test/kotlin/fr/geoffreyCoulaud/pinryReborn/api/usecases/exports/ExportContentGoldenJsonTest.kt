@@ -21,12 +21,16 @@ import java.util.UUID
  * end-to-end proof that a real archive on disk matches this shape is the integration tests (later
  * tasks), not this test.
  *
- * No `jackson-module-kotlin` is on the classpath anywhere in this codebase, so every type here is
- * serialized through plain JavaBean getter introspection, not constructor/property metadata. The one
- * place that matters is `Boolean`: a property named `isX` compiles to a getter `isX()`, which Jackson
- * reads as a property named `x` (the `is` prefix is stripped). [ExportedImage.animated] is named
- * `animated`, not `isAnimated`, specifically so its getter is `getAnimated()` and its published field
- * name stays `animated`, matching spec §4 exactly.
+ * `jackson-module-kotlin` reached `api-storage-filesystem` with the import reader, so the sentence
+ * this KDoc used to carry (none anywhere in the codebase) is no longer true. It is registered on the
+ * reader's mapper only; the writer's registered module ids are asserted in
+ * `FilesystemZipExportArchiveStoreTest`, which is where a stray registration would be caught. Nothing
+ * registers it here either, so every type below is still serialized through plain JavaBean getter
+ * introspection, not constructor/property metadata. The one place that matters is `Boolean`: a
+ * property named `isX` compiles to a getter `isX()`, which Jackson reads as a property named `x` (the
+ * `is` prefix is stripped). [ExportedImage.animated] is named `animated`, not `isAnimated`,
+ * specifically so its getter is `getAnimated()` and its published field name stays `animated`,
+ * matching spec §4 exactly.
  */
 class ExportContentGoldenJsonTest {
     private val mapper: ObjectMapper =
