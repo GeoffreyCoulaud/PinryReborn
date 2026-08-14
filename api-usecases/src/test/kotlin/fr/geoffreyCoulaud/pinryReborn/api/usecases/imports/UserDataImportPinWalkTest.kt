@@ -134,7 +134,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         assertEquals(2, stored.processedPins)
         assertEquals(2, stored.createdPins)
         assertEquals(savedImages.map { it.storageKey }.toSet(), promoted)
-        assertTrue(stagedPaths.isEmpty())
+        assertEquals(1, discarded.size)
         verify(exactly = 0) { archiveStore.delete(any()) }
     }
 
@@ -165,7 +165,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         assertEquals(1, savedPins.size)
         assertEquals(UserDataImportState.CANCELLED, stored.state)
         assertEquals(savedImages.map { it.storageKey }.toSet(), promoted)
-        assertTrue(stagedPaths.isEmpty())
+        assertEquals(1, discarded.size)
     }
 
     @Test
@@ -190,7 +190,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
         // Then
         assertEquals(1, savedPins.size)
         assertEquals(savedImages.map { it.storageKey }.toSet(), promoted)
-        assertTrue(stagedPaths.isEmpty())
+        assertEquals(1, discarded.size)
     }
 
     @Test
@@ -215,7 +215,7 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
 
         // Then: the pin row's own fate is the real transaction's, which this passthrough cannot roll back
         assertTrue(promoted.isEmpty())
-        assertTrue(stagedPaths.isEmpty())
+        assertEquals(1, discarded.size)
         assertEquals(listOf(UserDataImportIssueKind.LINE_REJECTED), kinds())
         assertEquals(1, stored.processedPins)
         assertEquals(0, stored.createdPins)

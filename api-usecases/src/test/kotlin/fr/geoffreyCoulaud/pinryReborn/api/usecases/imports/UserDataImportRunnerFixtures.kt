@@ -191,6 +191,7 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
     protected val promoted = mutableSetOf<String>()
     protected val deletedArchives = mutableListOf<String>()
     protected val stagedPaths = mutableSetOf<String>()
+    protected val discarded = mutableListOf<String>()
     protected var stageCalls = 0
 
     /** How a re-read of the row answers, null included. The fence cases replace it instead of restubbing. */
@@ -408,8 +409,16 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
         every { archiveStore.delete(any()) } answers { deletedArchives += firstArg<String>() }
     }
 
+    /**
+     * Recorded rather than counted through [stagedPaths]: the promote fixture already emptied that set,
+     * so asserting it holds nothing says nothing about a compensation that never ran.
+     */
     protected fun stubDiscard() {
-        every { imageStore.discard(any()) } answers { stagedPaths -= firstArg<StagedFile>().path }
+        every { imageStore.discard(any()) } answers {
+            val staged = firstArg<StagedFile>()
+            discarded += staged.path
+            stagedPaths -= staged.path
+        }
     }
 
     protected fun stubDelete() {
