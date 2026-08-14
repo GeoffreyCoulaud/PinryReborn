@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.controllers
 
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.common.CursorDto
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserDataImportIssueListOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserDataImportListOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.UserDataImportOutputDto
@@ -27,6 +28,9 @@ import jakarta.ws.rs.Path
 import jakarta.ws.rs.QueryParam
 import jakarta.ws.rs.core.MediaType
 import org.eclipse.microprofile.openapi.annotations.Operation
+import org.eclipse.microprofile.openapi.annotations.media.Content
+import org.eclipse.microprofile.openapi.annotations.media.Schema
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.jboss.resteasy.reactive.RestResponse
 import org.jboss.resteasy.reactive.RestResponse.ResponseBuilder
 import java.io.InputStream
@@ -53,6 +57,23 @@ class MeImportController(
         summary = "Open an import and wait for its archive",
         description = IMPORT_IS_NOT_ATOMIC,
     )
+    // SmallRye reads the status off the return type, and a runtime ResponseBuilder carries none, so
+    // every status this class answers is declared by hand or published wrong (spec sections 7 and 10).
+    @APIResponse(
+        responseCode = "202",
+        description = "Import opened, awaiting its archive",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = UserDataImportOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = "IMPORT_ALREADY_IN_PROGRESS: this account already has an active import",
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun createImport(): RestResponse<UserDataImportOutputDto> {
         val user = securityIdentity.getUser()
         val userDataImport = creator.create(user)
@@ -71,6 +92,36 @@ class MeImportController(
         summary = "Append one chunk of the archive at the given offset",
         description = "Answers the upload's new length. An offset that is not the current length is " +
             "refused with that length, so a client resumes rather than restarts.",
+    )
+    @APIResponse(
+        responseCode = "200",
+        description = "Chunk appended, with the upload's new length",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = UserDataImportOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "404",
+        description = IMPORT_DOES_NOT_EXIST,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = "IMPORT_NOT_AWAITING_ARCHIVE, or IMPORT_CHUNK_OFFSET_MISMATCH naming the current length",
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
+        responseCode = "413",
+        description = "IMPORT_ARCHIVE_TOO_LARGE: the chunk would carry the upload past imports.max_archive_bytes",
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
+        responseCode = "507",
+        description = "IMPORT_INSUFFICIENT_STORAGE: free space is under imports.minimum_free_bytes",
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
     )
     fun uploadChunk(
         id: UUID,
@@ -91,6 +142,26 @@ class MeImportController(
         summary = "Close the upload and queue the import",
         description = IMPORT_IS_NOT_ATOMIC,
     )
+    @APIResponse(
+        responseCode = "202",
+        description = "Upload closed and the import queued",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = UserDataImportOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "404",
+        description = IMPORT_DOES_NOT_EXIST,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = "IMPORT_NOT_AWAITING_ARCHIVE, or IMPORT_ARCHIVE_EMPTY when no chunk ever landed",
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun completeArchive(id: UUID): RestResponse<UserDataImportOutputDto> {
         val user = securityIdentity.getUser()
         val userDataImport = archiveCompleter.complete(user, id)
@@ -110,6 +181,21 @@ class MeImportController(
 
     @GET
     @Path("/{id}")
+    @APIResponse(
+        responseCode = "200",
+        description = "The import's state and counters",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = UserDataImportOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "404",
+        description = IMPORT_DOES_NOT_EXIST,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun getImport(id: UUID): RestResponse<UserDataImportOutputDto> {
         val user = securityIdentity.getUser()
         return RestResponse.ok(getter.get(user, id).toDto())
@@ -121,6 +207,21 @@ class MeImportController(
         summary = "Read the import's report",
         description = "Anomalies the walk recorded. Past `imports.report_detail_limit` rows only the " +
             "count keeps growing, and the import says so through `issueDetailTruncated`.",
+    )
+    @APIResponse(
+        responseCode = "200",
+        description = "One page of the import's report",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = UserDataImportIssueListOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "404",
+        description = IMPORT_DOES_NOT_EXIST,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
     )
     fun listIssues(
         id: UUID,
@@ -140,6 +241,12 @@ class MeImportController(
         description = "Cancelling leaves partial state: the pins, boards and tags the import has " +
             "already created stay, and only the archive and the work still to do are dropped.",
     )
+    @APIResponse(responseCode = "204", description = "Import cancelled")
+    @APIResponse(
+        responseCode = "404",
+        description = IMPORT_DOES_NOT_EXIST,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun cancelImport(id: UUID): RestResponse<Void> {
         val user = securityIdentity.getUser()
         canceller.cancel(user, id)
@@ -148,6 +255,9 @@ class MeImportController(
 
     companion object {
         const val DEFAULT_PAGE_SIZE = 20
+
+        private const val PROBLEM_JSON = "application/problem+json"
+        private const val IMPORT_DOES_NOT_EXIST = "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id"
 
         // Spec section 14 promises this sentence to the API documentation, not only to itself.
         private const val IMPORT_IS_NOT_ATOMIC =

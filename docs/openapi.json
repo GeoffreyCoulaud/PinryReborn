@@ -366,6 +366,31 @@
           }
         }
       },
+      "ProblemDetail" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "detail" : {
+            "type" : [ "string", "null" ]
+          },
+          "instance" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "title", "status", "detail", "instance", "code" ]
+      },
       "RecycledBoardDto" : {
         "type" : "object",
         "required" : [ "id", "name", "description" ],
@@ -1327,12 +1352,22 @@
         "summary" : "Open an import and wait for its archive",
         "description" : "An import is not atomic: it creates rows as it walks the archive, and what it has already created stays if it fails, is cancelled or is abandoned.",
         "responses" : {
-          "200" : {
-            "description" : "OK",
+          "202" : {
+            "description" : "Import opened, awaiting its archive",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "IMPORT_ALREADY_IN_PROGRESS: this account already has an active import",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
@@ -1362,11 +1397,21 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
+            "description" : "The import's state and counters",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
@@ -1397,7 +1442,17 @@
         } ],
         "responses" : {
           "204" : {
-            "description" : "No Content"
+            "description" : "Import cancelled"
+          },
+          "404" : {
+            "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
           },
           "401" : {
             "description" : "Not Authorized"
@@ -1444,11 +1499,51 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
+            "description" : "Chunk appended, with the upload's new length",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "IMPORT_NOT_AWAITING_ARCHIVE, or IMPORT_CHUNK_OFFSET_MISMATCH naming the current length",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "413" : {
+            "description" : "IMPORT_ARCHIVE_TOO_LARGE: the chunk would carry the upload past imports.max_archive_bytes",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "507" : {
+            "description" : "IMPORT_INSUFFICIENT_STORAGE: free space is under imports.minimum_free_bytes",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
@@ -1479,12 +1574,32 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
+          "202" : {
+            "description" : "Upload closed and the import queued",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "IMPORT_NOT_AWAITING_ARCHIVE, or IMPORT_ARCHIVE_EMPTY when no chunk ever landed",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
@@ -1533,11 +1648,21 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
+            "description" : "One page of the import's report",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/UserDataImportIssueListOutputDto"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
