@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.boards.BoardNameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
@@ -11,6 +12,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QPinBo
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.BoardQueries
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.queries.withActivePin
 import jakarta.enterprise.context.ApplicationScoped
+import jakarta.persistence.PersistenceException
 import java.time.Instant
 import java.util.UUID
 
@@ -30,10 +32,30 @@ class BoardRepository(
     private fun List<BoardModel>.sortedForListing(): List<BoardModel> =
         sortedWith(compareBy({ it.name.lowercase() }, { it.id }))
 
-    override fun saveBoard(board: Board): Board = sqlRepository.saveAndReturn(board.toModel()).toDomain()
+    override fun saveBoard(board: Board): Board =
+        try {
+            sqlRepository.saveAndReturn(board.toModel()).toDomain()
+        } catch (error: PersistenceException) {
+            // ix_boards_author_name_nocase is the only unique index on boards, so a violation is a
+            // taken name. Covers creation and renaming; restoreBoard changes no indexed column.
+            SqliteConstraintViolations.translateUniqueConstraint(error) {
+                BoardNameAlreadyTakenException(cause = it)
+            }
+        }
 
     override fun findBoardById(id: UUID): Board? =
         BoardQueries.any().id.equalTo(id).findOne()?.toDomain()
+
+    // Reads every state through BoardQueries.any(): a recycled board holds its name (ADR 0008 asks
+    // the state be named). The comparison goes through the column's own collation rather than
+    // Ebean's `ieq`, which renders lower(column) = ? with the bind lowercased in Java: that fold is
+    // Unicode aware while `collate nocase` is ASCII only, so the two disagree in one direction.
+    override fun findBoardForUserByName(user: User, name: String): Board? =
+        BoardQueries.any()
+            .author.id.equalTo(user.id)
+            .raw("name collate nocase = ?", name)
+            .findOne()
+            ?.toDomain()
 
     override fun findActiveBoardById(id: UUID): Board? =
         BoardQueries.active().id.equalTo(id).findOne()?.toDomain()

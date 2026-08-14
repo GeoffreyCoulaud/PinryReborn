@@ -10,7 +10,8 @@ interface TagRepositoryInterface {
     fun saveTag(tag: Tag): Tag
 
     /**
-     * Find a tag with the given name for the specific user
+     * Find a tag with the given name for the specific user.
+     * The fold is the index's own, ASCII case only, so two names differing outside A to Z are two names.
      */
     fun findUserTagByName(
         user: User,

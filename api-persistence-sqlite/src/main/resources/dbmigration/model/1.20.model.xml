@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<migration xmlns="http://ebean-orm.github.io/xml/ns/dbmigration">
+    <changeSet type="apply">
+        <createIndex indexName="ix_boards_author_name_nocase" tableName="boards" columns="" definition="create unique index ix_boards_author_name_nocase on boards (author_id, name collate nocase)"/>
+        <createIndex indexName="ix_tags_author_name_nocase" tableName="tags" columns="" definition="create unique index ix_tags_author_name_nocase on tags (author_id, name collate nocase)"/>
+    </changeSet>
+</migration>
