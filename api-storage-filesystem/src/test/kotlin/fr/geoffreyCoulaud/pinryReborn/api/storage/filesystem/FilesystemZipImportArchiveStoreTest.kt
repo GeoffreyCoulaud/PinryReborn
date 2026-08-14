@@ -414,16 +414,25 @@ class FilesystemZipImportArchiveStoreTest {
     }
 
     @Test
-    fun `Given a line past the byte bound, Then it carries a failure and the corrupt tail is never read`() {
-        // Given: the same discriminator as readJson's bound, and the only one available here
-        val storageKey = writeArchiveWithCorruptTail("imports/long-line.zip", "pins.jsonl", paddedJson())
+    fun `Given a line past the byte bound, Then it carries a failure and the walk continues`() {
+        // Given: an over-long line between two readable ones, and a last one the entry ends without a
+        // newline. Ending the walk on the first would drop every later line with no signal a caller can
+        // tell from the end of the entry.
+        val overLong = """{"name":"""" + "a".repeat(OVER_LONG_CHARACTERS) + """","count":1}"""
+        val good = """{"name":"good","count":1}"""
+        val storageKey =
+            promoteArchive("imports/long-line.zip") { zip ->
+                writeEntry(zip, "pins.jsonl", "$overLong\n$good\n$overLong")
+            }
 
         // When
         val lines = readLines(storageKey)
 
         // Then
-        assertNull(lines.single().value)
-        assertTrue(lines.single().failure?.contains("$MAX_LINE_BYTES") == true)
+        assertEquals(listOf(1, 2, 3), lines.map { it.line })
+        assertTrue(lines[0].failure?.contains("$MAX_LINE_BYTES") == true)
+        assertEquals("good", lines[1].value?.name)
+        assertTrue(lines[2].failure?.contains("$MAX_LINE_BYTES") == true)
     }
 
     @Test
@@ -543,6 +552,7 @@ class FilesystemZipImportArchiveStoreTest {
         const val MAX_LINE_BYTES = 1_024
         const val BOUND_BYTES = 1_024L
         const val MANY_ENTRIES = 100
+        const val OVER_LONG_CHARACTERS = 2_000
         const val PADDING_CHARACTERS = 2_000_000
         const val LOCAL_HEADER_BYTES = 30
         const val KEPT_COMPRESSED_BYTES = 200
