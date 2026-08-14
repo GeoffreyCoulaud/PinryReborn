@@ -307,9 +307,12 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
     fun `Given a row whose sweep fails outside Exception, Then the failure is not absorbed`() {
         // Given: the isolation absorbs an Exception deliberately, and nothing wider. detekt reads catch
         // clauses only, so a swallow broader than Exception would ship with no suppression and no reason.
-        stubSweep()
+        // Stubbed by hand rather than through stubSweep(): the run stops here, so the two selections
+        // after it and the staged-file sweep are never reached.
+        every { clock.now() } returns now
         stubRowWrites()
         val refused = anImport(UserDataImportState.AWAITING_ARCHIVE)
+        every { repository.findAbandonableBefore(any()) } returns listOf(refused)
         every { archiveStore.discardPartialUpload(refused.id) } throws StackOverflowError("native frame")
 
         // When / Then

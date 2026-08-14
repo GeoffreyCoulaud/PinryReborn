@@ -86,12 +86,16 @@ class ReapAbandonedUserDataImports(
 
     /**
      * Item-level isolation, as `ReapExpiredUserDataExports` has: one row the store or the database
-     * refuses must not leave the rest of the hour's sweep undone.
+     * refuses must not leave the rest of the hour's sweep undone, and either can throw anything.
      */
+    @Suppress("TooGenericExceptionCaught")
     private fun swept(importId: UUID, sweep: () -> Boolean): Boolean =
-        runCatching(sweep)
-            .onFailure { logger.warn(it) { "import sweep failed for import $importId" } }
-            .getOrDefault(false)
+        try {
+            sweep()
+        } catch (e: Exception) {
+            logger.warn(e) { "import sweep failed for import $importId" }
+            false
+        }
 
     private companion object {
         private val logger = KotlinLogging.logger {}
