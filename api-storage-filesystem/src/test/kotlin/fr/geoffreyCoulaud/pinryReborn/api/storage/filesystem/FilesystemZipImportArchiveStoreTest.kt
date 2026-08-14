@@ -402,6 +402,24 @@ class FilesystemZipImportArchiveStoreTest {
     }
 
     @Test
+    fun `Given a blank line, Then it is skipped and the numbering still follows the file`() {
+        // Given: the writer emits none, but a hand-edited or concatenated archive holds them. A blank
+        // line carries no entry to report, so counting it as malformed would fill the report with
+        // noise the user cannot act on.
+        val first = """{"name":"first","count":1}"""
+        val third = """{"name":"third","count":3}"""
+        val storageKey =
+            promoteArchive("imports/blank-line.zip") { writeEntry(it, "pins.jsonl", "$first\n\n$third\n") }
+
+        // When
+        val lines = readLines(storageKey)
+
+        // Then: the line after the blank one still reports the number it holds in the file
+        assertEquals(listOf(1, 3), lines.map { it.line })
+        assertEquals(listOf("first", "third"), lines.map { it.value?.name })
+    }
+
+    @Test
     fun `Given an absent JSON lines entry, Then the walk runs once over nothing`() {
         // Given
         val storageKey = promoteArchive("imports/no-lines.zip") { writeEntry(it, "manifest.json", "{}") }
