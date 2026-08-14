@@ -57,12 +57,12 @@ class ReapAbandonedUserDataImports(
         repository.findRunning().filter { it.lostItsTask() }.count { swept(it.id) { failInterrupted(it.id) } }
 
     /**
-     * Absent never means "not enqueued yet": the task, the transition and the id that names it commit
-     * together, so a `RUNNING` row always had one. It means the terminal task sweep deleted it.
+     * A live attempt is a task `PENDING` or `RUNNING`, lease expiry included; every other state has
+     * settled. Absent means the terminal task sweep deleted it, never "not enqueued yet".
      */
     private fun UserDataImport.lostItsTask(): Boolean {
         val task = taskId?.let { taskQueue.findById(it) } ?: return true
-        return task.state == TaskState.DEAD
+        return task.state !in LIVE_ATTEMPT_STATES
     }
 
     private fun failInterrupted(importId: UUID): Boolean =
@@ -99,6 +99,9 @@ class ReapAbandonedUserDataImports(
 
     private companion object {
         private val logger = KotlinLogging.logger {}
+
+        /** The two states a task the queue still owes this row can be in (spec section 6). */
+        private val LIVE_ATTEMPT_STATES = setOf(TaskState.PENDING, TaskState.RUNNING)
 
         /** Spec section 10's failure code for a walk whose attempt is not coming back. */
         const val IMPORT_INTERRUPTED = "IMPORT_INTERRUPTED"
