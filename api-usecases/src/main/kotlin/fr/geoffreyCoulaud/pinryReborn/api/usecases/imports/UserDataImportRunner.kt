@@ -186,10 +186,7 @@ class UserDataImportRunner(
         importId: UUID,
         held: (UserDataImport) -> Boolean,
         update: (UserDataImport) -> UserDataImport,
-    ): UserDataImport? =
-        transactionRunner.inTransaction {
-            importRepository.findById(importId)?.takeIf(held)?.let { importRepository.save(update(it)) }
-        }
+    ): UserDataImport? = importRepository.saveFenced(transactionRunner, importId, held, update)
 
     /** The cap counts the rows already stored, which a lost counter write would over-report. */
     private fun recorderFor(opened: UserDataImport): ImportIssueRecorder =
