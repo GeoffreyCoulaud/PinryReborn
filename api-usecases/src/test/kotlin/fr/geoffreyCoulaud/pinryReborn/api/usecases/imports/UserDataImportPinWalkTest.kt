@@ -223,6 +223,33 @@ internal class UserDataImportPinWalkTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given a settlement that throws after reporting, Then the issue is not counted twice`() {
+        // Given: a digest mismatch to report, then a transaction that throws on the pin it was settling.
+        // The real transaction rolls the issue row back; the recorder's counter, held in memory, cannot
+        // follow it, so the cap would end an attempt short by every issue a rejected line had reported.
+        val lying = aPin().copy(image = ImportedImage(ALPHA_PATH, "0".repeat(HASH_LENGTH)))
+        val source = FakeArchiveSource(aManifest(), pins = listOf(TestLine(1, lying)), media = everyMedium)
+        stubWalk(source)
+        stubDigest()
+        stubHashLookup()
+        stubStage()
+        stubPromote()
+        stubProbe()
+        stubDiscard()
+        stubDelete()
+        stubIssues()
+        every { pinRepository.savePin(any()) } throws IllegalStateException("constraint violation")
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then: the rejected line reports once, and the issue the discarded transaction held is not kept
+        assertEquals(listOf(UserDataImportIssueKind.LINE_REJECTED), kinds())
+        assertEquals(1, stored.issueCount)
+        assertEquals(1, stored.skippedPins)
+    }
+
+    @Test
     fun `Given an interrupted walk, Then a second run resumes from the cursor and duplicates nothing`() {
         // Given
         val pins =
