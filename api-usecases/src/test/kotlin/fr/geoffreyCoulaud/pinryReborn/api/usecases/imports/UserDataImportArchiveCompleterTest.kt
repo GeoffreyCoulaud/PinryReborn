@@ -100,11 +100,8 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
 
     @Test
     fun `Given an import that received no chunk, Then completion is refused before the store is touched`() {
-        // Given: nothing created the upload file, so `finishUpload` opens an absent path and raises
-        // NoSuchFileException, untyped, which reaches the client as a 500:
-        //   java.nio.file.NoSuchFileException: /tmp/.../tmp/import-a1d0d5d4-....part
-        //       at java.base/java.nio.channels.FileChannel.open(FileChannel.java:353)
-        //       at ...FilesystemZipImportArchiveStore.finishUpload(FilesystemZipImportArchiveStore.kt:105)
+        // Given: nothing created the upload file, so `finishUpload` opens an absent path and raises an
+        // untyped NoSuchFileException, a 500 for the client. Its trace is in this commit's message.
         every { repository.findById(importId) } returns importWith().copy(uploadedBytes = 0)
 
         // When / Then

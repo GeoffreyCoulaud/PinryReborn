@@ -14,11 +14,8 @@ interface ArchiveSource : AutoCloseable {
     fun <T : Any> readJson(name: String, type: Class<T>, maxBytes: Long): T?
 
     /**
-     * Loan a lazy line sequence for a JSON Lines entry, same contract as the export's sink: the
-     * adapter owns the entry stream and closes it when [block] returns.
-     *
-     * Every line of the entry is yielded, a bad one carrying its failure, so the sequence ends only at
-     * the end of the entry. A line of no bytes is the one exception: it holds no entry to report.
+     * Loan a lazy line sequence for a JSON Lines entry: the adapter owns the stream and closes it when
+     * [block] returns. Every line but a blank one is yielded, so it ends at the end of the entry only.
      */
     fun <T : Any> readJsonLines(name: String, type: Class<T>, block: (Sequence<ArchiveLine<T>>) -> Unit)
 

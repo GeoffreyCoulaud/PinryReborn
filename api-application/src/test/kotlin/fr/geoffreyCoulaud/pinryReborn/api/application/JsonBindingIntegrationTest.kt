@@ -10,11 +10,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**
- * The CDI [ObjectMapper] binds every REST request body and every base64 cursor parameter.
- * `quarkus-kotlin` registers `KotlinModule` on it as soon as `jackson-module-kotlin` sits on the
- * runtime classpath, with no opt-in, and the import reader's dependency put it there. It is kept
- * deliberately, stricter null handling on Kotlin DTOs being what the boundary rule wants, and pinned
- * here because nothing else in this repository would notice it arriving or leaving.
+ * `quarkus-kotlin` registers `KotlinModule` on the CDI [ObjectMapper] as soon as the import reader's
+ * `jackson-module-kotlin` is on the classpath. Kept, and pinned: that mapper binds every request body.
  */
 @QuarkusTest
 class JsonBindingIntegrationTest : IntegrationTest() {

@@ -62,9 +62,8 @@ internal class ZipArchiveSource(
     override fun close() = zip.close()
 
     /**
-     * An over-long line is reported and walked past, never ending the walk: a walk that ends is
+     * A bad line is reported and walked past, never ending the walk: a walk that ends is
      * indistinguishable from the end of the entry, so every later line would be dropped unreported.
-     * The bound protects the heap, which discarding the rest of the line still honours.
      */
     private fun <T : Any> lines(
         stream: InputStream,
@@ -75,15 +74,21 @@ internal class ZipArchiveSource(
             while (true) {
                 val line = readLine(stream) ?: return@sequence
                 number++
-                if (line.overLong) {
-                    yield(ZipArchiveLine<T>(number, null, "Line is longer than the $maxLineBytes bytes allowed"))
-                    continue
-                }
-                // A line of no bytes holds no entry, so it is not an entry that failed. It still counts
-                // for the numbering, so a later failure names the line the file holds.
-                if (line.bytes.isEmpty()) continue
-                yield(parse(number, line.bytes, type))
+                val read = read(number, line, type)
+                if (read != null) yield(read)
             }
+        }
+
+    /** Null for a line of no bytes: it holds no entry, so it is not an entry that failed. */
+    private fun <T : Any> read(
+        number: Int,
+        line: ReadLine,
+        type: Class<T>,
+    ): ArchiveLine<T>? =
+        when {
+            line.overLong -> ZipArchiveLine(number, null, "Line is longer than the $maxLineBytes bytes allowed")
+            line.bytes.isEmpty() -> null
+            else -> parse(number, line.bytes, type)
         }
 
     private fun <T : Any> parse(
