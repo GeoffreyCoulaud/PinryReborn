@@ -528,6 +528,148 @@
           }
         }
       },
+      "UserDataImportIssueListOutputDto" : {
+        "type" : "object",
+        "required" : [ "issues", "pagination" ],
+        "properties" : {
+          "issues" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UserDataImportIssueOutputDto"
+            }
+          },
+          "pagination" : {
+            "$ref" : "#/components/schemas/PaginationOutputDto"
+          }
+        }
+      },
+      "UserDataImportIssueOutputDto" : {
+        "type" : "object",
+        "required" : [ "id", "kind", "line", "subject", "detail" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "line" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "subject" : {
+            "type" : [ "string", "null" ]
+          },
+          "detail" : {
+            "type" : [ "string", "null" ]
+          }
+        }
+      },
+      "UserDataImportListOutputDto" : {
+        "type" : "object",
+        "required" : [ "imports", "pagination" ],
+        "properties" : {
+          "imports" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UserDataImportOutputDto"
+            }
+          },
+          "pagination" : {
+            "$ref" : "#/components/schemas/PaginationOutputDto"
+          }
+        }
+      },
+      "UserDataImportOutputDto" : {
+        "type" : "object",
+        "required" : [ "id", "state", "requestedAt", "uploadedBytes", "byteSize", "archiveCompletedAt", "startedAt", "completedAt", "formatVersion", "announcedPins", "processedPins", "createdPins", "skippedPins", "createdBoards", "skippedBoards", "createdTags", "skippedTags", "issueCount", "issueDetailTruncated", "failureCode" ],
+        "properties" : {
+          "id" : {
+            "$ref" : "#/components/schemas/UUID"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "$ref" : "#/components/schemas/Instant"
+          },
+          "uploadedBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "byteSize" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "archiveCompletedAt" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Instant"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "startedAt" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Instant"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "completedAt" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Instant"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "formatVersion" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "announcedPins" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "processedPins" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdPins" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skippedPins" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdBoards" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skippedBoards" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdTags" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skippedTags" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "issueCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "issueDetailTruncated" : {
+            "type" : "boolean"
+          },
+          "failureCode" : {
+            "type" : [ "string", "null" ]
+          }
+        }
+      },
       "UserInputDto" : {
         "type" : "object",
         "required" : [ "name", "password" ],
@@ -1132,6 +1274,282 @@
         },
         "summary" : "Download Export",
         "tags" : [ "Me Export Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/imports" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "cursor",
+          "in" : "query",
+          "schema" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CursorDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataImportListOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "List Imports",
+        "tags" : [ "Me Import Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "post" : {
+        "summary" : "Open an import and wait for its archive",
+        "description" : "An import is not atomic: it creates rows as it walks the archive, and what it has already created stays if it fails, is cancelled or is abandoned.",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "tags" : [ "Me Import Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/imports/{id}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "summary" : "Get Import",
+        "tags" : [ "Me Import Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      },
+      "delete" : {
+        "summary" : "Cancel an import",
+        "description" : "Cancelling leaves partial state: the pins, boards and tags the import has already created stay, and only the archive and the work still to do are dropped.",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "tags" : [ "Me Import Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/imports/{id}/archive" : {
+      "put" : {
+        "summary" : "Append one chunk of the archive at the given offset",
+        "description" : "Answers the upload's new length. An offset that is not the current length is refused with that length, so a client resumes rather than restarts.",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        }, {
+          "name" : "offset",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/octet-stream" : {
+              "schema" : {
+                "type" : "string",
+                "format" : "binary"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "tags" : [ "Me Import Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/imports/{id}/archive/complete" : {
+      "post" : {
+        "summary" : "Close the upload and queue the import",
+        "description" : "An import is not atomic: it creates rows as it walks the archive, and what it has already created stays if it fails, is cancelled or is abandoned.",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataImportOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "tags" : [ "Me Import Controller" ],
+        "security" : [ {
+          "SecurityScheme" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/me/imports/{id}/issues" : {
+      "get" : {
+        "summary" : "Read the import's report",
+        "description" : "Anomalies the walk recorded. Past `imports.report_detail_limit` rows only the count keeps growing, and the import says so through `issueDetailTruncated`.",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UUID"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "schema" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/CursorDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "schema" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserDataImportIssueListOutputDto"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Not Authorized"
+          },
+          "403" : {
+            "description" : "Not Allowed"
+          }
+        },
+        "tags" : [ "Me Import Controller" ],
         "security" : [ {
           "SecurityScheme" : [ ]
         } ]
