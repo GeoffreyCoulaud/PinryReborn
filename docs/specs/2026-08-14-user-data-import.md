@@ -1,7 +1,7 @@
 # User data import (portability)
 
 Date: 2026-08-14
-Status: draft, revised after the six spec angles, pending approval
+Status: approved 2026-08-14, then corrected on seven points the plan angles falsified (marked below)
 Depends on: the export archive format (`docs/specs/2026-07-22-user-data-export.md` section 4,
 `formatVersion` 1), the task queue (`EnqueueTask`, `CancelTask`, `TaskHandler`, `renewLease`),
 `ImageStore`, `ImageProbe`, the pin / board / tag / image repositories, `TransactionRunner`, `Clock`.
@@ -148,7 +148,8 @@ writing:
 
 | Field | Bound | Source of the bound |
 |---|---|---|
-| board / tag name | non-blank, at most 200 characters | `BoardInputDto`, `PinTagsInputDto` |
+| board name | non-blank, at most 200 characters | `BoardInputDto` |
+| tag name | non-blank, at most 200 characters | non-blank from `PinTagsInputDto`; the length bound is **new**, since nothing bounds a tag name today |
 | board / pin description | at most 2000 characters | `BoardInputDto`, `PinCreationInputDto` |
 | `sourceContextUrl` | non-blank | `PinCreationInputDto` |
 | `tags[]`, `boards[]` per pin | at most 100 entries each | new: nothing bounds them today, and the list is resolved inside one transaction |
@@ -274,16 +275,25 @@ loan contract: the adapter owns the entry stream and closes it when `block` retu
 defaults, which bound a single string but not a document.
 
 **Deserialization needs `jackson-module-kotlin`.** Not, as the first draft claimed, because Jackson
-cannot instantiate a data class: the build sets `javaParameters` and `jackson-module-parameter-names`
-is already present, so constructor binding works without it. The reason is **null safety**: without
+cannot instantiate a data class: the build sets `javaParameters`, so parameter names are in the
+bytecode and a module that reads them can bind a primary constructor. (`jackson-module-parameter-names`
+is **not** on this module's classpath and is declared nowhere in the build; an earlier revision said
+it was.) The reason to take the Kotlin module is **null safety**: without
 the Kotlin module, a missing or null JSON field lands as `null` inside a non-nullable Kotlin property
 and fails later at an unrelated site, which is precisely what an archive-driven test suite must not
 depend on. Verified absent from the module's classpath
 (`./gradlew :api-storage-filesystem:dependencies --configuration runtimeClasspath` resolves
 `jackson-core`, `-databind`, `-annotations`, `-datatype-jsr310` and nothing else). It is registered
 on a reader-only `ObjectMapper`; the export builds its own explicitly, with no
-`findAndRegisterModules()`, so the written format cannot move and `ExportContentGoldenJsonTest`
-remains the proof.
+`findAndRegisterModules()`, so the written format cannot move.
+
+**`ExportContentGoldenJsonTest` is not the proof of that, contrary to what an earlier revision
+said.** It lives in `api-usecases` and builds a replica mapper, and its own KDoc says it stops
+proving anything about the real archive if the adapter's configuration drifts. It also asserts, in
+prose, that no `jackson-module-kotlin` exists anywhere in this codebase, which this lot falsifies.
+The proof that the writer is unchanged is therefore an assertion in `api-storage-filesystem` over the
+writer mapper's registered module ids, plus the cross-adapter round trip; and the golden test's KDoc
+is corrected in the commit that adds the dependency.
 
 `ImportAlreadyInProgressException` lives in `domain.imports`, not in `api-usecases`: the persistence
 adapter throws it and the use case rethrows `ImportAlreadyInProgressError`. `api-persistence-sqlite`
@@ -328,8 +338,11 @@ recycle bin would try to create a board whose name is already taken and hit the 
   `uploadedBytes` and `lastUploadActivityAt`. Refuses an out-of-order offset with the current length
   so a client can resume without guessing.
 - **`UserDataImportArchiveCompleter.complete(user, importId)`**: `finishUpload`, write `storageKey`
-  and `byteSize`, promote, move to `PENDING`, enqueue `account.import` below `account.deletion`'s
-  priority, store the task id. The storage key is written **before** the promote, as the export
+  and `byteSize`, promote, move to `PENDING`, enqueue `account.import` at an explicit priority of
+  `-1`, store the task id. Every task kind in this system currently runs at the default priority of
+  `0`: no call site passes the argument, and the kind is `account.delete`, not `account.deletion`. So
+  "below account deletion" is only expressible as a negative number, and this is the first use of the
+  field. The storage key is written **before** the promote, as the export
   builder does, so bytes are reclaimable even if the row is never written again.
 - **`UserDataImportRunner.run(importId, isLastAttempt, renewLease)`**: the worker path (section 8).
 - **`UserDataImportGetter`**, **`UserDataImportIssueLister`**: owner-checked reads.
@@ -422,10 +435,15 @@ Per pin, in order:
    refusal is `MEDIA_TOO_MANY_PIXELS`; both discard the staged file.
 5. Promote the bytes, then in **one transaction**: re-read the row, proceed only if it still holds
    the run, create the pin with the clamped timestamps, create the image row, resolve tags and boards
-   by name, write memberships **without passing through `Pin.boards`** (the mapped value drops
-   recycled boards, so saving it back would delete those join rows), apply `deletedAt`, and increment
-   the cursor and counters. If the fence fails or the transaction throws, delete the promoted bytes
-   and discard the staged file, as `SetPinImage`'s compensation does.
+   by name, write memberships through `Pin.boards` as any other writer does, apply `deletedAt`, and
+   increment the cursor and counters. If the fence fails or the transaction throws, delete the
+   promoted bytes and discard the staged file, as `SetPinImage`'s compensation does.
+
+   **Correction.** An earlier revision of this section forbade passing through `Pin.boards`, on the
+   claim that saving a mapped pin would delete the join rows of recycled boards. That is false:
+   `PinRepository.savePinBoards` diffs only against active memberships, deliberately and with a
+   comment saying so, precisely so a recycled board's join row survives a re-save. The ordinary path
+   is the correct one and no second membership writer is needed.
 
 Every issue row is written in the same transaction as the cursor increment that settles its line, so
 a crash cannot duplicate or lose it.
@@ -468,7 +486,7 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
 |---|---|---|
 | `imports.data_dir` | `/var/lib/pinry/imports` | Uploaded archives (a new volume) |
 | `imports.max_archive_bytes` | `21474836480` (20 GiB) | Refused past this, per import |
-| `imports.max_chunk_bytes` | `33554432` (32 MiB) | Must stay under `quarkus.http.limits.max-body-size` |
+| `imports.max_chunk_bytes` | `16777216` (16 MiB) | Strictly under `quarkus.http.limits.max-body-size`, which is `32M`, meaning 33554432 bytes. The 32 MiB this table first carried was exactly equal to it, so the invariant was violated by its own default |
 | `imports.max_entries` | `200000` | Archive entry-count bound |
 | `imports.max_metadata_bytes` | `16777216` (16 MiB) | Per non-image entry read whole |
 | `imports.max_line_bytes` | `1048576` (1 MiB) | Per JSONL line |
@@ -515,12 +533,18 @@ Failure codes on the row: `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
 `UNSUPPORTED_FORMAT_VERSION`, `DISK_FULL`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`.
 
 Each new code is an arm of `BaseErrorMapper`'s exhaustive `when`, landing in the same commit as the
-enum value. `jakarta.ws.rs` has an `INSUFFICIENT_STORAGE` constant; if it does not, the fallback title
-path is used and the spec says so once that is checked.
+enum value. `jakarta.ws.rs` has **no** `INSUFFICIENT_STORAGE` constant (verified with `javap` on
+`jakarta.ws.rs-api-3.1.0.jar`: `Response$Status` stops at `NETWORK_AUTHENTICATION_REQUIRED`).
+Nothing new is needed: `BaseErrorMapper.statusFor` already returns a raw `Int` and already carries
+this workaround for `IMAGE_INVALID`. The title fallback is currently hardcoded to the 422 wording, so
+it is generalised in the same commit rather than shipping a 507 titled "Unprocessable Entity".
 
 ## 11. Persistence and migration
 
-Migration `1.20` creates `user_data_imports` and `user_data_import_issues`, adds the two unique
+The schema change spans **three generated migrations**, not one, because three tasks touch the schema
+and each generates its own pair against the model directory as it stands; the generator owns the
+numbers and no document asserts them. Together they create `user_data_imports` and
+`user_data_import_issues`, add the two unique
 indexes of section 12, adds a **non-unique** index on `images (content_hash)`, and adds the partial
 unique index over the active import states.
 
@@ -557,9 +581,10 @@ The import needs a name to be an identity. Today it is not one.
 
 **The constraint fires at three sites, not one.** Besides creation, `PUT /api/v1/boards/{boardId}`
 renames through `BoardUpdater` with no check, and `BoardRecycleBin.restore` re-activates a board. The
-translation therefore lives in `BoardRepository.saveBoard` (the `UserRepository.saveUser`
-precedent) and each use case rethrows the domain error, so no persistence exception reaches a
-controller from any of the three.
+translation lives at **two** repository methods, not one: `saveBoard` covers creation and renaming,
+and `restoreBoard` covers restoration, which persists its model directly and never passes through
+`saveBoard`. Each use case rethrows the domain error, so no persistence exception reaches a
+controller from any of the three sites.
 
 **Recycled rows hold their name.** Operator decision. The index covers every row, like
 `ix_users_name_nocase`. Consequences, all deliberate: a board in the recycle bin blocks a new board
@@ -567,9 +592,14 @@ of that name until the bin is emptied, so the `409` detail says the name is held
 rather than leaving the client guessing; restoring from the recycle bin can no longer collide, since
 no homonym can have been created meanwhile; and the import's board finder reads every state.
 
-**The fold is ASCII.** `collate nocase` folds A to Z and nothing else, so `ÉTÉ` and `été` remain two
-names. The read side uses the same fold, so read and index agree. This is a stated limit rather than
-a claim of case insensitivity in general.
+**The fold is ASCII, and the read must use the index's fold rather than Java's.** `collate nocase`
+folds A to Z and nothing else, so `ÉTÉ` and `été` remain two names: a stated limit rather than a
+claim of case insensitivity in general. The trap is that Ebean's `ieq` renders `lower(column) = ?`
+with the bound value lowercased in Java, which **is** Unicode aware, so read and index disagree in
+one direction: with `ÉTÉ` stored, a lookup for `été` misses, while the reverse matches. Both name
+lookups therefore compare through the column's own collation
+(`raw("name collate nocase = ?", name)`), so the read folds exactly as the index does. Tested in both
+directions, because the one-directional test the precedent carries would not have caught this.
 
 ## 13. Testing strategy
 
@@ -659,7 +689,8 @@ TDD, 100% branch coverage per package. Each scenario names where it lives, becau
   and not only here.
 - **A long import holds one of four worker permits for hours**, and every write in the instance
   queues behind one SQLite connection. Several concurrent imports can starve `pin.download` and
-  `account.export`; `account.deletion` is enqueued above them. No per-kind fairness exists.
+  `account.export`, which is why the import enqueues at priority `-1` while everything else sits at
+  `0`. No per-kind fairness exists beyond that single number.
 - **The report cap can hide detail**, flagged rather than silent.
 - **Lowering `images.max_file_bytes` later makes previously importable archives partly
   un-importable**, as `MEDIA_TOO_LARGE`.
