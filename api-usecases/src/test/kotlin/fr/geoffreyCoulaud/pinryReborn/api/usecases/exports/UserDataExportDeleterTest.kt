@@ -18,6 +18,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -58,9 +59,16 @@ class UserDataExportDeleterTest : BaseTest() {
 
     private fun stored(): UserDataExport? = rows[exportId]
 
+    /** Which transaction each read and each write ran in, `null` outside one: a fence is one number. */
+    private val readInTransactions = mutableListOf<Int?>()
+    private val writtenInTransactions = mutableListOf<Int?>()
+
     private fun stubRow(row: UserDataExport) {
         rows[row.id] = row
-        every { repository.findById(any()) } answers { rows[firstArg<UUID>()] }
+        every { repository.findById(any()) } answers {
+            readInTransactions += transactions.current
+            rows[firstArg<UUID>()]
+        }
     }
 
     /** The racing actor committing between the owner check and the fence, which only the fence sees. */
@@ -74,7 +82,27 @@ class UserDataExportDeleterTest : BaseTest() {
     }
 
     private fun stubRowWrites() {
-        every { repository.save(any()) } answers { firstArg<UserDataExport>().also { row -> rows[row.id] = row } }
+        every { repository.save(any()) } answers {
+            writtenInTransactions += transactions.current
+            firstArg<UserDataExport>().also { row -> rows[row.id] = row }
+        }
+    }
+
+    @Test
+    fun `Given a deletion being written, Then the row is read and written in one transaction`() {
+        // Given: the predicate alone holds against two successive transactions, and a build landing
+        // between them is restored by merge, which writes every column of the copy it is handed. The
+        // single connection serialises each statement, not a pair (`docs/adr/0016`, decision 1).
+        stubRow(exportWith(state = UserDataExportState.FAILED))
+        stubRowWrites()
+
+        // When: a FAILED export, so the write is the whole use case and no release follows it
+        deleter.delete(user, exportId)
+
+        // Then: the owner check reads outside any transaction, the fence in the one it writes in
+        val fenced = writtenInTransactions.single()
+        assertNotNull(fenced, "the deletion should write inside a transaction")
+        assertEquals(listOf(null, fenced), readInTransactions)
     }
 
     @Test
