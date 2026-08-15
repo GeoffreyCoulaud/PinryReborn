@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -353,6 +354,29 @@ class MeImportIntegrationTest : IntegrationTest() {
         assertEquals(1, pinRepository.findAllPinsForUser(auth.user).size)
     }
 
+    @Test
+    fun `Given a chunk carrying the upload past the maximum, Then it is refused and the length holds`() {
+        // Given: the upload filled to imports.max_archive_bytes exactly
+        val auth = createAuthenticatedUser()
+        val importId = openImport(auth)
+        val toTheBound = ByteArray(importsConfig.maxArchiveBytes().toInt())
+        uploadChunk(auth, importId, toTheBound, 0).then().statusCode(200)
+
+        // When: one byte more
+        val refused = uploadChunk(auth, importId, ByteArray(1), toTheBound.size.toLong())
+
+        // Then: over the wire, since the use-case case for this stubs the store that raises it
+        refused
+            .then().statusCode(413)
+            .contentType("application/problem+json")
+            .body("code", equalTo("IMPORT_ARCHIVE_TOO_LARGE"))
+        assertEquals(
+            toTheBound.size.toLong(),
+            importRepository.findById(importId)?.uploadedBytes,
+            "a refused chunk leaves the length as it was, so the client resumes rather than restarts",
+        )
+    }
+
     // --- One archive, one of every anomaly ---
 
     @Test
@@ -525,6 +549,26 @@ class MeImportIntegrationTest : IntegrationTest() {
     }
 
     // --- Cancellation, and the wire's error format ---
+
+    @Test
+    fun `Given an import still awaiting its archive, Then cancelling it drops the partial upload`() {
+        // Given: one chunk on disk under the upload path, and no task, which this phase never has
+        val auth = createAuthenticatedUser()
+        val importId = openImport(auth)
+        uploadChunk(auth, importId, oneGoodPinArchive(), 0).then().statusCode(200)
+        val uploadPath = Path.of(importsConfig.dataDir()).resolve("tmp/import-$importId.part")
+        assertTrue(uploadPath.exists(), "the chunk is what the cancellation has to reclaim")
+
+        // When
+        given().authenticatedAs(auth).`when`().delete("/api/v1/me/imports/$importId").then().statusCode(204)
+
+        // Then
+        val cancelled = requireNotNull(importRepository.findById(importId))
+        assertEquals(UserDataImportState.CANCELLED, cancelled.state)
+        assertNull(cancelled.taskId)
+        assertEquals(0, taskQueue.countByState(TaskState.PENDING), "nothing was queued to cancel")
+        assertFalse(uploadPath.exists(), "the partial upload of a cancelled import is reclaimed")
+    }
 
     @Test
     fun `Given a PENDING import, Then cancelling it cancels the task and reclaims the archive`() {
