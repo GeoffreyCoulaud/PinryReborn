@@ -22,6 +22,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
 import java.util.UUID
 
@@ -58,36 +59,40 @@ class UserDataExportBuilder(
 
     /**
      * The worker's `account.export` task handler entry point (spec §8). Loads the export and its
-     * user, checks free space, stages and promotes the archive, then publishes the row with a
-     * compare-and-set so a build racing a cancellation or account deletion can never resurrect a
-     * row the user was told was gone. [isLastAttempt] controls whether a build failure marks the
-     * export `FAILED` (last attempt) or leaves it `PENDING` for a retry (earlier attempt); either
-     * way the original failure is rethrown so the task queue's own retry/dead-lettering still runs.
+     * user, checks free space, stages and promotes the archive, then publishes the row. Every write
+     * it makes is a compare-and-set on `PENDING` (`docs/adr/0016`), so a build racing a cancellation
+     * or an account deletion can never resurrect a row the user was told was gone. [isLastAttempt]
+     * controls whether a build failure marks the export `FAILED` (last attempt) or leaves it
+     * `PENDING` for a retry; either way the original failure is rethrown, so the queue's own retry
+     * and dead-lettering still run.
      */
     fun build(exportId: UUID, isLastAttempt: Boolean, renewLease: () -> Unit) {
-        val export = exportRepository.findById(exportId) ?: return
-        if (export.state != UserDataExportState.PENDING) return
+        val export = pendingExport(exportId) ?: return
         val user = requireUser(export)
         requireFreeSpace(export)
         val storageKey = storageKeyFor(exportId)
         // Referenced BEFORE it exists: the purge and the account cleaner both derive this same key
         // from the export id (spec §10), so a build that dies right after promote() is still
         // reclaimable even if this row never gets a further write.
-        exportRepository.save(export.copy(storageKey = storageKey))
-        val staged = stageOrFail(export, user, isLastAttempt, renewLease)
+        val stamped = stampStorageKey(exportId, storageKey) ?: return
+        val staged = stageOrFail(stamped, user, isLastAttempt, renewLease)
         archiveStore.promote(staged, storageKey)
         publish(exportId, storageKey, staged)
     }
 
+    /** The attempt's own guard, over a window this handler owns: the fences below cover the rest. */
+    private fun pendingExport(exportId: UUID): UserDataExport? =
+        exportRepository.findById(exportId)?.takeIf { it.state == UserDataExportState.PENDING }
+
     private fun requireUser(export: UserDataExport): User =
         userRepository.findUserById(export.userId) ?: run {
-            markFailed(export, "USER_GONE")
+            markFailed(export.id, "USER_GONE")
             throw PermanentTaskException("user no longer exists")
         }
 
     private fun requireFreeSpace(export: UserDataExport) {
         if (archiveStore.hasFreeSpace(minimumFreeBytes)) return
-        markFailed(export, "DISK_FULL")
+        markFailed(export.id, "DISK_FULL")
         throw PermanentTaskException("not enough free space")
     }
 
@@ -96,14 +101,30 @@ class UserDataExportBuilder(
         try {
             stageArchive(export, user, renewLease)
         } catch (error: Throwable) {
-            if (isLastAttempt) markFailed(export, "BUILD_FAILED")
+            if (isLastAttempt) markFailed(export.id, "BUILD_FAILED")
             throw error
         }
 
     private fun storageKeyFor(exportId: UUID): String = "exports/$exportId.${archiveStore.format.fileExtension}"
 
-    private fun markFailed(export: UserDataExport, failureCode: String) {
-        exportRepository.save(export.copy(state = UserDataExportState.FAILED, failureCode = failureCode))
+    /** The row as the fence found it, so the archive is written from what the row holds now. */
+    private fun stampStorageKey(exportId: UUID, storageKey: String): UserDataExport? =
+        exportRepository.saveFenced(transactionRunner, exportId, ::stillPending) {
+            it.copy(storageKey = storageKey)
+        }
+
+    /** Refused when the row moved on: the caller rethrows its own failure and this writes nothing. */
+    private fun markFailed(exportId: UUID, failureCode: String) {
+        exportRepository.saveFenced(transactionRunner, exportId, ::stillPending) {
+            it.copy(state = UserDataExportState.FAILED, failureCode = failureCode)
+        }
+    }
+
+    /** The predicate both writes take, and the one place that can name the state that took the window. */
+    private fun stillPending(export: UserDataExport): Boolean {
+        if (export.state == UserDataExportState.PENDING) return true
+        logger.info { "export ${export.id} is ${export.state}, expected PENDING: this build writes nothing" }
+        return false
     }
 
     /**
@@ -301,6 +322,8 @@ class UserDataExportBuilder(
     }
 
     private companion object {
+        private val logger = KotlinLogging.logger {}
+
         const val GENERATOR_NAME = "pinry-reborn"
         val EXCLUSIONS = listOf(
             ExportExclusion("password hashes", "secrets; useless to you, dangerous if this archive leaks"),
