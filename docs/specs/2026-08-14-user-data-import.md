@@ -550,19 +550,35 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
   takes a restart either way. What the design does buy is the sentence above it: the value reaches the
   settlement rather than the enqueue.
 
-  **An attempt ends two ways and the floor covers one of them.** A handler that returns a retryable
-  outcome is settled by `TaskProcessor`, which hands it the floor. A handler that stalls, which is
-  what a full disk does to a write, returns nothing: its lease expires and `EbeanTaskQueue.reapExpired`
-  puts the row back to `PENDING` instead. That reap now pushes `availableAt` forward by the queue's own
-  backoff, read off the attempts the row has spent; before it, the row kept the instant its claim left
-  in the past, the next one-second poll re-claimed it, and the five attempts burned in seconds with no
-  delay of any kind, which is the failure the floor was introduced to remove. The reaper cannot apply
-  the floor itself: it works on rows, and the floor belongs to a handler the persistence adapter does
-  not see. So a stalled import backs off in seconds where a returning one backs off ten minutes. The
-  gap is written here rather than closed, and closing it means the reaper resolving the kind's handler
-  or the floor becoming something the queue can read.
+  **An attempt ends two ways and the floor covers both.** A handler that returns a retryable outcome
+  is settled by `TaskProcessor`, which hands it the floor. A handler that stalls, which is what a full
+  disk does to a write, returns nothing: its lease expires and `EbeanTaskQueue.reapExpired` puts the
+  row back to `PENDING` instead. That reap pushes `availableAt` forward by the queue's own backoff over
+  the attempts the row has spent, floored at what the row's kind declares; before it, the row kept the
+  instant its claim left in the past, the next one-second poll re-claimed it, and the five attempts
+  burned in seconds with no delay of any kind, which is the failure the floor was introduced to remove.
 
-  The push applies to all four kinds, since the reaper reads no kind, and it changes what they did:
+  The reaper still reads no kind of its own. `ReapExpiredTasks` lives in `api-usecases` beside
+  `TaskHandlerRegistry`, so it resolves every registered kind to its handler's floor and hands
+  `reapExpired` that table; the adapter matches the row's kind against it. A kind the table does not
+  name is unfloored, which is what a row left behind by a removed handler gets, and such a row waits
+  no more than one poll anyway: `TaskProcessor` kills a kind it has no handler for on the next claim.
+  An earlier revision of this section recorded the difference as a limit and named the two ways to
+  close it, the reaper resolving the kind's handler or the floor becoming something the queue can
+  read. The first is what shipped. Measured at the repository level, at its 30 second base and full
+  jitter: a reaped lease of a floored kind came back available 30 seconds later and now comes back ten
+  minutes later, while a kind with no floor stays at 30 seconds exactly. At the shipped
+  `tasks.backoff_base` of one second, an import's four gaps through this exit were one, two, four and
+  eight seconds at full jitter and half that on average, against four ten-minute waits through the
+  other exit.
+
+  **The floors travel with the sweep rather than sitting on the row**, which is the decision the
+  paragraph above takes for the enqueue, for its reason: a floor stamped on a task holds the value it
+  was stamped with. What it costs is a coupling, the queue's timing now reading the registry's
+  contents, and the rows that coupling can surprise are the rows whose handler is gone, which are
+  killed rather than retried.
+
+  The push itself applies to all four kinds, floor or none, and it changes what they did:
   a task whose lease expires now waits instead of being re-claimed within the second. That is a fix in
   its own right. A task losing its lease in a loop had no pause at all, and the attempt it spends is
   the same attempt a returned failure spends.
