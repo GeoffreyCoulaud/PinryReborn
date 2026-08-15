@@ -26,6 +26,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.TagCreator
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import io.mockk.every
 import io.mockk.mockk
@@ -193,6 +194,8 @@ internal abstract class UserDataImportRunnerFixtures : BaseTest() {
             archiveStore = archiveStore,
             imageStore = imageStore,
             imageProbe = imageProbe,
+            // The real one over the same fake repository: the boundary it owns is what the walk needs.
+            tagCreator = TagCreator(tagRepository, transactions, clock),
             transactionRunner = transactions,
             clock = clock,
             maxMetadataBytes = MAX_METADATA_BYTES,

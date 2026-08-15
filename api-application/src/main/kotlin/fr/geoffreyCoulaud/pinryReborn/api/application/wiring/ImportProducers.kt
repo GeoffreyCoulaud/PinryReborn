@@ -15,6 +15,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInte
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
 import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipImportArchiveStore
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.TagCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapAbandonedUserDataImports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportChunkReceiver
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportRunner
@@ -87,6 +88,7 @@ class ImportProducers {
         archiveStore: ImportArchiveStore,
         imageStore: ImageStore,
         imageProbe: ImageProbe,
+        tagCreator: TagCreator,
         transactionRunner: TransactionRunner,
         clock: Clock,
         config: ImportsConfig,
@@ -94,7 +96,8 @@ class ImportProducers {
     ): UserDataImportRunner =
         UserDataImportRunner(
             importRepository, issueRepository, userRepository, tagRepository, boardRepository,
-            pinRepository, imageRepository, archiveStore, imageStore, imageProbe, transactionRunner, clock,
+            pinRepository, imageRepository, archiveStore, imageStore, imageProbe, tagCreator,
+            transactionRunner, clock,
             maxMetadataBytes = config.maxMetadataBytes(),
             maxEntries = config.maxEntries(),
             maxImageBytes = imagesConfig.maxFileBytes(),

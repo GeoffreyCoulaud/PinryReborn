@@ -3,7 +3,6 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
-import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataImport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportIssueKind
@@ -29,6 +28,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.TagCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.discardQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.UserDataExportRequester
@@ -55,6 +55,7 @@ class UserDataImportRunner(
     private val archiveStore: ImportArchiveStore,
     private val imageStore: ImageStore,
     private val imageProbe: ImageProbe,
+    private val tagCreator: TagCreator,
     private val transactionRunner: TransactionRunner,
     private val clock: Clock,
     private val maxMetadataBytes: Long,
@@ -291,16 +292,14 @@ class UserDataImportRunner(
         when {
             tag == null -> record(tally, UserDataImportIssueKind.LINE_MALFORMED, line.line, null, line.failure)
             fault != null -> record(tally, UserDataImportIssueKind.FIELD_INVALID, line.line, tag.name, fault)
-            tagRepository.findUserTagByName(user, tag.name) != null -> tally.skipped++
-            else -> createTag(user, tag, clamp, tally)
+            else -> resolveTag(user, tag, clamp, tally)
         }
     }
 
-    private fun createTag(user: User, tag: ImportedTag, clamp: ImportInstantClamp, tally: MetadataTally) {
-        tagRepository.saveTag(
-            Tag(id = randomUUID(), author = user, name = tag.name, createdAt = clamp.clamp(tag.createdAt)),
-        )
-        tally.created++
+    /** Through the one resolver, so the pair the unique index needs is one transaction here too. */
+    private fun resolveTag(user: User, tag: ImportedTag, clamp: ImportInstantClamp, tally: MetadataTally) {
+        val resolved = tagCreator.resolve(name = tag.name, user = user, createdAt = clamp.clamp(tag.createdAt))
+        if (resolved.created) tally.created++ else tally.skipped++
     }
 
     /** Step 5, counted apart from the tags so a merge can tell "nothing to do" from "did nothing". */
