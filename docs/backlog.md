@@ -73,6 +73,18 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   is no longer `RUNNING` under this lease. The result is coerced away, so a handler is never told its
   lease is gone and keeps working. Surfacing it, or having the context throw, is what would let a long
   handler stop itself. Named by the export fencing lot and deliberately left out of it.
+- **Superseding an export can strand its archive, and the comment that says otherwise is wrong.**
+  `UserDataExportRequester.createPending` moves the previous `READY` row to `SUPERSEDED` **and nulls
+  its `storageKey`** inside the transaction, then deletes the bytes outside it with `deleteQuietly`.
+  The order and the best-effort delete are both deliberate and argued at the site, but the comment
+  closes with "The orphan archive is reclaimed by the periodic garbage collection", and it is not:
+  `ReapOrphanedStorage` reclaims a key only when `findMissingExportIds` says **no row carries that
+  id**, and the superseded row is still there. So a `deleteQuietly` that swallows a real failure
+  leaves an archive that no state names and no sweep can find, for the life of the row. Same shape as
+  the defect the export fencing lot closed on the deleter, on a path that lot had no mandate to
+  change. To decide: whether the sweep should key on "no row *names* this key" rather than "no row has
+  this id", which would also cover the `DELETED` and `EXPIRED` rows that keep their key. Named by the
+  export fencing lot and deliberately left out of it.
 - **An export can stay `PENDING` for good, and no sweep clears it.** `EbeanTaskQueue.claimNext` kills
   an attempts-exhausted task inline (`state = DEAD`, `return null`) **without ever invoking the
   handler**, so `UserDataExportBuilder.markFailed` never runs and the export row keeps its `PENDING`
