@@ -41,10 +41,16 @@ VOLUME /data
 # from images: export archives are large, short-lived (7-day retention) and
 # regenerable, so an operator may want it on its own volume with its own backup
 # and quota policy. imports.data_dir is a third one for the same reasons, and it
-# takes uploads of up to imports.max_archive_bytes (20 GiB by default) each. The
-# container does not create these paths; images and exports are created on first
-# write, but only if their parent is writable by uid 1001, and imports is created
-# and probed at startup, so an unwritable volume refuses the boot.
+# takes uploads of up to imports.max_archive_bytes (20 GiB by default) each.
+#
+# images and exports are created on first write, so the container leaves them
+# alone. imports is different: ImportDataDirectoryCheck creates and probes it
+# from a startup observer, so a default the image does not provide refuses the
+# boot of every deployment, import or no import. /var/lib is root-owned and uid
+# 1001 cannot create under it, hence the line below. An operator who leaves
+# IMPORTS_DATA_DIR unset therefore uploads into the container's writable layer
+# rather than onto a volume; ImportDataDirectoryImageTest holds the pair.
+RUN mkdir -p /var/lib/pinry/imports && chown 1001:1001 /var/lib/pinry/imports
 
 # Copy the Quarkus fast-jar layout. lib/ changes least often (better layer
 # caching), then the application classes, and the tiny runner jar last.
