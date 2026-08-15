@@ -1,5 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.boards.BoardNameAlreadyTakenException
+import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Tag
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportIssueKind
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
@@ -348,6 +350,50 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
         // Stored at the report's own bound, so a hostile line cannot make the report the payload
         assertEquals(longName.take(ISSUE_TEXT_LIMIT), savedIssues[1].subject)
         assertTrue(savedIssues[2].detail?.contains("longer than") == true)
+    }
+
+    @Test
+    fun `Given a metadata line a concurrent write refuses, Then it is reported and the walk goes on`() {
+        // Given: an API write taking the same name between a walk's read and its own, which the two
+        // unique indexes of this lot answer with a violation, untranslated on tags and named on boards
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags =
+                    listOf(
+                        TestLine(1, ImportedTag(name = "taken", createdAt = pastInstant)),
+                        TestLine(2, ImportedTag(name = "free", createdAt = pastInstant)),
+                    ),
+                boards = listOf(TestLine(1, aBoard("Taken")), TestLine(2, aBoard("Free"))),
+            )
+        stubWalk(source)
+        stubIssues()
+        stubTagLookup()
+        stubBoardLookup()
+        every { tagRepository.saveTag(any()) } answers {
+            val tag = firstArg<Tag>()
+            check(tag.name != "taken") { "UNIQUE constraint failed: tags.author_id, tags.name" }
+            savedTags += tag
+            existingTags[tag.name] = tag
+            tag
+        }
+        every { boardRepository.saveBoard(any()) } answers {
+            val board = firstArg<Board>()
+            if (board.name == "Taken") throw BoardNameAlreadyTakenException(IllegalStateException("ix_boards"))
+            savedBoards += board
+            existingBoards[board.name] = board
+            board
+        }
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then: one refused name costs its own line, not the whole import
+        assertEquals(UserDataImportState.COMPLETED, stored.state)
+        assertEquals(List(2) { UserDataImportIssueKind.LINE_REJECTED }, kinds())
+        assertEquals(1, stored.createdTags)
+        assertEquals(1, stored.createdBoards)
+        assertEquals(2, stored.issueCount)
     }
 
     @Test
