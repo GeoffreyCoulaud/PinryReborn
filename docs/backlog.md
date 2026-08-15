@@ -81,6 +81,26 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   the Kotlin constructor's null check. Nothing asserts either shape. To decide: an exception mapper
   over `JsonProcessingException` and its `MismatchedInputException` subtypes, and which `code` it
   publishes. Named by the import lot and deliberately left out of it.
+- **`EbeanTaskQueue.reapExpired` selects every expired lease at once.** `findList()` carries no
+  `setMaxRows`, so one sweep materialises and re-saves as many task rows as have expired, row by row
+  inside a single transaction, on the one write connection. Bound the selection the way a claim is
+  bounded. Named by the import lot and deliberately left out of it.
+- **`ImportStateMergedOutsideTransaction` reads a construction as an insert.** A `save` whose argument
+  starts with an upper-case callee is passed as a fresh row, so a row rebuilt from one read elsewhere
+  (`UserDataImport(id = old.id, ...)`) walks through the rule untouched. The inversion is deliberate
+  and its reasons are in the rule's KDoc; what is open is whether a second condition can tell a
+  rebuild from an insert without type resolution. Named by the import lot and deliberately left out
+  of it.
+- **The tag respelling is a contract change nobody published.** `PUT /api/v1/pins/{pinId}/tags` with
+  `Landscape` when `landscape` is stored now answers the stored spelling and creates no second tag
+  (`docs/specs/2026-08-14-user-data-import.md` section 12), and `docs/openapi.json` says nothing about
+  it: the endpoint carries no `@Operation` and no summary of the ASCII fold. Named by the import lot
+  and deliberately left out of it.
+- **An absent `offset` on a chunk upload defaults to 0, undocumented.**
+  `PUT /api/v1/me/imports/{id}/archive` treats a missing `offset` as the start of the upload, with the
+  reason at the site, but the parameter is published as a plain nullable integer with no default and
+  spec section 7 writes it as `?offset=N`. A client reading either cannot tell whether omitting it
+  starts the upload or is refused. Named by the import lot and deliberately left out of it.
 - **Re-measure the review regime after three lots.** `docs/adr/0014-review-budget-upstream.md` moved
   the review budget upstream on figures taken from the session transcripts, and nothing in this
   repository reproduces them. After three lots have run under the new regime, re-measure the three
