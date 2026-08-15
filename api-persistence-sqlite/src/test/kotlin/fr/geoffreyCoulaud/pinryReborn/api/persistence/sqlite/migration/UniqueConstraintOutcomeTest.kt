@@ -48,10 +48,12 @@ class UniqueConstraintOutcomeTest {
                 "UserDataImportCreator rethrows ImportAlreadyInProgressError, so the client sees 409 " +
                 "IMPORT_ALREADY_IN_PROGRESS. The index is the only authority: no read asks the question first.",
             "ix_tags_author_name_nocase" to
-                "No translation, deliberately: TagCreator.findOrCreate reads through the same fold before " +
-                "writing, and holds that pair in one transaction, which ADR 0009 measured is what serialises " +
-                "a pair on the single connection. Every write path resolving a tag goes through it, so the " +
-                "violation is unreachable and a concurrent tagging converges on one row rather than a 500.",
+                "No translation, deliberately: TagCreator reads through the same fold before writing and " +
+                "holds that pair in one transaction, which ADR 0009 measured is what serialises a pair on " +
+                "the single connection. Every write path that can create a tag goes through it, the API " +
+                "ones through findOrCreate and the user data import through resolve, which differ only in " +
+                "the createdAt they stamp; so the violation is unreachable and a concurrent tagging " +
+                "converges on one row rather than a 500.",
         )
 
     // Uniqueness has two spellings: a standalone `create unique index`, and an inline constraint at table creation.
