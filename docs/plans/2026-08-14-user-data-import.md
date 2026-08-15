@@ -65,12 +65,13 @@ the import's find-or-create would behave differently depending on which case lan
 `BoardRepositoryInterface` gains `findBoardForUserByName(user, name): Board?`, reading **every** state
 through `BoardQueries.any()`, with the state named in its KDoc as ADR 0008 requires.
 
-**Translation lives at two repository methods, not one.** `saveBoard` covers creation and renaming;
-`restoreBoard` persists its model directly and never passes through `saveBoard`, so it needs its own
-catch. Both throw the domain exception, since `api-persistence-sqlite` cannot see a `BaseError`.
-`BoardCreator`, `BoardUpdater` and `BoardRecycleBin.restore` each rethrow
-`BoardNameAlreadyExistsError`, mapped to `409 BOARD_NAME_ALREADY_EXISTS`, whose detail says when the
-name is held by a recycled board.
+**Translation lives at one repository method.** `saveBoard` covers creation and renaming, which are
+the two writes that can collide. `restoreBoard` persists its model directly and never passes through
+`saveBoard`, but it writes no indexed column and the index covers recycled rows, so no homonym can
+exist for it to collide with: a catch there would be dead code. `saveBoard` throws the domain
+exception, since `api-persistence-sqlite` cannot see a `BaseError`. `BoardCreator` and `BoardUpdater`
+each rethrow `BoardNameAlreadyExistsError`, mapped to `409 BOARD_NAME_ALREADY_EXISTS`, whose detail
+says when the name is held by a recycled board.
 
 **Acceptance.**
 - Repository tests, both fold directions: store `été` and look up `ÉTÉ`, then store `ÉTÉ` and look up
@@ -78,10 +79,12 @@ name is held by a recycled board.
   would not have caught the disagreement, which is why both are named.
 - Repository test: `voyage` then `Voyage` collide; two authors may each hold `voyage`; an active and
   a recycled board cannot share a name; the board finder returns a recycled board.
-- Three integration cases, in the two named suites: `POST /api/v1/boards` with a taken name, `PUT`
-  renaming onto one, and restoring from the recycle bin onto one. Each returns `409
-  BOARD_NAME_ALREADY_EXISTS`. **Before the change all three succeed** (`201` and two `200`s): there is
-  no constraint today, so no `500` is reachable, and the red commit pastes three successes.
+- Two integration cases, in the two named suites: `POST /api/v1/boards` with a taken name and `PUT`
+  renaming onto one. Each returns `409 BOARD_NAME_ALREADY_EXISTS`. **Before the change both succeed**
+  (`201` and `200`): there is no constraint today, so no `500` is reachable, and the red commit pastes
+  the successes. Restoring onto a taken name is not a third case, since under the constraint the
+  collision cannot be created; the recycle-bin suite covers the reachable half instead, a `POST` onto
+  a name a recycled board holds.
 - `UniqueConstraintOutcomeTest` rows for both indexes. The tag row records "no translation,
   deliberately", the board row names the code.
 - `./gradlew gate`.
@@ -595,8 +598,8 @@ two suites already share.
   `DISK_FULL`, `IMPORT_NOT_AWAITING_ARCHIVE`, `LINE_REJECTED`.
 - **Both fold directions are tested**, after the angle showed `ieq` and `collate nocase` disagree in
   one direction; the spec now specifies the collation-based read.
-- **Task 1's red was restated**: all three board sites succeed today, so no `500` is reachable before
-  the constraint exists.
+- **Task 1's red was restated**: both board sites succeed today, so no `500` is reachable before the
+  constraint exists.
 - **`RunnableImport` is built after the claim**, so its validated field has a reachable failure.
 - **The on-disk assertions moved to modules that can see a real store**, and the demoted integration
   scenarios are now named rather than silently unhosted.

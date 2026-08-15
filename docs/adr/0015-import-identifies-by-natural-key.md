@@ -10,7 +10,7 @@ so the invariant is never left reading as unqualified.
 Related: `docs/adr/0006-domain-owned-timestamps.md`, whose decision is narrower than decision 3
 touches (it forbids the persistence adapter from reading a clock, which the import does not do);
 `docs/adr/0009-unique-index-named-outcomes.md` (the database is the authority on uniqueness; this
-lot adds three constraints and one changes a public contract at three sites);
+lot adds three constraints and one changes a public contract at two sites);
 `docs/adr/0008-structural-soft-delete-read-isolation.md` (every new read names its soft-delete state).
 
 ## Context
@@ -46,7 +46,7 @@ protocol built for it.
 name, folded for ASCII case; a pin is identified by the SHA-256 of its medium. Archive identifiers
 are read and discarded. Three consequences follow and are taken: `(author_id, name collate nocase)`
 becomes unique on tags and on boards, covering recycled rows, which turns a taken board name into a
-`409` at three call sites; a pin carrying no medium has no identity, so it is skipped and reported;
+`409` at two call sites; a pin carrying no medium has no identity, so it is skipped and reported;
 and when a digest matches several existing pins the import does nothing and says so, rather than
 inventing a winner.
 
@@ -83,12 +83,14 @@ specification's section 14. **The condition that reopens this is any change maki
 destructive, irreversible in bulk, or capable of acting on rows it did not create**, of which
 override's return is one instance rather than the definition.
 
-**A public contract breaks, at three sites rather than one.** Creating a board with an existing name
-stops working, and so do renaming onto one and restoring one from the recycle bin, since a recycled
-row holds its name. Alpha status allows it and no instance is deployed, but the change is a
-deliberate cost of decision 2: a name cannot serve as an identity while the system lets it be
-ambiguous. The translation lives in the repository so no persistence exception can reach a controller
-from any of the three paths.
+**A public contract breaks, at two sites.** Creating a board with an existing name stops working, and
+so does renaming onto one. Restoring from the recycle bin is not a third, though two earlier
+revisions of this decision said it was: the index covers recycled rows, so no homonym can exist while
+a board sits in the bin, and `restoreBoard` writes no indexed column, which makes the collision
+unreachable rather than translated. Alpha status allows the break and no instance is deployed, but it
+is a deliberate cost of decision 2: a name cannot serve as an identity while the system lets it be
+ambiguous. The translation lives in the repository, at `saveBoard`, so no persistence exception can
+reach a controller from either path.
 
 **Some data does not survive a round trip, and restoring recovers less than the word suggests.** A
 pin whose image download was pending or had failed arrives without a medium and is dropped; two pins

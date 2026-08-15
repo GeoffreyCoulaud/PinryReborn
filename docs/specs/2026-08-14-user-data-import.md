@@ -39,7 +39,7 @@ sitting in the recycle bin.
   every anomaly, resume from a cursor after any interruption.
 - **Validation of archive content**, treated exactly as a request DTO is treated (section 4.1).
 - **Two uniqueness constraints**: `(author_id, name collate nocase)` on tags and on boards, covering
-  recycled rows. The board one changes a public contract at three sites (section 12).
+  recycled rows. The board one changes a public contract at two sites (section 12).
 - **Account deletion erases imports** (rows, issues and archive bytes): section 10.
 - **A non-unique index on `images.content_hash`**, without which the pin lookup is a table scan per
   pin (section 11).
@@ -639,7 +639,7 @@ existing body limit; that is a direct benefit of chunking.
 | `IMPORT_ARCHIVE_EMPTY` | `409` | Completion for an import that received no chunk |
 | `IMPORT_ARCHIVE_TOO_LARGE` | `413` | The chunk would carry the total past `imports.max_archive_bytes` |
 | `IMPORT_INSUFFICIENT_STORAGE` | `507` | Free space below the margin |
-| `BOARD_NAME_ALREADY_EXISTS` | `409` | Section 12, at all three sites |
+| `BOARD_NAME_ALREADY_EXISTS` | `409` | Section 12, at both write sites |
 
 Naming follows `USERNAME_ALREADY_EXISTS` and its `UsernameAlreadyTakenException`, rather than
 inventing a second vocabulary for the same concept.
@@ -805,9 +805,12 @@ TDD, 100% branch coverage per package. Each scenario names where it lives, becau
 14. **Recycled board holds its name** (integration): the account has `Summer` in the recycle bin, the
     archive an active `Summer`. Assert nothing created, `NAME_TAKEN_BY_RECYCLED` recorded, and the
     recycled board untouched.
-15. **Board constraint at all three sites** (integration): `POST` with a taken name, `PUT` renaming
-    onto a taken name, and restoring from the recycle bin. Each returns `409
-    BOARD_NAME_ALREADY_EXISTS`, never a 500.
+15. **Board constraint at both write sites** (integration): `POST` with a taken name and `PUT`
+    renaming onto a taken name. Each returns `409 BOARD_NAME_ALREADY_EXISTS`, never a 500. Restoring
+    from the recycle bin is not a third case: section 12 says why the collision is unreachable, and a
+    test for it cannot be set up, since creating the collision is itself refused by the constraint
+    under test. The reachable half of that rule is covered where it is reachable, by a `POST` onto a
+    name a recycled board holds.
 16. **Report cap** (use-case unit) with the limit injected: 501 anomalies store 500 rows, report
     `issueCount = 501`, and set `issueDetailTruncated`; 499 leave it false.
 17. **Chunked upload** (integration): three chunks, a replayed offset refused with the current
