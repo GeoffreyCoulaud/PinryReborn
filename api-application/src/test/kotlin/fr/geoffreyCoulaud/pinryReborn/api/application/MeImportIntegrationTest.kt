@@ -47,8 +47,6 @@ import kotlin.io.path.exists
  */
 @QuarkusTest
 @TestProfile(MeImportTestProfile::class)
-// The app under test runs the real SystemClock; these read the wall clock to keep fixtures consistent with it.
-@Suppress("WallClockRead")
 class MeImportIntegrationTest : IntegrationTest() {
     @Inject lateinit var pinCreator: PinCreator
 
