@@ -65,6 +65,19 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   first one (`docs/specs/2026-08-14-user-data-import.md` section 7). Two halves of one feature now
   describe themselves differently, which is the drift this item exists to close. Named by the import
   lot and deliberately left out of it.
+- **A malformed request body does not answer in this project's error format, and the import lot moved
+  which bodies land there.** `agents/engineering.md` requires one error format everywhere, framework
+  generated malformed payloads included, and no mapper covers Jackson's own failures:
+  `ConstraintViolationExceptionMapper` catches only the bodies that deserialize and then fail
+  `@Valid`, so a body that fails to deserialize gets Quarkus's own `400` rather than a `ProblemDetail`
+  built by `ProblemResponses`. The user data import declared `jackson-module-kotlin` on
+  `api-storage-filesystem`, and an `implementation` dependency reaches `api-application`'s runtime
+  classpath, where `quarkus-kotlin` registers `KotlinModule` on the CDI `ObjectMapper` with no opt-in
+  (`docs/specs/2026-08-14-user-data-import.md` section 5). Every REST request body now binds through
+  it, and a field a DTO declares non-nullable but the body omits fails inside Jackson instead of in
+  the Kotlin constructor's null check. Nothing asserts either shape. To decide: an exception mapper
+  over `JsonProcessingException` and its `MismatchedInputException` subtypes, and which `code` it
+  publishes. Named by the import lot and deliberately left out of it.
 - **Re-measure the review regime after three lots.** `docs/adr/0014-review-budget-upstream.md` moved
   the review budget upstream on figures taken from the session transcripts, and nothing in this
   repository reproduces them. After three lots have run under the new regime, re-measure the three

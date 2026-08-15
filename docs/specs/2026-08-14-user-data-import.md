@@ -5,7 +5,9 @@ Status: approved 2026-08-14, then corrected on seven points the plan angles fals
 Depends on: the export archive format (`docs/specs/2026-07-22-user-data-export.md` section 4,
 `formatVersion` 1), the task queue (`EnqueueTask`, `CancelTask`, `TaskHandler`, `renewLease`),
 `ImageStore`, `ImageProbe`, the pin / board / tag / image repositories, `TransactionRunner`, `Clock`.
-One new adapter-only dependency (`jackson-module-kotlin`, version-managed by the Quarkus BOM).
+One new dependency (`jackson-module-kotlin`, version-managed by the Quarkus BOM), declared on
+`api-storage-filesystem` and **not** adapter-only: section 5 records where it travels and what it
+binds there.
 
 ## 1. Goal
 
@@ -281,11 +283,24 @@ is **not** on this module's classpath and is declared nowhere in the build; an e
 it was.) The reason to take the Kotlin module is **null safety**: without
 the Kotlin module, a missing or null JSON field lands as `null` inside a non-nullable Kotlin property
 and fails later at an unrelated site, which is precisely what an archive-driven test suite must not
-depend on. Verified absent from the module's classpath
-(`./gradlew :api-storage-filesystem:dependencies --configuration runtimeClasspath` resolves
-`jackson-core`, `-databind`, `-annotations`, `-datatype-jsr310` and nothing else). It is registered
-on a reader-only `ObjectMapper`; the export builds its own explicitly, with no
-`findAndRegisterModules()`, so the written format cannot move.
+depend on.
+
+**It is not adapter-only, and an earlier revision of this section audited the wrong module.** That
+audit read `./gradlew :api-storage-filesystem:dependencies --configuration runtimeClasspath`, which
+before this lot resolved `jackson-core`, `-databind`, `-annotations` and `-datatype-jsr310` and
+nothing else. An `implementation` dependency travels to every consumer's runtime classpath all the
+same: `./gradlew :api-application:dependencies --configuration runtimeClasspath` resolves
+`jackson-module-kotlin` beside `quarkus-kotlin`, and `quarkus-kotlin` registers `KotlinModule` on the
+CDI `ObjectMapper` with no opt-in of any kind. So the module binds every REST request body, not only
+archive lines.
+
+Neither mapper this feature owns is affected, since both register their modules by name: the reader
+here, and the export's writer, which calls no `findAndRegisterModules()`, so the written format
+cannot move. What does move is how a pre-existing endpoint binds a body that omits a field its DTO
+declares non-nullable: it now fails inside Jackson rather than in the Kotlin constructor's null
+check, and neither shape is built through `ProblemResponses`. No input DTO carries a Kotlin default,
+so that is the whole of it. `docs/backlog.md` carries it, as a hole in the one-error-format rule that
+this lot widened rather than opened.
 
 **`ExportContentGoldenJsonTest` is not the proof of that, contrary to what an earlier revision
 said.** It lives in `api-usecases` and builds a replica mapper, and its own KDoc says it stops
