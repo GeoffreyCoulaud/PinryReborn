@@ -56,8 +56,11 @@ write path into the same tables and no entity carries an invariant.
   makes the hook see no change of its own. `AGENTS.md`'s gotcha holds only when no build ran first,
   which is the opposite of the discipline the repository asks for. Check `git status` before
   committing, not after.
-- **"Every task ends with `gate`" was read as "every task", not "every commit".** Nine commits shipped
-  red on detekt inside one range before a tenth closed it. Run the gate before each green commit.
+- **One commit in six does not compile, and that is the rule working.** 25 of this lot's 151 commits
+  touch test sources only and create a test file, so they name a class that does not exist yet and
+  fail `compileTestKotlin`. An earlier draft of this handoff read that as a discipline failure and
+  proposed requiring a green gate per commit, which would have forbidden the repository's own TDD.
+  `agents/engineering.md` now says so where the red-commit rule lives.
 - **`generateDbMigration` numbers by diffing the model directory**, so two schema tasks built from the
   same base both emit the same version, each omitting the other's index. Keep schema work serial and
   let the generator own the number: no document should name one.
@@ -135,16 +138,22 @@ expose.
 
 ## Suggested next step
 
-**Improve, which has not run.** Five candidates, in the order I would argue them:
+**Improve, opened 2026-08-15.** The candidates, in the order the operator retained:
 
-1. The stale-merge family, which cost more rework than anything else and whose durable form is a test
+1. **The size of the lot itself.** 151 commits and 14 200 insertions is past what its owner can read,
+   and past what GitHub can rebase: the pull request answered `rebaseable: false` while git replayed
+   all 151 patches locally without one conflict, on an unmoved base. The remedy on the table is that
+   a change of behaviour on existing code ships in its own pull request, before the lot that needs
+   it. The four this lot carried were four ten-minute reviews, and what would have been left is a lot
+   of new code only, where "what does this break" answers itself.
+2. The stale-merge family, which cost more rework than anything else and whose durable form is a test
    or a version column rather than a rule with a one-package reach.
-2. "Every task ends with `gate`" wants restating as every commit, since three separate agents read it
-   the same wrong way.
 3. The `docs/openapi.json` hook hole, which lets an API change land unpublished whenever the author
    followed the repository's own build discipline.
-4. Block independence: the plan asserts it and nothing checks it, and it was wrong three times out of
-   ten in a plan whose angles had already corrected it once.
-5. Whether a spec angle's finding that is not applied should be recorded as refused. The
+4. Whether a spec angle's finding that is not applied should be recorded as refused. The
    `FAIL_ON_UNKNOWN_PROPERTIES` defect was predicted on the draft spec, left unapplied without a
    reason being written, and cost a block its first hour.
+5. Block independence: the plan asserts it and nothing checks it, and it was wrong three times out of
+   ten in a plan whose angles had already corrected it once.
+
+Already applied: the red commit that does not compile, in the pitfalls above.

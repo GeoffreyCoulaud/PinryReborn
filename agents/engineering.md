@@ -12,6 +12,10 @@ Process is in `agents/workflow.md`.
 - **The failing test is committed alone, before its implementation**, as
   `test(scope): <behaviour>`, its message body carrying the red: the command run and the failure
   it produced, pasted from that run. `git show` on the test commit reproduces it.
+- **That red is usually a compilation failure, and the commit is meant to stay that way.** A test
+  written before its implementation names a class that does not exist, so the commit does not
+  build: neither detekt nor the gate can be green on it, and `git bisect` skips it. Making it
+  compile against a stub is the implementation arriving early.
 - **Review judges the tests before the code.** A test that passes against a wrong implementation
   is a defect of the same rank as the bug it missed.
 - **100% branch coverage, verified after the fact.** Uncovered code is a missing test or code
