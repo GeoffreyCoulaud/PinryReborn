@@ -368,8 +368,10 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
 
     @Test
     fun `Given an export erased before its key was stamped, Then no row is written back into existence`() {
-        // Given: the account deletion cleaner drops the row in that window, and merge is an upsert, so
-        // a fence testing the copy read first would re-insert a row for an account that is gone.
+        // Given: the row goes while the stamp reads it, and merge is an upsert, so a fence testing the
+        // copy read first would write it back into existence. The window is the helper's own, not one
+        // an actor opens: only the account cleaner deletes an export row, and it runs on an account
+        // `findUserById` already hides, so `requireUser` throws first. The case below is that one.
         stubBuildEntry()
         eraseWhen { transactions.inside }
 
@@ -379,6 +381,27 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
         // Then
         assertNull(stored())
         verify(exactly = 0) { archiveStore.stage(any()) }
+        verify(exactly = 0) { exportRepository.save(any()) }
+    }
+
+    @Test
+    fun `Given an account erased while the build read it, Then no row is written back into existence`() {
+        // Given: the erasure the cleaner does produce, both rows dropped in one transaction, so the
+        // user lookup answers nothing and the failure marking finds no row to write over.
+        stubRow()
+        var userRead = false
+        every { userRepository.findUserById(userId) } answers {
+            userRead = true
+            null
+        }
+        eraseWhen { userRead }
+
+        // When / Then: the queue still gets the permanent failure, and nothing is re-inserted for it
+        val error = assertThrows(PermanentTaskException::class.java) {
+            builder.build(exportId, isLastAttempt = false, renewLease = {})
+        }
+        assertEquals("user no longer exists", error.reason)
+        assertNull(stored())
         verify(exactly = 0) { exportRepository.save(any()) }
     }
 
