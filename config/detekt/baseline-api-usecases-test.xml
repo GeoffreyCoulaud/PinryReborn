@@ -3,6 +3,5 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CommentCarriesDocumentation:ExportContentGoldenJsonTest.kt:ExportContentGoldenJsonTest</ID>
-    <ID>CommentCarriesDocumentation:UserDataExportBuilderTest.kt:RecordingSink : ArchiveSink</ID>
   </CurrentIssues>
 </SmellBaseline>
