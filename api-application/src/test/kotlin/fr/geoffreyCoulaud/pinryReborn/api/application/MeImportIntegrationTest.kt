@@ -316,7 +316,9 @@ class MeImportIntegrationTest : IntegrationTest() {
         )
         assertEquals(source.boards, copy.boards, "both boards, the recycled one still recycled")
         assertEquals(source.tags, copy.tags)
-        assertFalse(issueKinds(destination, importId).contains("MEDIA_AMBIGUOUS"), "a skip is not an ambiguity")
+        // The whole report, not one kind: this is the one case where the real exporter's digest meets
+        // the real importer's, so any anomaly at all is a disagreement between the two halves.
+        assertEquals(emptyList<String>(), issueKinds(destination, importId))
         val counters = counters(destination, importId)
         assertEquals(3, counters.getInt("createdPins"))
         assertEquals(1, counters.getInt("skippedPins"))
@@ -461,6 +463,9 @@ class MeImportIntegrationTest : IntegrationTest() {
             uploadImage(auth, createPin(auth, slug).id, "sample.png", "image/png")
         }
         val storedBefore = storedObjectCount(auth.user.id)
+        // Scoped like the count above: `images.data_dir` outlives a case and is shared with the sweep
+        // suite, which runs on this profile too, so emptiness would be another suite's business.
+        val stagedBefore = stagedFiles()
         val archive =
             ImportArchiveBuilder(objectMapper)
                 .manifest(announcedPins = 1)
@@ -483,7 +488,7 @@ class MeImportIntegrationTest : IntegrationTest() {
         assertEquals(2, pinRepository.findAllPinsForUser(auth.user).size)
         assertEquals(2, storedBefore, "the two uploads are what the count compares against")
         assertEquals(storedBefore, storedObjectCount(auth.user.id), "an ambiguous line promotes nothing")
-        assertTrue(stagedFiles().isEmpty(), "an ambiguous line stages nothing")
+        assertEquals(stagedBefore, stagedFiles(), "an ambiguous line stages nothing")
     }
 
     // --- An account that is not empty ---
