@@ -30,13 +30,13 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   does not exist yet and has no stable ID, so no origin is wired for it. When it ships, add its
   `chrome-extension://<id>` / `moz-extension://<id>` origin to `api.cors.origins`. See
   `docs/handoffs/2026-07-21 - handoff - cors.md`.
-- **User data import (portability).** Export shipped (see `docs/handoffs/2026-07-22 - handoff - user-data-export.md`
-  and the `v*-user-data-export` tag); the remaining half is **import**: let a user re-create their pins, boards,
-  tags and images on this instance (or another one) from an export archive. The archive format is the contract:
-  `docs/specs/2026-07-22-user-data-export.md` §4 defines the layout (`manifest.json`, `pins.jsonl`, `boards.jsonl`,
-  `tags.jsonl`, `user.json`, `images/`), `formatVersion` is `1`, and every file's `sha256` is in the manifest.
-  Open questions to spec: id remapping vs id preservation, conflict handling with existing rows, image de-dup on
-  re-upload, and how much of the archive to trust (signature / manifest verification).
+- **Import follow-ons.** Import shipped (`docs/specs/2026-08-14-user-data-import.md`,
+  `docs/adr/0015-import-identifies-by-natural-key.md`, branch `feat/user-data-import`); what it
+  deliberately left out is here rather than in the spec's out-of-scope list, because these are work
+  someone will do rather than limits: **selective import** (one board, or skipping the recycle bin)
+  and its mirror **partial export**; **merging metadata onto a pin that already exists**, which is
+  the option the v1 "skip" rule forecloses; and **making a pin with no medium travel**, which needs
+  the export to carry `ImageDownload` so a pending or failed download survives the round trip.
 
 ### P2: Operational debt
 
