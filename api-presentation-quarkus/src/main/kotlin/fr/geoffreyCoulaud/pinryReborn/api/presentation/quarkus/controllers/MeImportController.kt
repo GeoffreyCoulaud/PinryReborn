@@ -104,6 +104,11 @@ class MeImportController(
         ],
     )
     @APIResponse(
+        responseCode = "403",
+        description = IMPORT_INSUFFICIENT_PERMISSIONS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
         responseCode = "404",
         description = IMPORT_DOES_NOT_EXIST,
         content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
@@ -154,6 +159,11 @@ class MeImportController(
         ],
     )
     @APIResponse(
+        responseCode = "403",
+        description = IMPORT_INSUFFICIENT_PERMISSIONS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
         responseCode = "404",
         description = IMPORT_DOES_NOT_EXIST,
         content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
@@ -193,6 +203,11 @@ class MeImportController(
         ],
     )
     @APIResponse(
+        responseCode = "403",
+        description = IMPORT_INSUFFICIENT_PERMISSIONS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
         responseCode = "404",
         description = IMPORT_DOES_NOT_EXIST,
         content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
@@ -220,6 +235,11 @@ class MeImportController(
         ],
     )
     @APIResponse(
+        responseCode = "403",
+        description = IMPORT_INSUFFICIENT_PERMISSIONS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
         responseCode = "404",
         description = IMPORT_DOES_NOT_EXIST,
         content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
@@ -244,6 +264,11 @@ class MeImportController(
     )
     @APIResponse(responseCode = "204", description = "Import cancelled")
     @APIResponse(
+        responseCode = "403",
+        description = IMPORT_INSUFFICIENT_PERMISSIONS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
+    @APIResponse(
         responseCode = "404",
         description = IMPORT_DOES_NOT_EXIST,
         content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
@@ -259,6 +284,8 @@ class MeImportController(
 
         private const val PROBLEM_JSON = "application/problem+json"
         private const val IMPORT_DOES_NOT_EXIST = "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id"
+        private const val IMPORT_INSUFFICIENT_PERMISSIONS =
+            "IMPORT_INSUFFICIENT_PERMISSIONS: this import belongs to another account"
 
         // Spec section 14 promises this sentence to the API documentation, not only to itself.
         private const val IMPORT_IS_NOT_ATOMIC =

@@ -1410,6 +1410,16 @@
               }
             }
           },
+          "403" : {
+            "description" : "IMPORT_INSUFFICIENT_PERMISSIONS: this import belongs to another account",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "404" : {
             "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
             "content" : {
@@ -1422,9 +1432,6 @@
           },
           "401" : {
             "description" : "Not Authorized"
-          },
-          "403" : {
-            "description" : "Not Allowed"
           }
         },
         "summary" : "Get Import",
@@ -1448,6 +1455,16 @@
           "204" : {
             "description" : "Import cancelled"
           },
+          "403" : {
+            "description" : "IMPORT_INSUFFICIENT_PERMISSIONS: this import belongs to another account",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "404" : {
             "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
             "content" : {
@@ -1460,9 +1477,6 @@
           },
           "401" : {
             "description" : "Not Authorized"
-          },
-          "403" : {
-            "description" : "Not Allowed"
           }
         },
         "tags" : [ "Me Import Controller" ],
@@ -1512,6 +1526,16 @@
               }
             }
           },
+          "403" : {
+            "description" : "IMPORT_INSUFFICIENT_PERMISSIONS: this import belongs to another account",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "404" : {
             "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
             "content" : {
@@ -1554,9 +1578,6 @@
           },
           "401" : {
             "description" : "Not Authorized"
-          },
-          "403" : {
-            "description" : "Not Allowed"
           }
         },
         "tags" : [ "Me Import Controller" ],
@@ -1588,6 +1609,16 @@
               }
             }
           },
+          "403" : {
+            "description" : "IMPORT_INSUFFICIENT_PERMISSIONS: this import belongs to another account",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "404" : {
             "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
             "content" : {
@@ -1610,9 +1641,6 @@
           },
           "401" : {
             "description" : "Not Authorized"
-          },
-          "403" : {
-            "description" : "Not Allowed"
           }
         },
         "tags" : [ "Me Import Controller" ],
@@ -1661,6 +1689,16 @@
               }
             }
           },
+          "403" : {
+            "description" : "IMPORT_INSUFFICIENT_PERMISSIONS: this import belongs to another account",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "404" : {
             "description" : "IMPORT_DOES_NOT_EXIST: no import of the caller carries this id",
             "content" : {
@@ -1673,9 +1711,6 @@
           },
           "401" : {
             "description" : "Not Authorized"
-          },
-          "403" : {
-            "description" : "Not Allowed"
           }
         },
         "tags" : [ "Me Import Controller" ],
