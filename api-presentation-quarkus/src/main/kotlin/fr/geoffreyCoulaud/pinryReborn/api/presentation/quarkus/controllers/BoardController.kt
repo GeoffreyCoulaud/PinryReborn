@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.input.PinSor
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.BoardListOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.BoardOutputDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.PinListOutputDto
+import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.dtos.output.ProblemDetail
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.BoardMapper.toDto
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.CursorMapper.toDomain
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.mappers.PinMapper.toDto
@@ -28,6 +29,10 @@ import jakarta.ws.rs.POST
 import jakarta.ws.rs.PUT
 import jakarta.ws.rs.Path
 import jakarta.ws.rs.QueryParam
+import jakarta.ws.rs.core.MediaType
+import org.eclipse.microprofile.openapi.annotations.media.Content
+import org.eclipse.microprofile.openapi.annotations.media.Schema
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.jboss.resteasy.reactive.RestResponse
 import org.jboss.resteasy.reactive.RestResponse.ResponseBuilder
 import java.net.URI
@@ -46,6 +51,23 @@ class BoardController(
 ) {
     @POST
     @Authenticated
+    // SmallRye reads the status off the return type, and a runtime ResponseBuilder carries none, so
+    // the 201 is declared with the 409 the name constraint answers (spec 2026-08-14 section 12).
+    @APIResponse(
+        responseCode = "201",
+        description = "Board created",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = BoardOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = BOARD_NAME_ALREADY_EXISTS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun createBoard(@Valid dto: BoardInputDto): RestResponse<BoardOutputDto> {
         val user = securityIdentity.getUser()
         val board = boardCreator.create(author = user, name = dto.name, description = dto.description)
@@ -78,6 +100,21 @@ class BoardController(
     @PUT
     @Authenticated
     @Path("/{boardId}")
+    @APIResponse(
+        responseCode = "200",
+        description = "Board updated",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = Schema(implementation = BoardOutputDto::class),
+            ),
+        ],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = BOARD_NAME_ALREADY_EXISTS,
+        content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+    )
     fun updateBoard(boardId: UUID, @Valid dto: BoardInputDto): RestResponse<BoardOutputDto> {
         val user = securityIdentity.getUser()
         val board = boardUpdater.update(boardId = boardId, name = dto.name, description = dto.description, user = user)
@@ -115,5 +152,10 @@ class BoardController(
 
     companion object {
         const val DEFAULT_PAGE_SIZE = 20
+
+        private const val PROBLEM_JSON = "application/problem+json"
+        private const val BOARD_NAME_ALREADY_EXISTS =
+            "BOARD_NAME_ALREADY_EXISTS: this account already holds a board of that name, ASCII case " +
+                "folded, and a recycled board holds its name until the bin is emptied"
     }
 }

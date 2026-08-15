@@ -770,12 +770,22 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
+          "201" : {
+            "description" : "Board created",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/BoardOutputDto"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "BOARD_NAME_ALREADY_EXISTS: this account already holds a board of that name, ASCII case folded, and a recycled board holds its name until the bin is emptied",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
@@ -927,11 +937,21 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
+            "description" : "Board updated",
             "content" : {
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/BoardOutputDto"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "BOARD_NAME_ALREADY_EXISTS: this account already holds a board of that name, ASCII case folded, and a recycled board holds its name until the bin is emptied",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
                 }
               }
             }
