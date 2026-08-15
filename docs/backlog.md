@@ -57,6 +57,33 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   `config/detekt/detekt.yml`; renaming it, which its own KDoc anticipates, touches eight files. The
   seven entities with no dangerous pair are insert-only, single-actor or already compare-and-set, and
   are named in the export spec's section 8 so nobody re-derives the list.
+- **Two attempts of one export build can overlap, and the loser deletes the winner's archive.**
+  `tasks.lease_duration` is `PT1M`, and the last stretch of a build renews nothing: the manifest
+  write, the channel force on a multi-gigabyte ZIP, and the promote. `EbeanTaskQueue.reapExpired`
+  returns the task to `PENDING`, a second worker claims it, and **both attempts read a legitimate
+  `PENDING` row**, so no predicate on state can tell them apart and the export lot's fences pass both
+  (`docs/specs/2026-08-15-export-row-fencing.md` section 8). Both derive the same storage key from the
+  export id and both promote onto it; the loser's `publish` fence then refuses and calls
+  `deleteQuietly` on the key the winner just published. The row reads `READY`, the archive is gone,
+  the download answers `500` rather than `410`, and `ReapOrphanedStorage` cannot see it because it
+  reclaims only keys with no row. The fix is a claim token on the export row, as
+  `UserDataImportRunner.runToken` is on the import: a column and a migration, which is why the export
+  lot left it out. Filed with it, and enabling it: **`TaskContext.renewLease` is typed `() -> Unit`**
+  while `TaskQueueInterface.renewLease` answers a `Boolean` documenting that it no-ops once the task
+  is no longer `RUNNING` under this lease. The result is coerced away, so a handler is never told its
+  lease is gone and keeps working. Surfacing it, or having the context throw, is what would let a long
+  handler stop itself. Named by the export fencing lot and deliberately left out of it.
+- **An export can stay `PENDING` for good, and no sweep clears it.** `EbeanTaskQueue.claimNext` kills
+  an attempts-exhausted task inline (`state = DEAD`, `return null`) **without ever invoking the
+  handler**, so `UserDataExportBuilder.markFailed` never runs and the export row keeps its `PENDING`
+  state. `ReapExpiredUserDataExports` selects only `READY` rows past `expiresAt`, so nothing sweeps
+  it; `ReapTerminalTasks` then deletes the `DEAD` task after `garbage-collection.terminal_task_grace`
+  (`P7D`), removing the forensic link. The user holds his one `uq_user_data_exports_pending` slot and
+  every `POST /api/v1/me/exports` answers `409` until he happens to `DELETE` the stuck row, which does
+  work. The import half has exactly the sweep the export half lacks:
+  `ReapAbandonedUserDataImports.failInterruptedRuns` finds `RUNNING` imports whose task is gone and
+  fences them to `FAILED`. An export twin is the shape. Named by the export fencing lot and
+  deliberately left out of it.
 - **The export endpoints publish a status they do not answer, and no error at all.**
   `MeExportController` carries no `@APIResponse`, so SmallRye reads each status off the return type
   and a runtime `ResponseBuilder` carries none: `POST /api/v1/me/exports` is published as `200` where
