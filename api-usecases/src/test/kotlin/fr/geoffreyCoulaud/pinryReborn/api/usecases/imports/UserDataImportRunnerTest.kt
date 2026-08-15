@@ -190,6 +190,31 @@ internal class UserDataImportRunnerTest : UserDataImportRunnerFixtures() {
     }
 
     @Test
+    fun `Given a tag the archive creates, Then the lookup and the insert are one transaction`() {
+        // Given: the single connection serialises each statement, not a pair, so a tagging landing
+        // between the two raises the untranslated violation of ix_tags_author_name_nocase
+        val source =
+            FakeArchiveSource(
+                manifest = aManifest(),
+                tags = listOf(TestLine(1, ImportedTag(name = "voyage", createdAt = pastInstant))),
+            )
+        stubWalk(source)
+        val readIn = mutableListOf<Int?>()
+        val writtenIn = mutableListOf<Int?>()
+        every { tagRepository.findUserTagByName(user, any()) } answers
+            { readIn += transactions.current; existingTags[secondArg<String>()] }
+        every { tagRepository.saveTag(any()) } answers
+            { writtenIn += transactions.current; firstArg<Tag>().also { tag -> savedTags += tag } }
+
+        // When
+        runner.run(importId, isLastAttempt = false, renewLease)
+
+        // Then: one open transaction, and the same one, which is what makes the pair safe
+        assertNotNull(writtenIn.single(), "the insert should run inside a transaction")
+        assertEquals(writtenIn, readIn, "the lookup should run inside the transaction that inserts")
+    }
+
+    @Test
     fun `Given an archive naming a tag and a board twice, Then the second line finds what the first created`() {
         // Given: inside one archive the walk is its own history, which a lookup blind to it would miss
         val source =
