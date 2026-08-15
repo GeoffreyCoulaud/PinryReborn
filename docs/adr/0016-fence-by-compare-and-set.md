@@ -5,8 +5,8 @@ Date: 2026-08-15
 Specification: `docs/specs/2026-08-15-export-row-fencing.md`
 Amends: `docs/backlog.md`, P2 item "Only `TaskModel` carries a version, so every other entity two
 actors can write is exposed", whose stated general answer is optimistic locking. This record reverses
-that answer and the item is rewritten in the commit that establishes this in code, so the backlog is
-never left prescribing a remedy the repository has decided against.
+that answer and the item is rewritten in this lot, so the backlog is never left prescribing a remedy
+the repository has decided against.
 Related: `docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`, whose single
 connection is the premise decision 1 rests on; `docs/adr/0007` on `Persistor.merge` writing every
 column, which is the defect being fenced.

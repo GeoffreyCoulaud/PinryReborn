@@ -1,6 +1,7 @@
 # Fencing the user data export row
 
-Status: drafted 2026-08-15, corrected on eleven points the six spec angles falsified (marked below).
+Status: approved 2026-08-15, corrected on eleven points the six spec angles falsified and on five the
+implementation falsified (all marked below).
 Tier: Spec. Branch: `fix/export-row-fencing`. Decision record: `docs/adr/0016-fence-by-compare-and-set.md`.
 
 ## 1. Goal
@@ -129,7 +130,8 @@ Each is an observable, not an instrument. `S` is the state a racing actor commit
 | A4 | A `PENDING` export, `S = DELETED`, staging throws, `isLastAttempt` | the build runs | the row still reads `DELETED`, not `FAILED`; the staging error is rethrown |
 | A5 | A `PENDING` export, staging throws, `isLastAttempt`, nothing racing | the build runs | the row reads `FAILED` with `failureCode = BUILD_FAILED` |
 | A6 | A `PENDING` export, `S = READY` committed after `getter.get` | the owner deletes it | the row reads `DELETED` and the archive bytes are gone |
-| A7 | A `READY` export, `S = EXPIRED` | the owner deletes it | the row reads `DELETED` |
+| A7 | A `READY` export, `S = EXPIRED` | the owner deletes it | the row still reads `EXPIRED`, and the bytes the sweep already released are not deleted a second time. *(Corrected after implementation: the draft wanted `DELETED` here, which contradicts this document's own predicate. `EXPIRED` satisfies `isGone`, so the fence refuses. The state that says why the archive is gone outranks the one the request asked for, and both are `isGone` to a client.)* |
+| A7b | A `FAILED` export | the owner deletes it | the row reads `DELETED` and nothing is released |
 | A8 | A `DELETED` export | the owner deletes it | the row still reads `DELETED`, the task is not cancelled a second time |
 | A9 | An expired `READY` export, `S = DELETED` | the sweep runs | the row still reads `DELETED`, `reap()` counts 0, one INFO line names the export |
 | A10 | Two expired `READY` exports, one raced | the sweep runs | the unraced row reads `EXPIRED`, `reap()` counts 1 |
@@ -144,11 +146,18 @@ the specified predicate from a looser one.
 **Declared surface: unchanged.** No status, field or endpoint moves. Provable by
 `git diff --exit-code docs/openapi.json`, which CI enforces independently.
 
-**Observed behaviour, two changes**, both in the user's favour:
+**Observed behaviour, three changes**, all in the user's favour:
 
 - An export deleted while it is being built stays deleted, and stays undownloadable.
 - A `DELETE` crossing `PENDING` to `READY` releases the archive it finds, rather than cancelling a
   task and leaving the bytes.
+- **A `DELETE` on a `FAILED` export now marks it `DELETED`**, where
+  `docs/specs/2026-07-22-user-data-export.md` declared a no-op for terminal states. `FAILED` is not
+  `isGone`, so the phase-agnostic predicate this document mandates lets it through. The alternative
+  was a predicate enumerating the live states, which a future state would silently fall out of. The
+  no-op was the surprising half: a failed export could not be cleared from the history at all.
+  *(Added after implementation: the draft counted two changes and missed this one, which follows from
+  its own predicate.)*
 
 ## 8. Out of scope, accepted limits
 
@@ -179,6 +188,11 @@ the specified predicate from a looser one.
 - **The tests pin the code's shape, not the database's isolation.** `PassthroughTransactionRunner`
   opens no transaction; it counts. Real exclusion comes from the single SQLite connection and is
   reachable only from `api-persistence-sqlite`.
+- **The INFO line a refusal writes is asserted nowhere.** `api-usecases` binds `slf4j-nop` at test
+  runtime by an explicit decision recorded in its build file, so a test captures no output. The line
+  is written where the state that took the window is visible; pinning it needs either a different
+  test-runtime binding or a logging seam, and neither is worth its change here. Criteria A1 and A9
+  name the line as an observable and it is the one half of them the suite does not hold.
 
 ## 9. Tests
 
@@ -204,9 +218,23 @@ What the fixtures need, none of which the export suites have today:
 - The runner is `internal` to the imports test package and `api-utilities` testFixtures cannot host
   it (no `api-domain` dependency), so the export suites import it across packages.
 
-`UserDataExportBuilderTest` is 506 lines against detekt's 600-line bound, and `stubBuildFailure`
-stubs a `save` the refusal path never reaches, which `BaseTest.checkUnnecessaryStub` fails on. The
-fixtures split into a small shared file, as the import suite's did.
+`UserDataExportBuilderTest` is 506 lines against detekt's 600-line bound, so the fixtures split into
+a small shared file, as the import suite's did. *(Corrected after implementation: the draft also
+blamed `stubBuildFailure` for stubbing a `save` the refusal path never reaches. The reverse is true.
+Site 2's refusal does reach `save`, because site 1 stamps the key before staging is attempted; the
+path that writes nothing at all is site 1's. The split was still needed, for the line bound and for
+stub granularity. Moving `RecordingSink` also invalidates its detekt baseline entry, baseline ids
+carrying the file name, so its KDoc was shortened and the entry deleted rather than re-pointed.)*
 
 Site 1's fence and the pre-existing `state != PENDING` check at `build`'s entry are two branches
-pinning two different windows. Neither is a duplicate of the other.
+pinning two different windows. Neither is a duplicate of the other. detekt's `ReturnCount` (two, with
+no guard-clause exemption) refuses a third `return` in `build`, so the entry guard moves into its own
+function.
+
+*(Corrected after implementation: the bound forces more than one refusal of five. `saveFencedOver` is
+a second helper carrying its own three branches, both arms of each predicate function are counted,
+and the deleter's `else` arm is one more; conversely sites 1 and 2 share one predicate function, so a
+single enumeration pins both. A consequence for any future plan: `saveFencedOver` cannot ship in a
+task of its own, since a helper with no caller fails the package's bound. Section 3's site 2 is also
+three call sites rather than one, `requireUser`, `requireFreeSpace` and `stageOrFail` all reaching
+`markFailed`, and only the third carries the window the table describes.)*
