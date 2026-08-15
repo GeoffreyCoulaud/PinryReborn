@@ -63,6 +63,17 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         every { archiveStore.delete(any()) } answers { deletedArchives += firstArg<String>() }
     }
 
+    /**
+     * The racing actor committing between the batch selection and this row's write, which only a read
+     * inside the write's transaction sees: answered outside it, the fence would pass unfenced code.
+     */
+    private fun stubRacedRow(raced: UserDataExport, state: UserDataExportState) {
+        every { repository.findById(raced.id) } answers {
+            if (!transactions.inside) return@answers stored(raced.id)
+            stored(raced.id).copy(state = state).also { row -> rows[row.id] = row }
+        }
+    }
+
     @Test
     fun `Given a ready export past its expiry, Then it becomes EXPIRED and its bytes are deleted`() {
         // Given
@@ -134,9 +145,7 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         racedStates.forEach { state ->
             rows.clear()
             val raced = expiredExport(storageKey = "exports/raced.zip")
-            every { repository.findById(raced.id) } answers {
-                stored(raced.id).copy(state = state).also { row -> rows[row.id] = row }
-            }
+            stubRacedRow(raced, state)
 
             // When
             val count = reaper.reap()
@@ -157,9 +166,7 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         stubArchiveDeletion()
         val raced = expiredExport(storageKey = "exports/raced.zip")
         val swept = expiredExport(storageKey = "exports/swept.zip")
-        every { repository.findById(raced.id) } answers {
-            stored(raced.id).copy(state = UserDataExportState.DELETED).also { row -> rows[row.id] = row }
-        }
+        stubRacedRow(raced, UserDataExportState.DELETED)
 
         // When
         val count = reaper.reap()

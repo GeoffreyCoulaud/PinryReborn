@@ -127,6 +127,10 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     /** How far the build got, which is what a racing actor lands on rather than a call ordinal. */
     protected var stageCalls = 0
 
+    /** Which transaction each read and each write ran in, `null` outside one: a fence is one number. */
+    protected val readInTransactions = mutableListOf<Int?>()
+    protected val writtenInTransactions = mutableListOf<Int?>()
+
     protected fun anExport(formatVersion: Int = 1) =
         UserDataExport(
             id = exportId, userId = userId, state = UserDataExportState.PENDING,
@@ -164,11 +168,17 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
 
     protected fun stubRow(row: UserDataExport = anExport()) {
         seedRow(row)
-        every { exportRepository.findById(any()) } answers { rows[firstArg<UUID>()]?.let(reread) }
+        every { exportRepository.findById(any()) } answers {
+            readInTransactions += transactions.current
+            rows[firstArg<UUID>()]?.let(reread)
+        }
     }
 
     protected fun stubRowWrites() {
-        every { exportRepository.save(any()) } answers { firstArg<UserDataExport>().also(::seedRow) }
+        every { exportRepository.save(any()) } answers {
+            writtenInTransactions += transactions.current
+            firstArg<UserDataExport>().also(::seedRow)
+        }
     }
 
     /** The owner's DELETE committing at the next re-read, which is how a cancellation reaches a build. */

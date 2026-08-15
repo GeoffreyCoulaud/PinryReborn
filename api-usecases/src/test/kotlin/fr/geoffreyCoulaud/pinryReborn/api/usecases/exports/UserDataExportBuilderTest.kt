@@ -15,6 +15,7 @@ import java.io.ByteArrayInputStream
 import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -321,6 +322,25 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
         assertEquals(now, published.completedAt)
         assertEquals(now.plus(retention), published.expiresAt)
         verify { archiveStore.promote(any(), storageKey) }
+    }
+
+    @Test
+    fun `Given a key being stamped, Then the row is read and written in one transaction`() {
+        // Given: the predicate alone holds against two successive transactions, and a DELETE landing
+        // between them is restored by merge, which writes every column of the copy it is handed. The
+        // single connection serialises each statement, not a pair (`docs/adr/0016`, decision 1).
+        stubBuildToStaging()
+        stubFailingStage()
+
+        // When: the staging fails on an attempt that is not the last, so the stamp is the only write
+        assertThrows(IllegalStateException::class.java) {
+            builder.build(exportId, isLastAttempt = false, renewLease = {})
+        }
+
+        // Then: the entry read is outside any transaction, and the stamp reads in the one it writes in
+        val fenced = writtenInTransactions.single()
+        assertNotNull(fenced, "the stamp should write inside a transaction")
+        assertEquals(listOf(null, fenced), readInTransactions)
     }
 
     @Test
