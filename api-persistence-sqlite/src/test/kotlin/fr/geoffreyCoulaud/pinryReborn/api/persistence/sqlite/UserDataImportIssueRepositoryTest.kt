@@ -104,24 +104,6 @@ class UserDataImportIssueRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `Given issues on two imports, Then deleteAllForImport removes only that import's rows`() {
-        // Given
-        val user = createAndSaveUser()
-        val otherUser = createAndSaveUser()
-        val userDataImport = createAndSaveImport(user.id)
-        val otherImport = createAndSaveImport(otherUser.id)
-        repository.save(issue(userDataImport.id))
-        repository.save(issue(otherImport.id))
-
-        // When
-        repository.deleteAllForImport(userDataImport.id)
-
-        // Then
-        assertEquals(0, repository.countForImport(userDataImport.id))
-        assertEquals(1, repository.countForImport(otherImport.id))
-    }
-
-    @Test
     fun `Given issues belonging to two accounts, Then deleteAllForUser removes only that account's rows`() {
         // Given: account deletion reaps issues before the import rows they hang off
         val user = createAndSaveUser()

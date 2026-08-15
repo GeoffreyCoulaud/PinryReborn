@@ -17,7 +17,5 @@ interface UserDataImportIssueRepositoryInterface {
     /** How many rows are stored, which the report cap bounds; the row's own issueCount is the total. */
     fun countForImport(importId: UUID): Int
 
-    fun deleteAllForImport(importId: UUID)
-
     fun deleteAllForUser(userId: UUID)
 }

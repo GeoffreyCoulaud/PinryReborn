@@ -54,10 +54,6 @@ class UserDataImportIssueRepository(
     override fun countForImport(importId: UUID): Int =
         QUserDataImportIssueModel().userDataImport.id.equalTo(importId).findCount()
 
-    override fun deleteAllForImport(importId: UUID) {
-        QUserDataImportIssueModel().userDataImport.id.equalTo(importId).delete()
-    }
-
     override fun deleteAllForUser(userId: UUID) {
         QUserDataImportIssueModel().userDataImport.user.id.equalTo(userId).delete()
     }
