@@ -16,7 +16,7 @@ class UserDataImportTaskHandler(
 ) : TaskHandler {
     override val kind = UserDataImportTask.KIND
 
-    /** Read per settlement rather than at construction, so a retuned floor reaches the tasks already queued. */
+    /** Not stamped at enqueue: the floor is read from configuration when the task settles. */
     override val retryFloor: Duration get() = config.retryFloor()
 
     override fun handle(payload: String, context: TaskContext) =

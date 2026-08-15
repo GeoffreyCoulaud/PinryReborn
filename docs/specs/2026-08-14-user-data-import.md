@@ -537,12 +537,18 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
   **Where the floor lives.** The queue had no floor of any kind, and an earlier revision of this
   section read as though it had one. It is now a property of the task, not of the queue: `TaskHandler`
   carries a `retryFloor` defaulting to `Duration.ZERO`, `UserDataImportTaskHandler` overrides it with
-  `imports.retry_floor` read live from `ImportsConfig`, and `TaskProcessor` hands the settled task's
+  `imports.retry_floor` from `ImportsConfig`, and `TaskProcessor` hands the settled task's
   own floor to `BackoffPolicy.nextAttemptAt`, where it applies after the jitter and over the cap
   (`tasks.backoff_cap` bounds the queue's exponential window, not this task's minimum). The three
   other kinds declare nothing and keep the exact delay they compute today. Not a column on `tasks`:
   the value is configuration an operator retunes, and a floor stamped at enqueue would hold the old
   one for every task already queued.
+
+  What the handler's getter does not buy is a retune reaching a live instance. An earlier revision of
+  this paragraph said the floor was read live; SmallRye resolves a `@ConfigMapping` once into a cached
+  field and the handler is `@ApplicationScoped`, so a `val` would behave identically and a retune
+  takes a restart either way. What the design does buy is the sentence above it: the value reaches the
+  settlement rather than the enqueue.
 
   **An attempt ends two ways and the floor covers one of them.** A handler that returns a retryable
   outcome is settled by `TaskProcessor`, which hands it the floor. A handler that stalls, which is
