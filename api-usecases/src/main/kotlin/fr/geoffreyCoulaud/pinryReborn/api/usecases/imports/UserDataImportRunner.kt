@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.boards.BoardNameAlreadyTakenException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Board
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
@@ -270,7 +271,9 @@ class UserDataImportRunner(
         recorder: ImportIssueRecorder,
     ): UserDataImport? {
         val tally = MetadataTally(recorder)
-        walkLines(source, TAGS_ENTRY, ImportedTag::class.java, renewLease) { importTag(it, user, clamp, tally) }
+        walkLines(source, TAGS_ENTRY, ImportedTag::class.java, renewLease) {
+            rejecting(tally, it.line) { importTag(it, user, clamp, tally) }
+        }
         return advance(runnable) {
             it.copy(
                 createdTags = it.createdTags + tally.created,
@@ -278,6 +281,21 @@ class UserDataImportRunner(
                 issueCount = it.issueCount + tally.issues,
                 issueDetailTruncated = recorder.truncated,
             )
+        }
+    }
+
+    /**
+     * `LINE_REJECTED` for a metadata line, as [importPin] has for a pin: a name a concurrent write took
+     * between this walk's read and its own raises against a unique index, and costs its line only.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun rejecting(tally: MetadataTally, line: Int, importLine: () -> Unit) {
+        try {
+            importLine()
+        } catch (error: RuntimeException) {
+            record(tally, UserDataImportIssueKind.LINE_REJECTED, line, null, error.toString())
+        } catch (error: BoardNameAlreadyTakenException) {
+            record(tally, UserDataImportIssueKind.LINE_REJECTED, line, null, error.toString())
         }
     }
 
@@ -312,7 +330,9 @@ class UserDataImportRunner(
         recorder: ImportIssueRecorder,
     ): UserDataImport? {
         val tally = MetadataTally(recorder)
-        walkLines(source, BOARDS_ENTRY, ImportedBoard::class.java, renewLease) { importBoard(it, user, clamp, tally) }
+        walkLines(source, BOARDS_ENTRY, ImportedBoard::class.java, renewLease) {
+            rejecting(tally, it.line) { importBoard(it, user, clamp, tally) }
+        }
         return advance(runnable) {
             it.copy(
                 createdBoards = it.createdBoards + tally.created,
