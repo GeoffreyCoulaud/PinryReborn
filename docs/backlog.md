@@ -54,6 +54,17 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   loses gets (a retry, or a `409`); and what the append-only migration history costs, since this adds a
   column to every table it touches. No import write rides on this item any more: the two the upload
   path still carried are fenced, and the inline suppression that held one of them is gone.
+- **The export endpoints publish a status they do not answer, and no error at all.**
+  `MeExportController` carries no `@APIResponse`, so SmallRye reads each status off the return type
+  and a runtime `ResponseBuilder` carries none: `POST /api/v1/me/exports` is published as `200` where
+  it answers `202`, and the only failures in `docs/openapi.json` are the framework's own `401` and
+  `403`. None of the refusals a client has to handle is there: `409 EXPORT_ALREADY_IN_PROGRESS`,
+  `429 EXPORT_TOO_SOON`, `404 EXPORT_DOES_NOT_EXIST`, `409 EXPORT_NOT_READY`, `410 EXPORT_GONE`, and
+  the download's `206` and `416`. **The import half of this defect is fixed and the export half is
+  not**: `MeImportController` declares every status by hand, with the reason in a comment on the
+  first one (`docs/specs/2026-08-14-user-data-import.md` section 7). Two halves of one feature now
+  describe themselves differently, which is the drift this item exists to close. Named by the import
+  lot and deliberately left out of it.
 - **Re-measure the review regime after three lots.** `docs/adr/0014-review-budget-upstream.md` moved
   the review budget upstream on figures taken from the session transcripts, and nothing in this
   repository reproduces them. After three lots have run under the new regime, re-measure the three
