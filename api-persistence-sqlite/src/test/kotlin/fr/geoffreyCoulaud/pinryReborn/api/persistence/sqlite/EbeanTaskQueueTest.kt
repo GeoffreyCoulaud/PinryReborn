@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ExponentialBackoffWithJitter
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.TaskModel
@@ -24,7 +25,10 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class EbeanTaskQueueTest : RepositoryTest() {
-    private val queue = EbeanTaskQueue(persistor, transactionRunner)
+    // The real policy at full jitter, so the delay a reap writes is exactly computable rather than
+    // stubbed: at one attempt the window is the base itself.
+    private val backoffPolicy = ExponentialBackoffWithJitter(base = BACKOFF_BASE, cap = BACKOFF_CAP) { 1.0 }
+    private val queue = EbeanTaskQueue(persistor, transactionRunner, backoffPolicy)
     private val now = Instant.parse("2026-07-08T00:00:00Z")
 
     private fun newTask(
@@ -501,6 +505,22 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given a running task whose lease expired, Then reapExpired pushes its next attempt out`() {
+        // Given
+        val claimed = claimFresh() // lease 1 minute from now, first attempt
+        val reapedAt = now.plusSeconds(120)
+
+        // When
+        val reaped = queue.reapExpired(reapedAt)
+
+        // Then: a reap spends an attempt, so it backs off like a returned failure. Left where the
+        // claim put it, availableAt is in the past and the next poll re-claims within the second,
+        // which spends the whole budget in seconds (spec 2026-08-14-user-data-import.md section 9).
+        assertEquals(1, reaped)
+        assertEquals(reapedAt.plus(BACKOFF_BASE), queue.findById(claimed.id)?.availableAt)
+    }
+
+    @Test
     fun `Given a running task with a live lease, Then reapExpired leaves it alone`() {
         // Given
         claimFresh()
@@ -519,8 +539,9 @@ class EbeanTaskQueueTest : RepositoryTest() {
         queue.claimNext(now, Duration.ofMinutes(1))
         queue.reapExpired(now.plusSeconds(120))
 
-        // When
-        val killAt = now.plusSeconds(121)
+        // When: past the backoff the reap wrote, since a task that is not yet available is not claimed
+        // at all and would sit PENDING rather than being killed
+        val killAt = now.plusSeconds(120).plus(BACKOFF_BASE)
         val reclaimed = queue.claimNext(killAt, Duration.ofMinutes(1))
 
         // Then
@@ -645,5 +666,10 @@ class EbeanTaskQueueTest : RepositoryTest() {
             .setParameter(1, terminalStateAt)
             .setParameter(2, id)
             .execute()
+    }
+
+    private companion object {
+        val BACKOFF_BASE: Duration = Duration.ofSeconds(30)
+        val BACKOFF_CAP: Duration = Duration.ofMinutes(5)
     }
 }
