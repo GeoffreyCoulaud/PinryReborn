@@ -324,17 +324,24 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
     }
 
     @Test
-    fun `Given an export deleted before its key was stamped, Then the row stays DELETED and nothing is staged`() {
-        // Given: the DELETE commits between the read that started the build and the write that stamps
-        // the key, so only a read taken inside that write's transaction can see it.
+    fun `Given an export that moved on before its key was stamped, Then the row keeps the state it moved to`() {
+        // Given: the write commits between the read that started the build and the read the stamp
+        // takes, so only a read inside that write's transaction sees it. Ranged over every state the
+        // window can commit, a single-state refusal telling state == PENDING from no looser predicate.
         stubBuildEntry()
-        deleteWhen { transactions.inside }
+        val racedStates = UserDataExportState.entries.filter { it != UserDataExportState.PENDING }
+        assertTrue(racedStates.isNotEmpty())
 
-        // When
-        builder.build(exportId, isLastAttempt = false, renewLease = {})
+        racedStates.forEach { state ->
+            seedRow(anExport())
+            reread = { row -> if (transactions.inside) row.copy(state = state).also(::seedRow) else row }
 
-        // Then: no task failure is raised either, so the attempt settles as a success
-        assertEquals(UserDataExportState.DELETED, stored()?.state)
+            // When: no task failure is raised either, so the attempt settles as a success
+            builder.build(exportId, isLastAttempt = false, renewLease = {})
+
+            // Then
+            assertEquals(state, stored()?.state)
+        }
         verify(exactly = 0) { archiveStore.stage(any()) }
         verify(exactly = 0) { exportRepository.save(any()) }
     }

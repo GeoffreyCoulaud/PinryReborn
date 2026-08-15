@@ -15,6 +15,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ReapExpiredUserDataExportsTest : BaseTest() {
@@ -122,21 +123,28 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
     }
 
     @Test
-    fun `Given an export deleted while the sweep read it, Then nothing is written over it`() {
-        // Given: the owner deletes it between the batch selection and this row's write, and the
-        // deletion already released the bytes this run would otherwise delete a second time.
+    fun `Given an export that moved on while the sweep read it, Then nothing is written over it`() {
+        // Given: the owner's DELETE and a new request's SUPERSEDED are the two met in practice, and
+        // the deletion already released the bytes this run would otherwise delete a second time.
+        // Ranged over every state, a single-state refusal telling state == READY from no looser one.
         stubSweep()
-        val raced = expiredExport(storageKey = "exports/raced.zip")
-        every { repository.findById(raced.id) } answers {
-            stored(raced.id).copy(state = UserDataExportState.DELETED).also { row -> rows[row.id] = row }
+        val racedStates = UserDataExportState.entries.filter { it != UserDataExportState.READY }
+        assertTrue(racedStates.isNotEmpty())
+
+        racedStates.forEach { state ->
+            rows.clear()
+            val raced = expiredExport(storageKey = "exports/raced.zip")
+            every { repository.findById(raced.id) } answers {
+                stored(raced.id).copy(state = state).also { row -> rows[row.id] = row }
+            }
+
+            // When
+            val count = reaper.reap()
+
+            // Then
+            assertEquals(0, count)
+            assertEquals(state, stored(raced.id).state)
         }
-
-        // When
-        val count = reaper.reap()
-
-        // Then
-        assertEquals(0, count)
-        assertEquals(UserDataExportState.DELETED, stored(raced.id).state)
         verify(exactly = 0) { repository.save(any()) }
         verify(exactly = 0) { archiveStore.delete(any()) }
     }
