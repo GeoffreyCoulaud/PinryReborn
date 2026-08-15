@@ -54,6 +54,9 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
 
     /** Which transaction each write and the enqueue saw open, so two sequential ones never read as one. */
     private val savedInTransactions = mutableListOf<Int?>()
+
+    /** The same for the re-reads: a fence hoisted out of its transaction is a fence over a stale row. */
+    private val readInTransactions = mutableListOf<Int?>()
     private var enqueuedInTransaction: Int? = null
     private val deletedArchives = mutableListOf<String>()
 
@@ -70,7 +73,10 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
     /** Reads answer the stored row, so every fence sees what the write before it committed. */
     private fun stubStoredRow(stored: UserDataImport = importWith()) {
         row = stored
-        every { repository.findById(importId) } answers { reread(row) }
+        every { repository.findById(importId) } answers {
+            readInTransactions += transactions.current
+            reread(row)
+        }
     }
 
     /**
@@ -278,6 +284,10 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
         assertNotNull(handOver)
         assertEquals(listOf(handOver, handOver), savedInTransactions.takeLast(2))
         assertEquals(handOver, enqueuedInTransaction)
+        // And the fence that decides them, since a read hoisted out of the block decides on a row a
+        // cancellation can replace before the write lands. The other two sites take `saveFenced`,
+        // which is pinned where it lives; this one is hand rolled and nothing else reads it.
+        assertEquals(handOver, readInTransactions.last())
     }
 
     @Test
