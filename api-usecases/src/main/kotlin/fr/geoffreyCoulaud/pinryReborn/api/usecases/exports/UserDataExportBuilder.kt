@@ -107,7 +107,7 @@ class UserDataExportBuilder(
 
     private fun storageKeyFor(exportId: UUID): String = "exports/$exportId.${archiveStore.format.fileExtension}"
 
-    /** The row as the fence found it, so the archive is written from what the row holds now. */
+    /** The row this write left, not the copy read before it: what the staging reads is what it wrote. */
     private fun stampStorageKey(exportId: UUID, storageKey: String): UserDataExport? =
         exportRepository.saveFenced(transactionRunner, exportId, ::stillPending) {
             it.copy(storageKey = storageKey)
