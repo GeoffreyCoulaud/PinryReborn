@@ -376,11 +376,15 @@ shows `CANCELLED`. Bytes promoted before a lost fence are deleted best-effort on
 sweep is the guarantor if that delete fails.
 - **`UserDataImportRunner.run(importId, isLastAttempt, renewLease)`**: the worker path (section 8).
 - **`UserDataImportGetter`**, **`UserDataImportIssueLister`**: owner-checked reads.
-- **`UserDataImportCanceller.cancel(user, importId)`**: owner check; `AWAITING_ARCHIVE` discards the
-  partial upload and moves to `CANCELLED` (no task exists yet, so none is cancelled); `PENDING`
-  cancels the task, deletes the archive and moves to `CANCELLED`; `RUNNING` writes `CANCELLED` and
-  lets the fence stop the walk at the next pin, the runner deleting the archive as it returns;
-  terminal states are a no-op. Rows already written stay: an import is not a transaction.
+- **`UserDataImportCanceller.cancel(user, importId)`**: owner check, then `CANCELLED` written under
+  the non-terminal fence, and the release chosen from **the phase that write replaced**, not from the
+  phase the request read first: `AWAITING_ARCHIVE` then unlinks the partial upload (no task exists
+  yet, so none is cancelled); `PENDING` cancels the task and deletes the archive; `RUNNING` releases
+  nothing, the fence stopping the walk at the next pin and the runner deleting the archive as it
+  returns; a terminal row and a row that is gone are a no-op. Reading the phase before the fence let a
+  `DELETE` sent while `PENDING`, claimed in the window, delete the archive of a walk in flight, and
+  one sent while `AWAITING_ARCHIVE`, completed in the window, unlink the source of a promotion. Rows
+  already written stay: an import is not a transaction.
 - **`ReapAbandonedUserDataImports.reap()`**: moves `AWAITING_ARCHIVE` rows whose
   `lastUploadActivityAt` (falling back to `requestedAt`) is older than `imports.upload_grace` to
   `ABANDONED`, discarding their partial uploads; deletes the archive bytes of terminal rows that
