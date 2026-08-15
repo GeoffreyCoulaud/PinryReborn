@@ -40,23 +40,23 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 
 ### P2: Operational debt
 
-- **Only `TaskModel` carries a version, so every other entity two actors can write is exposed.**
+- **The rows two actors can write are fenced one by one, and nothing structural forces the next one.**
   `Persistor.merge` writes every column, so saving an entity read earlier restores that entity's whole
-  state, including whatever another actor committed in between. `TaskModel` is the one model with an
-  Ebean `@Version` field today, which is the precedent this item builds on rather than a shape it has
-  to invent. The user data import found **nine sites of that one defect in a single lot**, seven
-  before the upload path was read again, each reported and fixed as a particular case, before the read
-  and the write were made one transaction everywhere
-  (`docs/specs/2026-08-14-user-data-import.md` sections 6 and 8, branch `feat/user-data-import`). What
-  holds it is a fence written by hand for one entity, plus the `ImportStateMergedOutsideTransaction`
-  detekt rule whose reach is that one package: nothing covers the exports, the tasks, the pins, the
-  boards or the users, and four export use cases write the same shape today. The general answer is
-  **optimistic locking**: a version column on the models that lack one, and a
-  domain exception for the lost update, which replaces "fence each writer by hand" with "the database
-  refuses the stale write". To decide: every model or only those a task can reach; what a caller that
-  loses gets (a retry, or a `409`); and what the append-only migration history costs, since this adds a
-  column to every table it touches. No import write rides on this item any more: the two the upload
-  path still carried are fenced, and the inline suppression that held one of them is gone.
+  state, including whatever another actor committed in between. The general answer this item used to
+  propose, a version column on every model that lacks one, is refused:
+  `docs/adr/0016-fence-by-compare-and-set.md` decides that a shared row is fenced by re-reading it and
+  testing a predicate inside the transaction that writes it, the datasource holding one connection
+  (`docs/adr/0012`). `TaskModel`'s `@Version` stays as the live back-stop it is, with no domain
+  surface. The imports are fenced (`docs/specs/2026-08-14-user-data-import.md` sections 6 and 8) and so
+  are the exports (`docs/specs/2026-08-15-export-row-fencing.md`). What is left is two halves. **The
+  writers with a dangerous pair that are still exposed**: `PinModel` and `BoardModel`, whose exposure
+  needs two simultaneous requests from the same owner and whose loss the user repairs by repeating the
+  action, which is why they were left out of the export lot. **The rule that catches the writers
+  nobody fenced**: `ImportStateMergedOutsideTransaction`'s reach is one package, so the `exports`
+  package has no static guard on the shape it now holds. Widening it is one line in
+  `config/detekt/detekt.yml`; renaming it, which its own KDoc anticipates, touches eight files. The
+  seven entities with no dangerous pair are insert-only, single-actor or already compare-and-set, and
+  are named in the export spec's section 8 so nobody re-derives the list.
 - **The export endpoints publish a status they do not answer, and no error at all.**
   `MeExportController` carries no `@APIResponse`, so SmallRye reads each status off the return type
   and a runtime `ResponseBuilder` carries none: `POST /api/v1/me/exports` is published as `200` where
