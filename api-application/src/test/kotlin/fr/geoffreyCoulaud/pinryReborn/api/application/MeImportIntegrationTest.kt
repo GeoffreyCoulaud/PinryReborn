@@ -290,7 +290,6 @@ class MeImportIntegrationTest : IntegrationTest() {
     fun `Given a real archive poured into a second account, Then every field survives and no identifier does`() {
         // Given: the destination account first, since the import clamps every restored instant to that
         // account's creation, and one created later would flatten all of them onto its own birth.
-        // Nothing is wiped: deleting the origin would destroy the very archive under test.
         val password = DEFAULT_PASSWORD
         val destination = createAuthenticatedUser()
         val origin = createAuthenticatedUser(password = password)
@@ -341,9 +340,8 @@ class MeImportIntegrationTest : IntegrationTest() {
         val replayed = uploadChunk(auth, importId, chunks[1], chunks[0].size.toLong())
             .then().statusCode(409).body("code", equalTo("IMPORT_CHUNK_OFFSET_MISMATCH")).extract().jsonPath()
 
-        // Then: the client resumes from the length the refusal reported, and the archive still reads.
-        // Read off the problem's own member, since a number a client has to parse out of an English
-        // sentence is not a contract.
+        // Then: the client resumes from the length the refusal reported, read off the problem's own
+        // member, since a number parsed out of an English sentence is not a contract.
         val reportedLength = replayed.getLong("currentLength")
         assertEquals(afterSecond.getLong("uploadedBytes"), reportedLength)
         uploadChunk(auth, importId, chunks[2], reportedLength).then().statusCode(200)
@@ -570,9 +568,8 @@ class MeImportIntegrationTest : IntegrationTest() {
 
     @Test
     fun `Given a PENDING import, Then cancelling it cancels the task and reclaims the archive`() {
-        // Given: the task is enqueued far enough out that the real worker cannot claim it first, which
-        // is the only deterministic way to observe a PENDING row (a small archive finishes in
-        // milliseconds, and spec section 13.6 refuses to paper that over with a sleep).
+        // Given: the task is enqueued far enough out that the real worker cannot claim it first, the
+        // only deterministic way to observe a PENDING row (spec section 13.6).
         val auth = createAuthenticatedUser()
         val importId = openImport(auth)
         val storageKey = "imports/$importId.zip"
