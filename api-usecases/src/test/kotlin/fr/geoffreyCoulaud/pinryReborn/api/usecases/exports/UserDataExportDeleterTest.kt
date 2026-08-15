@@ -158,6 +158,23 @@ class UserDataExportDeleterTest : BaseTest() {
     }
 
     @Test
+    fun `Given a deletion whose release failed, Then deleting again frees the bytes it left`() {
+        // Given: the state moves before the bytes, so a disk failure answered the first DELETE with a
+        // 500 over a row already DELETED. Nothing else reclaims those bytes: ReapOrphanedStorage keys
+        // on row absence, and the row is still there naming them.
+        stubRow(exportWith(state = UserDataExportState.DELETED, storageKey = storageKey))
+        every { archiveStore.delete(storageKey) } just runs
+
+        // When
+        deleter.delete(user, exportId)
+
+        // Then: the fence still refuses, so the retry is a release and not a second write
+        verify { archiveStore.delete(storageKey) }
+        assertEquals(UserDataExportState.DELETED, stored()?.state)
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
     fun `Given a pending export completed while the request ran, Then the archive it found is released`() {
         // Given: the build publishes between the owner check and the fence, so the state the request
         // read is one state old and the bytes it has to release did not exist when it started.
