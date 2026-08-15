@@ -153,6 +153,12 @@ the specified predicate from a looser one.
 - An export deleted while it is being built stays deleted, and stays undownloadable.
 - A `DELETE` crossing `PENDING` to `READY` releases the archive it finds, rather than cancelling a
   task and leaving the bytes.
+- **A `DELETE` whose disk release fails now leaves the row `DELETED` and still answers `500`.** Before
+  the lot the row stayed `READY`, so the error and the row agreed. They no longer do, which is the
+  cost of decision 4 of the ADR. What the lot restores in exchange is the repair: a replayed `DELETE`
+  meets the refused fence, sees a row that was already gone, and releases the bytes it names. Without
+  that arm the first `500` would have been terminal, the replay answering `204` and touching nothing.
+  *(Added after the holistic review, which found the lost repair rather than the status mismatch.)*
 - **A `DELETE` on a `FAILED` export now marks it `DELETED`**, where
   `docs/specs/2026-07-22-user-data-export.md` declared a no-op for terminal states. `FAILED` is not
   `isGone`, so the phase-agnostic predicate this document mandates lets it through. The alternative
@@ -176,7 +182,12 @@ the specified predicate from a looser one.
 - **An export stuck `PENDING` for good.** `EbeanTaskQueue.claimNext` kills an attempts-exhausted task
   inline without invoking the handler, so `markFailed` never runs, and no sweep selects a `PENDING`
   export. The import has `failInterruptedRuns` for exactly this; the export has no twin. Filed.
-- **Bytes surviving a failed delete under an `isGone` row**, per §5. Filed with the sweep above.
+- **Bytes surviving a failed delete under an `isGone` row**, per §5, narrowed by the replay arm: an
+  owner who deletes again repairs it, and the expiry sweep, whose `deleteQuietly` swallows and which
+  nobody replays, does not. Filed with the sweep above, and with the adjacent case this lot had no
+  mandate to touch: superseding an export nulls its key inside the transaction and releases the bytes
+  best-effort outside it, so a swallowed failure there strands an archive that no state names and
+  `ReapOrphanedStorage` cannot find, its row still existing.
 - **The detekt rule's reach.** Widening `ImportStateMergedOutsideTransaction` to the exports is one
   line in `config/detekt/detekt.yml`; renaming it, which its own KDoc anticipates, touches eight
   files. The split is for the rename's blast radius, not a necessity. It ships in the next pull

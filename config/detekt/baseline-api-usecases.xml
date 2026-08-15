@@ -45,7 +45,6 @@
     <ID>CommentCarriesDocumentation:UserDataExportBuilder.kt:UserDataExportBuilder$private fun publish</ID>
     <ID>CommentCarriesDocumentation:UserDataExportBuilderTest.kt:RecordingSink : ArchiveSink</ID>
     <ID>CommentCarriesDocumentation:UserDataExportDeleter.kt:UserDataExportDeleter</ID>
-    <ID>CommentCarriesDocumentation:UserDataExportDeleter.kt:UserDataExportDeleter$fun delete</ID>
     <ID>CommentCarriesDocumentation:UserDataExportDownloader.kt:UserDataExportDownloader</ID>
     <ID>CommentCarriesDocumentation:UserDataExportGetter.kt:UserDataExportGetter</ID>
     <ID>CommentCarriesDocumentation:UserDataExportRequester.kt:UserDataExportRequester</ID>
