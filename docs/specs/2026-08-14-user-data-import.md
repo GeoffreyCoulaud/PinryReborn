@@ -345,8 +345,9 @@ because no constraint guarantees at most one.
 reading **every state**: a recycled board holds its name (section 12), so a finder blind to the
 recycle bin would try to create a board whose name is already taken and hit the index.
 
-`TagRepositoryInterface.findUserTagByName` becomes case insensitive, following `UserRepository`'s
-`ieq` against `ix_users_name_nocase`.
+`TagRepositoryInterface.findUserTagByName` becomes case insensitive, through the column's own
+collation and **not** through Ebean's `ieq`: section 12 states why the two folds disagree, and this
+sentence named the trap as the model until it was corrected.
 
 ## 6. Use cases
 
@@ -694,12 +695,12 @@ it is generalised in the same commit rather than shipping a 507 titled "Unproces
 
 ## 11. Persistence and migration
 
-The schema change spans **three generated migrations**, not one, because three tasks touch the schema
-and each generates its own pair against the model directory as it stands; the generator owns the
-numbers and no document asserts them. Together they create `user_data_imports` and
-`user_data_import_issues`, add the two unique
-indexes of section 12, adds a **non-unique** index on `images (content_hash)`, and adds the partial
-unique index over the active import states.
+The schema change spans **more than one generated migration**, because each task that touches the
+schema generates its own pair against the model directory as it stands; the generator owns the
+numbers and no document asserts them. Two shipped, not the three this paragraph first predicted: the
+task adding the two unique indexes of section 12 and the task adding the two import tables, the
+supporting indexes, the partial unique index over the active import states, and the **non-unique**
+index on `images (content_hash)`.
 
 **Every index is declared on its entity** with `@Index(name = ..., definition = "create unique index
 ...")` and the migration is produced by `./gradlew :api-persistence-sqlite:generateDbMigration`, so
