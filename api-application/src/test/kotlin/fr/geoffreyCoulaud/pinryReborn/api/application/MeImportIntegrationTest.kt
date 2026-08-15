@@ -389,11 +389,9 @@ class MeImportIntegrationTest : IntegrationTest() {
         // When
         val importId = importArchive(auth, archive)
 
-        // Then
-        val kinds = issueKinds(auth, importId)
-        EXPECTED_ANOMALIES.forEach { kind ->
-            assertEquals(1, kinds.count { it == kind }, "expected exactly one $kind, got $kinds")
-        }
+        // Then: the whole report, so a seventh issue no one asked for fails here. Sorted rather than
+        // in the walk's order, which is the report's paging to decide and not what this case is about.
+        assertEquals(EXPECTED_ANOMALIES.sorted(), issueKinds(auth, importId).sorted())
         assertEquals(listOf("https://example.test/good"), pinRepository.findAllPinsForUser(auth.user)
             .map { it.sourceContextUrl })
         assertTrue(boardRepository.findActiveBoardsForUser(auth.user).isEmpty(), "the over-long name is refused")
