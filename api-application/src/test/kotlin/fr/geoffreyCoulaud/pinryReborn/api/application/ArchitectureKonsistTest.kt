@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Test
  * regardless of where this test runs; it is placed in `api-application` (the only module without
  * the Kover branch-coverage gate) to avoid a near-empty dedicated module.
  *
- * The two "scope is not empty" tests guard against a mistyped `moduleName` silently making an
- * import assertion pass on an empty file list.
+ * The three module-scoped non-empty tests guard against a mistyped `moduleName` silently making an
+ * assertion pass on an empty file list.
  */
 class ArchitectureKonsistTest {
     /**

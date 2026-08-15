@@ -40,15 +40,18 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 
 ### P2: Operational debt
 
-- **No model carries a version, so every entity two actors can write is exposed.** `Persistor.merge`
-  writes every column, so saving an entity read earlier restores that entity's whole state, including
-  whatever another actor committed in between. The user data import found **seven sites of that one
-  defect in a single lot**, nine once the upload path was read again, each reported and fixed as a
-  particular case, before the read and the write were made one transaction everywhere
+- **Only `TaskModel` carries a version, so every other entity two actors can write is exposed.**
+  `Persistor.merge` writes every column, so saving an entity read earlier restores that entity's whole
+  state, including whatever another actor committed in between. `TaskModel` is the one model with an
+  Ebean `@Version` field today, which is the precedent this item builds on rather than a shape it has
+  to invent. The user data import found **nine sites of that one defect in a single lot**, seven
+  before the upload path was read again, each reported and fixed as a particular case, before the read
+  and the write were made one transaction everywhere
   (`docs/specs/2026-08-14-user-data-import.md` sections 6 and 8, branch `feat/user-data-import`). What
   holds it is a fence written by hand for one entity, plus the `ImportStateMergedOutsideTransaction`
   detekt rule whose reach is that one package: nothing covers the exports, the tasks, the pins, the
-  boards or the users, and four export use cases write the same shape today. The general answer is **optimistic locking**: a version column, an Ebean `@Version` field, and a
+  boards or the users, and four export use cases write the same shape today. The general answer is
+  **optimistic locking**: a version column on the models that lack one, and a
   domain exception for the lost update, which replaces "fence each writer by hand" with "the database
   refuses the stale write". To decide: every model or only those a task can reach; what a caller that
   loses gets (a retry, or a `409`); and what the append-only migration history costs, since this adds a

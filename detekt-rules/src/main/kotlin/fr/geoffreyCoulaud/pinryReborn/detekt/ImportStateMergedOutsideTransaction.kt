@@ -13,10 +13,10 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
 /**
  * A state transition is decided on the row as it is, inside the transaction that writes it.
  *
- * `Persistor.merge` writes every column and no model carries a version, so saving a row read earlier
- * restores that row's whole state, including whatever another actor committed in between. The import
- * row is written from two directions at once, a request and a worker, and this lot found seven sites of
- * that one defect before making the read and the write a single fenced pair.
+ * `Persistor.merge` writes every column and only `TaskModel` carries a version, so saving a row read
+ * earlier restores that row's whole state, including whatever another actor committed in between. The
+ * import row is written from two directions at once, a request and a worker, and this lot found nine
+ * sites of that one defect before making the read and the write a single fenced pair.
  *
  * ## Reach
  *
@@ -44,7 +44,11 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
  * behaviour tests, whose transaction fake answers a read taken outside one with a cancelled row
  * (`UserDataImportRunnerTest`, `UserDataImportCancellerTest`). This rule is the other half: it fails
  * the build on a writer that never opened a transaction at all, which is the shape every one of the
- * seven sites actually took.
+ * nine sites took.
+ *
+ * None of them is left, so the rule holds no current violation open: every import-row write now goes
+ * through `saveFenced` or `saveFencedOver`, and the completer's hand-over opens its own block. What it
+ * guards is the next writer added to this package, which is why it stays after the fences landed.
  */
 class ImportStateMergedOutsideTransaction(
     config: Config,
