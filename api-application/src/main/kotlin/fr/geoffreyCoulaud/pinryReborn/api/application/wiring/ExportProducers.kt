@@ -88,7 +88,11 @@ class ExportProducers {
         repository: UserDataExportRepositoryInterface,
         archiveStore: ExportArchiveStore,
         clock: Clock,
+        transactionRunner: TransactionRunner,
         config: ExportsConfig,
     ): ReapExpiredUserDataExports =
-        ReapExpiredUserDataExports(repository, archiveStore, clock, stagedFileMaxAge = config.stagedFileMaxAge())
+        ReapExpiredUserDataExports(
+            repository, archiveStore, clock, transactionRunner,
+            stagedFileMaxAge = config.stagedFileMaxAge(),
+        )
 }
