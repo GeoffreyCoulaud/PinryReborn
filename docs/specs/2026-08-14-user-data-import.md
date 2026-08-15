@@ -353,7 +353,7 @@ recycle bin would try to create a board whose name is already taken and hit the 
   `AWAITING_ARCHIVE` fence as the storage key write before them. Split in two, a crash or a database
   error between the `PENDING` write and the enqueue leaves a row `PENDING` with no task, which no sweep
   rescues: `findAbandonableBefore` is `AWAITING_ARCHIVE`-only, `findReclaimableTerminal` is
-  terminal-only, and the reaper's third path only rescues a `RUNNING` row whose task is dead. That row
+  terminal-only, and the reaper's third path only rescues a `RUNNING` row. That row
   holds the account's only active slot through the partial unique index and its bytes are never
   reclaimed. Joined, a failure anywhere in the hand-over leaves the row `AWAITING_ARCHIVE`, which the
   upload-grace sweep does cover. It also settles a second question: a `PENDING` or `RUNNING` row always
@@ -385,8 +385,10 @@ sweep is the guarantor if that delete fails.
   `lastUploadActivityAt` (falling back to `requestedAt`) is older than `imports.upload_grace` to
   `ABANDONED`, discarding their partial uploads; deletes the archive bytes of terminal rows that
   still have some, stamping the row so the same bytes are not re-deleted every hour; moves a
-  `RUNNING` row whose task is `DEAD` or absent to `FAILED` with `IMPORT_INTERRUPTED`; and sweeps
-  orphaned staged files.
+  `RUNNING` row whose task is no longer a live attempt to `FAILED` with `IMPORT_INTERRUPTED`; and
+  sweeps orphaned staged files. The predicate is the complement of the live one below, not a list of
+  the dead states: written as "`DEAD` or absent" it took a task that had ended `SUCCEEDED` or
+  `CANCELLED` for a walk still running.
 
   Three properties the implementation settles. **Every path writes through the same fence**, so a row
   another actor moved between the selection and the write is left alone. **Abandonment writes the
@@ -732,10 +734,14 @@ TDD, 100% branch coverage per package. Each scenario names where it lives, becau
    fence test above, since a real worker finishes a small archive before a test can act. That limit
    is stated rather than papered over with a sleep.
 7. **Per-line anomalies** (integration, one archive): an entry path with `../`, a truncated JSONL
-   line, a pin declaring an absent image, a text file renamed `.jpg`, a pin with no image, a board
-   name of 300 characters, a pin with 200 tags. Assert the import reaches `COMPLETED`, the good pins
+   line, a pin declaring an absent image, a text file renamed `.jpg`, a pin with no image, and a board
+   name of 300 characters. Assert the import reaches `COMPLETED`, the good pins
    exist, and each of `ENTRY_PATH_INVALID`, `LINE_MALFORMED`, `MEDIA_ENTRY_MISSING`,
-   `MEDIA_UNREADABLE`, `PIN_HAS_NO_MEDIA`, `FIELD_INVALID` appears exactly once.
+   `MEDIA_UNREADABLE`, `PIN_HAS_NO_MEDIA`, `FIELD_INVALID` appears exactly once. **One anomaly per
+   kind, therefore one field refusal**: the over-tagged pin this list also carried yields
+   `FIELD_INVALID` too, so "exactly once" cannot hold with both of them in the archive. The
+   reference-count bound is covered in the use-case walk (`UserDataImportPinWalkTest`), which counts a
+   kind rather than requiring it once and takes all four field refusals in one archive.
 8. **Rejected archives** (use-case unit), one per failure code: `formatVersion` 2, absent manifest,
    unreadable ZIP. Each asserts `FAILED`, the code, `processedPins = 0`, and nothing created.
 9. **Bounds** (adapter unit): an entry count past `max_entries`, a metadata entry past
