@@ -10,7 +10,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
@@ -187,8 +186,10 @@ class TaskProcessorTest {
             .execute(claimed(kind = PinDownloadTask.KIND, attempts = 2), leaseDuration)
 
         // Then
+        // The clock is stubbed and the jitter is full, so both instants are exact: at or above the
+        // floor would pass a policy adding the floor to the window rather than flooring it.
         val (importRetryAt, downloadRetryAt) = retryAts
-        assertTrue(!importRetryAt.isBefore(now.plus(floor)), "the import should wait out its floor")
+        assertEquals(now.plus(floor), importRetryAt, "the import waits out its floor, and no longer")
         assertEquals(now.plusSeconds(4), downloadRetryAt, "a kind declaring no floor keeps its window")
     }
 
