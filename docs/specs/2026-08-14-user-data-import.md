@@ -649,11 +649,21 @@ completer went straight to `finishUpload`, which opens the upload file, so an im
 chunk raised `NoSuchFileException` and reached its owner as a `500`. The row's `uploadedBytes`
 settles it in the use case, before the store is touched.
 
-The row is not the only way that file goes. **A cancellation unlinks the partial upload before it
-writes `CANCELLED`**, so a `DELETE` landing between the owner read and `finishUpload`, or between the
-storage key fence and the atomic move, leaves the store opening a path that is gone while the state
-still reads `AWAITING_ARCHIVE`. The completer translates `NoSuchFileException` from either call into
-`IMPORT_NOT_AWAITING_ARCHIVE`, which is what the caller's next `GET` shows anyway.
+The row is not the only way that file goes. **A cancellation writes `CANCELLED` and then unlinks the
+partial upload**, the write first and the release chosen from the phase that write replaced, which is
+what section 6 specifies and what ships. An earlier revision of this paragraph stated the reverse
+order and contradicted section 6; the reverse is also the dangerous one, since it leaves the file
+gone while the row still reads `AWAITING_ARCHIVE`.
+
+The completer's `NoSuchFileException` translation is not dead for that, and this is the interleaving
+that reaches it: the completer reads `AWAITING_ARCHIVE`, the `DELETE` then writes `CANCELLED` and
+unlinks, and the completer touches the store before its own fence runs. So `finishUpload` opens a
+path that is gone, and `promote` does the same when the `DELETE` lands between the storage key fence
+and the atomic move. The completer translates `NoSuchFileException` from either call into
+`IMPORT_NOT_AWAITING_ARCHIVE`, which is what the caller's next `GET` shows anyway. The ordering does
+not close that window, because nothing re-reads the row between the fence and the store call: what it
+buys is that the row is already terminal when the bytes go, so no fence can be won over a file that
+is no longer there.
 
 Failure codes on the row: `USER_GONE`, `ARCHIVE_UNREADABLE`, `MANIFEST_MISSING`,
 `UNSUPPORTED_FORMAT_VERSION`, `IMPORT_FAILED`, `IMPORT_INTERRUPTED`. `DISK_FULL` was listed here in

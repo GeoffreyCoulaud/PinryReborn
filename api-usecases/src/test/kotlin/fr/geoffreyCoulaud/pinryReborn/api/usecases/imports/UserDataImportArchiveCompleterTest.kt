@@ -182,8 +182,8 @@ class UserDataImportArchiveCompleterTest : BaseTest() {
 
     @Test
     fun `Given an upload unlinked before it is closed, Then the completion is refused, not failed`() {
-        // Given: the canceller unlinks the partial upload before it writes CANCELLED, so the file can be
-        // gone while the row still reads AWAITING_ARCHIVE, and the store answers with an untyped throw
+        // Given: the canceller wrote CANCELLED and unlinked the partial upload after this owner read,
+        // so the store opens a path that is gone and answers with an untyped throw
         stubStoredRow()
         every { archiveStore.finishUpload(importId) } throws NoSuchFileException(staged.path)
 

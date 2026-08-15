@@ -55,8 +55,8 @@ class UserDataImportArchiveCompleter(
     }
 
     /**
-     * The cancellation unlinks the upload before it writes `CANCELLED`, so the file goes while the row
-     * still reads `AWAITING_ARCHIVE`: the caller is told now what its next `GET` would tell it anyway.
+     * A cancellation writes `CANCELLED` and then unlinks the upload, and nothing re-reads the row
+     * between the fence and the store call: the caller is told now what its next `GET` would say.
      */
     private fun <T> onTheUpload(touch: () -> T): T =
         try {
