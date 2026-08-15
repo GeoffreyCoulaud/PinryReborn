@@ -36,8 +36,8 @@ class EbeanTaskQueueTest : RepositoryTest() {
         dedupKey: String? = null,
     ) = NewTask(kind = kind, payload = "{}", availableAt = now, maxAttempts = 3, dedupKey = dedupKey)
 
-    private fun claimFresh(): ClaimedTask {
-        queue.enqueue(newTask())
+    private fun claimFresh(kind: String = "test.kind"): ClaimedTask {
+        queue.enqueue(newTask(kind = kind))
         return requireNotNull(queue.claimNext(now, Duration.ofMinutes(1)))
     }
 
@@ -497,7 +497,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val claimed = claimFresh() // lease 1 minute from now
         val later = now.plusSeconds(120)
         // When
-        val reaped = queue.reapExpired(later)
+        val reaped = queue.reapExpired(later, NO_FLOORS)
         // Then
         assertEquals(1, reaped)
         val stored = queue.findById(claimed.id)
@@ -514,7 +514,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val reapedAt = now.plusSeconds(120)
 
         // When
-        val reaped = queue.reapExpired(reapedAt)
+        val reaped = queue.reapExpired(reapedAt, NO_FLOORS)
 
         // Then: a reap spends an attempt, so it backs off like a returned failure. Left where the
         // claim put it, availableAt is in the past and the next poll re-claims within the second,
@@ -528,9 +528,35 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Given
         claimFresh()
         // When (before lease expiry)
-        val reaped = queue.reapExpired(now.plusSeconds(1))
+        val reaped = queue.reapExpired(now.plusSeconds(1), NO_FLOORS)
         // Then
         assertEquals(0, reaped)
+    }
+
+    @Test
+    fun `Given expired leases of two kinds, Then reapExpired floors the kind it was given a floor for`() {
+        // Given: one kind whose floor the caller passes, one it does not name at all
+        val floor = Duration.ofMinutes(10)
+        val floored = claimFresh(kind = "floored.kind")
+        val unfloored = claimFresh(kind = "unfloored.kind")
+        val reapedAt = now.plusSeconds(120)
+
+        // When
+        val reaped = queue.reapExpired(reapedAt, mapOf("floored.kind" to floor))
+
+        // Then: the jitter is full and the clock is a parameter, so both instants are exact rather
+        // than bounds; at or above the floor would pass an adapter adding it to the window.
+        assertEquals(2, reaped)
+        assertEquals(
+            reapedAt.plus(floor),
+            queue.findById(floored.id)?.availableAt,
+            "a reaped lease waits out its kind's floor, and no longer",
+        )
+        assertEquals(
+            reapedAt.plus(BACKOFF_BASE),
+            queue.findById(unfloored.id)?.availableAt,
+            "a kind the caller names no floor for keeps the queue's own window",
+        )
     }
 
     // --- attempts exhaustion ---
@@ -540,7 +566,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Given
         val enqueued = queue.enqueue(NewTask(kind = "test.kind", payload = "{}", availableAt = now, maxAttempts = 1))
         queue.claimNext(now, Duration.ofMinutes(1))
-        queue.reapExpired(now.plusSeconds(120))
+        queue.reapExpired(now.plusSeconds(120), NO_FLOORS)
 
         // When: past the backoff the reap wrote, since a task that is not yet available is not claimed
         // at all and would sit PENDING rather than being killed
@@ -570,7 +596,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Then
         assertTrue(renewed)
         assertEquals(extendedUntil, queue.findById(claimed.id)?.leaseExpiresAt)
-        assertEquals(0, queue.reapExpired(now.plusSeconds(120)))
+        assertEquals(0, queue.reapExpired(now.plusSeconds(120), NO_FLOORS))
     }
 
     @Test
@@ -583,7 +609,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
 
         // Then
         assertFalse(renewed)
-        assertEquals(1, queue.reapExpired(now.plusSeconds(120)))
+        assertEquals(1, queue.reapExpired(now.plusSeconds(120), NO_FLOORS))
     }
 
     @Test
@@ -672,6 +698,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     private companion object {
+        val NO_FLOORS: Map<String, Duration> = emptyMap()
         val BACKOFF_BASE: Duration = Duration.ofSeconds(30)
         val BACKOFF_CAP: Duration = Duration.ofMinutes(5)
     }
