@@ -109,8 +109,10 @@ broken it.)*
 **The row moves before the bytes**, reversing today's order at sites 4 and 5. The reason today's
 comment gives for the old order (a disk failure must reach the caller) survives: the exception still
 propagates. What changes is the state left behind by such a failure, and the new one is strictly
-better at site 5, where a failed `deleteQuietly` currently leaves a `READY` row naming bytes that are
-gone, and a download answering `500` instead of `410`. The cost is the mirror case: a `DELETED` or
+better at site 5, where a write that fails after a *successful* delete currently leaves a `READY` row
+naming bytes that are gone, and a download answering `500` instead of `410`. *(Corrected after the
+holistic review: the draft blamed a failed `deleteQuietly`, which cannot be the cause since it
+swallows and the write ran regardless.)* The cost is the mirror case: a `DELETED` or
 `EXPIRED` row whose bytes survive a failed delete, which no sweep reclaims today because
 `ReapOrphanedStorage` keys on row absence. §8 carries it as an accepted limit and a backlog item.
 

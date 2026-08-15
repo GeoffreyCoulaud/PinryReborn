@@ -890,8 +890,9 @@ pinry-reborn:
   ImportStateMergedOutsideTransaction:
     active: true
     # The rule keys on a call shape, so its reach is a path filter: the import use cases, whose row a
-    # request and a worker both write. Every other entity is exposed the same way and has no fence,
-    # which is the P2 backlog item rather than this rule's business. Tests write the shape on purpose.
+    # request and a worker both write. The exports hold the same fence by hand without this rule
+    # seeing them (ADR 0016); widening the filter is the open half of the P2 backlog item, and needs
+    # the rename the rule's own KDoc anticipates. Tests write the shape on purpose.
     includes: ['**/api-usecases/**/imports/**']
     excludes: ['**/test/**', '**/testFixtures/**']
   CommentCarriesDocumentation:

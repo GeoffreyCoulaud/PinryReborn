@@ -8,8 +8,11 @@ actors can write is exposed", whose stated general answer is optimistic locking.
 that answer and the item is rewritten in this lot, so the backlog is never left prescribing a remedy
 the repository has decided against.
 Related: `docs/adr/0012-one-datasource-declaration-and-one-transaction-seam.md`, whose single
-connection is the premise decision 1 rests on; `docs/adr/0007` on `Persistor.merge` writing every
-column, which is the defect being fenced.
+connection is the premise decision 1 rests on. The defect being fenced, `Persistor.merge` writing
+every column, is recorded in no ADR: it is stated in
+`docs/handoffs/2026-08-15 - handoff - user-data-import.md` and in the specification above.
+`docs/adr/0007` is a near miss and not the citation, its fact 4 answering a different question
+(whether `merge` can write over a soft-deleted row).
 
 ## Context
 

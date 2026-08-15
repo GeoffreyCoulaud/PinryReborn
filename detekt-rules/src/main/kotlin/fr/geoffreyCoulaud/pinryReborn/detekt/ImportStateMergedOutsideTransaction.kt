@@ -29,9 +29,10 @@ import org.jetbrains.kotlin.psi.psiUtil.parents
  * A construction is told from a call by its name starting upper case, Kotlin's own convention, since
  * this rule set runs without type resolution. So does the rest: `save` and `inTransaction` are
  * spellings, not resolved members. The scope is set in `detekt.yml`, by path, over the import use
- * cases; every other entity is exposed the same way and has no fence, which is a backlog item rather
- * than this rule's business. **The message therefore names no helper**: `saveFenced` is the import
- * row's, and would be wrong advice the day the path filter widens.
+ * cases; the exports took the same fence by hand without this rule seeing them
+ * (`docs/adr/0016-fence-by-compare-and-set.md`), and widening the filter is the open half of the
+ * backlog item. **The message therefore names no helper**: there are two `saveFenced` now, one per
+ * feature, and naming either would be wrong advice from the other.
  *
  * Two boundaries follow. A row built somewhere else and handed over through a property is reported all
  * the same (`imageRepository.save(created.image)` in `UserDataImportRunner`, suppressed inline with its
