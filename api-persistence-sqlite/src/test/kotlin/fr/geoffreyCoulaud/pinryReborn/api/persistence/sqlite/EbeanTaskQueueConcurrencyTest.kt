@@ -1,6 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ExponentialBackoffWithJitter
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanTaskQueue
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -23,7 +24,9 @@ import java.util.concurrent.CountDownLatch
  * of relying on optimistic-lock retries to paper over a lost race.
  */
 class EbeanTaskQueueConcurrencyTest : RepositoryTest() {
-    private val queue = EbeanTaskQueue(persistor, transactionRunner)
+    // No case here reaps a lease, so the policy is only what the constructor asks for.
+    private val queue =
+        EbeanTaskQueue(persistor, transactionRunner, ExponentialBackoffWithJitter(BACKOFF, BACKOFF) { 1.0 })
     private val now = Instant.parse("2026-07-08T00:00:00Z")
 
     @Test
@@ -59,5 +62,9 @@ class EbeanTaskQueueConcurrencyTest : RepositoryTest() {
         assertTrue(failures.isEmpty()) { "Expected zero exceptions while claiming concurrently, got: $failures" }
         assertEquals(taskCount, claimed.size)
         assertEquals(taskCount, claimed.map { it.id }.toSet().size)
+    }
+
+    private companion object {
+        val BACKOFF: Duration = Duration.ofSeconds(1)
     }
 }

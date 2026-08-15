@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Image
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.Pin
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ExponentialBackoffWithJitter
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories.EbeanImageDownloadRepository
@@ -16,13 +17,16 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
 
 class EbeanTransactionRunnerTest : RepositoryTest() {
     private val runner = transactionRunner
-    private val queue = EbeanTaskQueue(persistor, transactionRunner)
+    // No case here reaps a lease, so the policy is only what the constructor asks for.
+    private val queue =
+        EbeanTaskQueue(persistor, transactionRunner, ExponentialBackoffWithJitter(BACKOFF, BACKOFF) { 1.0 })
     private val downloads = EbeanImageDownloadRepository(persistor)
     private val images = EbeanImageRepository(persistor, transactionRunner)
     private val userRepository = UserRepository(persistor)
@@ -104,5 +108,9 @@ class EbeanTransactionRunnerTest : RepositoryTest() {
             }
         }
         assertNull(images.findByPinId(pin.id))
+    }
+
+    private companion object {
+        val BACKOFF: Duration = Duration.ofSeconds(1)
     }
 }

@@ -2,6 +2,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.repositories
 
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.BackoffPolicy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.ClaimedTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.NewTask
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.Task
@@ -38,6 +39,7 @@ import java.util.UUID.randomUUID
 class EbeanTaskQueue(
     private val persistor: Persistor,
     private val transactionRunner: TransactionRunner,
+    private val backoffPolicy: BackoffPolicy,
 ) : TaskQueueInterface {
     override fun enqueue(task: NewTask): Task = transactionRunner.inTransaction { enqueueWithin(task) }
 
@@ -222,17 +224,29 @@ class EbeanTaskQueue(
             .setRaw("version = version + 1")
             .update() > 0
 
+    /**
+     * Row by row rather than in one bulk update: the delay is read off the attempts that row spent.
+     * The pair is a transaction for the reason [claimNext]'s is, a settle landing between the two.
+     */
     override fun reapExpired(now: Instant): Int =
-        QTaskModel()
-            .state.equalTo(TaskState.RUNNING.name)
-            .leaseExpiresAt.le(now)
-            .asUpdate()
-            .set("state", TaskState.PENDING.name)
-            .set("lastError", "reclaimed after lease expiry")
-            .setNull("leaseId")
-            .setNull("leaseExpiresAt")
-            .setRaw("version = version + 1")
-            .update()
+        transactionRunner.inTransaction {
+            val expired =
+                QTaskModel()
+                    .state.equalTo(TaskState.RUNNING.name)
+                    .leaseExpiresAt.le(now)
+                    .findList()
+            expired.forEach { model ->
+                model.state = TaskState.PENDING.name
+                model.lastError = "reclaimed after lease expiry"
+                model.leaseId = null
+                model.leaseExpiresAt = null
+                // A reap spends an attempt, so it delays the next one as a returned failure does. The
+                // handler's own floor is not applied here: the queue cannot see it (spec section 9).
+                model.availableAt = backoffPolicy.nextAttemptAt(model.attempts, now, Duration.ZERO)
+                persistor.save(model)
+            }
+            expired.size
+        }
 
     override fun deleteTerminalBefore(cutoff: Instant): Int =
         QTaskModel()

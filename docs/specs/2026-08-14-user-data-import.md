@@ -544,6 +544,23 @@ stopped being true on 2026-08-01. The dated document keeps its sentence; this on
   the value is configuration an operator retunes, and a floor stamped at enqueue would hold the old
   one for every task already queued.
 
+  **An attempt ends two ways and the floor covers one of them.** A handler that returns a retryable
+  outcome is settled by `TaskProcessor`, which hands it the floor. A handler that stalls, which is
+  what a full disk does to a write, returns nothing: its lease expires and `EbeanTaskQueue.reapExpired`
+  puts the row back to `PENDING` instead. That reap now pushes `availableAt` forward by the queue's own
+  backoff, read off the attempts the row has spent; before it, the row kept the instant its claim left
+  in the past, the next one-second poll re-claimed it, and the five attempts burned in seconds with no
+  delay of any kind, which is the failure the floor was introduced to remove. The reaper cannot apply
+  the floor itself: it works on rows, and the floor belongs to a handler the persistence adapter does
+  not see. So a stalled import backs off in seconds where a returning one backs off ten minutes. The
+  gap is written here rather than closed, and closing it means the reaper resolving the kind's handler
+  or the floor becoming something the queue can read.
+
+  The push applies to all four kinds, since the reaper reads no kind, and it changes what they did:
+  a task whose lease expires now waits instead of being re-claimed within the second. That is a fix in
+  its own right. A task losing its lease in a loop had no pause at all, and the attempt it spends is
+  the same attempt a returned failure spends.
+
   **It is not, however, named as its own failure code.** An earlier revision listed `DISK_FULL` among
   the row's failure codes, copying the export, which can use it because it asks `hasFreeSpace` before
   building and therefore knows. The walk does not ask: a full disk reaches it as an `IOException`
