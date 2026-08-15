@@ -74,7 +74,7 @@ class UserDataExportDeleterTest : BaseTest() {
     }
 
     private fun stubRowWrites() {
-        every { repository.save(any()) } answers { firstArg<UserDataExport>().also { rows[it.id] = it } }
+        every { repository.save(any()) } answers { firstArg<UserDataExport>().also { row -> rows[row.id] = row } }
     }
 
     @Test

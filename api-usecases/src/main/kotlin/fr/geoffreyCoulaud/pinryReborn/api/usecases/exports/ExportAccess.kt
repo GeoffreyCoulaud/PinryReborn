@@ -18,3 +18,17 @@ internal fun UserDataExportRepositoryInterface.saveFenced(
     transactionRunner.inTransaction {
         findById(exportId)?.takeIf(held)?.let { save(update(it)) }
     }
+
+/**
+ * The same write, answering the row it replaced rather than the one it wrote: a caller whose release
+ * depends on the state reads it here, the state it saw before the fence being possibly one old.
+ */
+internal fun UserDataExportRepositoryInterface.saveFencedOver(
+    transactionRunner: TransactionRunner,
+    exportId: UUID,
+    held: (UserDataExport) -> Boolean,
+    update: (UserDataExport) -> UserDataExport,
+): UserDataExport? =
+    transactionRunner.inTransaction {
+        findById(exportId)?.takeIf(held)?.also { save(update(it)) }
+    }
