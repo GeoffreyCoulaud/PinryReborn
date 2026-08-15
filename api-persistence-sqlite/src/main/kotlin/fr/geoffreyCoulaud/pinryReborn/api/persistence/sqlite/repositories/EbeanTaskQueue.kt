@@ -226,10 +226,10 @@ class EbeanTaskQueue(
             .update() > 0
 
     /**
-     * Row by row rather than in one bulk update: the delay is read off the attempts that row spent.
-     * The pair is a transaction for the reason [claimNext]'s is, a settle landing between the two.
+     * Row by row rather than in one bulk update: the delay is per row, off its attempts and the floor
+     * its kind is given. The pair is a transaction for [claimNext]'s reason, a settle landing between.
      */
-    override fun reapExpired(now: Instant): Int =
+    override fun reapExpired(now: Instant, retryFloors: Map<String, Duration>): Int =
         transactionRunner.inTransaction {
             val expired =
                 QTaskModel()
@@ -241,9 +241,11 @@ class EbeanTaskQueue(
                 model.lastError = "reclaimed after lease expiry"
                 model.leaseId = null
                 model.leaseExpiresAt = null
-                // A reap spends an attempt, so it delays the next one as a returned failure does. The
-                // handler's own floor is not applied here: the queue cannot see it (spec section 9).
-                model.availableAt = backoffPolicy.nextAttemptAt(model.attempts, now, Duration.ZERO)
+                // A reap spends an attempt, so it delays the next one as a returned failure does,
+                // floored the same way. The kind is matched against a table the caller resolved: the
+                // queue reads no handler of its own.
+                val floor = retryFloors[model.kind] ?: Duration.ZERO
+                model.availableAt = backoffPolicy.nextAttemptAt(model.attempts, now, floor)
                 persistor.save(model)
             }
             expired.size

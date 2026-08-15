@@ -53,8 +53,11 @@ interface TaskQueueInterface {
     /** Request cancellation of a RUNNING task (sets cancelRequested WHERE state=RUNNING). Returns true if set. */
     fun requestCancel(id: UUID): Boolean
 
-    /** Flip RUNNING rows whose lease expired (leaseExpiresAt <= now) back to PENDING. Returns the count reclaimed. */
-    fun reapExpired(now: Instant): Int
+    /**
+     * Flip RUNNING rows whose lease expired back to PENDING, delayed by the queue's backoff floored
+     * at [retryFloors] for the row's kind (a kind it does not name is unfloored). Returns the count.
+     */
+    fun reapExpired(now: Instant, retryFloors: Map<String, Duration>): Int
 
     /** Count tasks currently in [state]. For metrics/inspection. */
     fun countByState(state: TaskState): Int
