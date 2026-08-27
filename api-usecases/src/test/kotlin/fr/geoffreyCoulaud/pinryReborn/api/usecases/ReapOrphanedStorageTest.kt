@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportArchiveKey
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import io.mockk.every
 import io.mockk.just
@@ -25,6 +26,9 @@ class ReapOrphanedStorageTest : BaseTest() {
     private val userDataExportRepository = mockk<UserDataExportRepositoryInterface>()
     private val userDataImportRepository = mockk<UserDataImportRepositoryInterface>()
     private val batchSize = 2
+
+    /** What the store's format answers in production, and what the derived key therefore carries. */
+    private val archiveExtension = "zip"
 
     private val useCase = ReapOrphanedStorage(
         renditionCache = renditionCache,
@@ -75,9 +79,10 @@ class ReapOrphanedStorageTest : BaseTest() {
 
     @Test
     fun `Given an export storage key only on disk, Then reap deletes it`() {
-        // Given: disk has one export archive whose id has no DB row
+        // Given: disk has one export archive whose id has no DB row, named as the builder names it,
+        // so the derivation and the parse this sweep runs on it are pinned as a pair
         val exportId = randomUUID()
-        val storageKey = "exports/$exportId.zip"
+        val storageKey = ExportArchiveKey.forExport(exportId, archiveExtension)
         renditionsOnDisk()
         exportsOnDisk(storageKey)
         importsOnDisk()
@@ -118,7 +123,7 @@ class ReapOrphanedStorageTest : BaseTest() {
         val liveExportId = randomUUID()
         val liveImportId = randomUUID()
         renditionsOnDisk(liveImageId)
-        exportsOnDisk("exports/$liveExportId.zip")
+        exportsOnDisk(ExportArchiveKey.forExport(liveExportId, archiveExtension))
         importsOnDisk("imports/$liveImportId.zip")
         every { imageRepository.findMissingImageIds(listOf(liveImageId)) } returns emptySet()
         every { userDataExportRepository.findMissingExportIds(listOf(liveExportId)) } returns emptySet()
@@ -181,7 +186,11 @@ class ReapOrphanedStorageTest : BaseTest() {
         val badUuidWithExt = "exports/also-not-a-uuid.bin"
         renditionsOnDisk()
         exportsOnDisk(wrongPrefix, noDot, emptyExtension, badUuidWithExt)
-        importsOnDisk("exports/${randomUUID()}.zip", "imports/not-a-uuid.zip", "imports/${randomUUID()}")
+        importsOnDisk(
+            ExportArchiveKey.forExport(randomUUID(), archiveExtension),
+            "imports/not-a-uuid.zip",
+            "imports/${randomUUID()}",
+        )
 
         // When
         val count = useCase.reap()
