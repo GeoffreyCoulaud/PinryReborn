@@ -10,9 +10,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * The tail of a build: the promote, the fence that publishes it and the net that covers both
- * (`docs/specs/2026-08-27-export-build-completion.md` sections 4.1 and 4.2). Read off the fake store,
- * so "the canonical key is untouched" is what the disk holds and not a call that was never made.
+ * The tail of a build: the promote, the fence publishing it, and the net covering both (spec sections
+ * 4.1 and 4.2). Read off the fake store, so the canonical key is what the disk holds afterwards.
  */
 internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() {
 
