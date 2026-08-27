@@ -12,9 +12,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.TimeUnit
-import java.util.logging.Handler
-import java.util.logging.LogRecord
-import java.util.logging.Logger
 
 class ExportRetentionLifecycleTest {
     private val reap: ReapExpiredUserDataExports = mockk(relaxed = true)
@@ -78,14 +75,15 @@ class ExportRetentionLifecycleTest {
     fun `Given a reap that moved rows, Then one line reports the count of each pass`() {
         // Given
         every { reap.reap() } returns ExportSweepCounts(failed = 1, expired = 2, reclaimed = 3)
+        val reported = mutableListOf<String>()
         // When
-        val logged = capturingLifecycleLogs { lifecycle().safeReap() }
+        lifecycle().safeReap { reported += it }
         // Then
-        assertEquals(1, logged.size, "one line per sweep, got $logged")
+        assertEquals(1, reported.size, "one line per sweep, got $reported")
         val eachCount = listOf("1 failed", "2 expired", "3 reclaimed")
         assertTrue(
-            eachCount.all { logged.first().contains(it) },
-            "the sweep line must name every pass count, got: ${logged.first()}",
+            eachCount.all { reported.first().contains(it) },
+            "the sweep line must name every pass count, got: ${reported.first()}",
         )
     }
 
@@ -113,28 +111,5 @@ class ExportRetentionLifecycleTest {
         lifecycle().onStop(mockk<ShutdownEvent>())
         // Then
         verify { scheduler.shutdown() }
-    }
-
-    /** slf4j binds to the JBoss LogManager here, which is the JUL one, so a plain JUL handler sees the line. */
-    private fun capturingLifecycleLogs(sweep: () -> Unit): List<String> {
-        val records = mutableListOf<LogRecord>()
-        val handler =
-            object : Handler() {
-                override fun publish(record: LogRecord) {
-                    records += record
-                }
-
-                override fun flush() = Unit
-
-                override fun close() = Unit
-            }
-        val logger = Logger.getLogger(ExportRetentionLifecycle::class.java.name)
-        logger.addHandler(handler)
-        try {
-            sweep()
-        } finally {
-            logger.removeHandler(handler)
-        }
-        return records.map { it.message ?: "" }
     }
 }
