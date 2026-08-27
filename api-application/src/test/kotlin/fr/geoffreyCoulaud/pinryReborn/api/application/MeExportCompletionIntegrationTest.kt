@@ -394,7 +394,10 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertEquals("READY", pollUntilReady(auth, supersededId))
         val archiveBytes = downloadBytes(auth, supersededId)
         val archivePath = archivePathFor(supersededId)
-        requestExport(auth, password)
+        // Drained, not merely requested: this class truncates every table before each case, and a
+        // build still in flight holds the single test connection while that truncation runs.
+        val supersedingId = requestExport(auth, password)
+        assertEquals("READY", pollUntilReady(auth, supersedingId), "the superseding build should finish")
         Files.write(archivePath, archiveBytes)
         val superseded = requireNotNull(userDataExportRepository.findById(supersededId))
         assertEquals(UserDataExportState.SUPERSEDED, superseded.state)
@@ -431,11 +434,16 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertEquals("EXPORT_INTERRUPTED", swept.failureCode)
         // 202 rather than merely "not 409": this profile pins exports.minimum_interval to PT0S,
         // where production answers 429 for as long as the cooldown runs.
-        given()
+        val acceptedId = given()
             .authenticatedAs(auth)
             .header("X-Reauthentication", stepUp(password))
             .`when`().post("/api/v1/me/exports")
             .then().statusCode(202)
+            .extract().jsonPath().getString("id")
+            .let(UUID::fromString)
+        // Drained for the same reason as the superseding build above: the case must not hand back
+        // while the worker still holds the single test connection.
+        assertEquals("READY", pollUntilReady(auth, acceptedId), "the accepted request should build")
     }
 
     @Test
