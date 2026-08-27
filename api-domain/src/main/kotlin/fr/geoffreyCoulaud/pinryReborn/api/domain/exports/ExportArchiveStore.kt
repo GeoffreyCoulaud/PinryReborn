@@ -30,6 +30,7 @@ interface ExportArchiveStore {
     fun stage(block: (ArchiveSink) -> Unit): StagedFile
     fun promote(staged: StagedFile, storageKey: String)
     fun openStream(storageKey: String, skipBytes: Long = 0): InputStream
+    /** Idempotent: a key whose bytes are already gone is not an error, so a retrying sweep converges. */
     fun delete(storageKey: String)
     fun discard(staged: StagedFile)
     fun discardOrphanedStagedFiles(olderThan: Instant): Int
