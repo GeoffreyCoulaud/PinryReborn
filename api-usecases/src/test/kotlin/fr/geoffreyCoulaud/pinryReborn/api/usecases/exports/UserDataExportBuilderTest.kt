@@ -305,11 +305,11 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
 
     @Test
     fun `Given a successful build, Then the row carries size, digest, media type and extension`() {
-        // Given
-        stubHappyPathBuild()
+        // Given: over the fake store, so the archive is read as what the disk holds afterwards
+        stubFakeStoreBuild()
 
         // When
-        builder.build(exportId, isLastAttempt = false, renewLease = {})
+        fakeStoreBuilder.build(exportId, isLastAttempt = false, renewLease = {})
 
         // Then
         val published = requireNotNull(stored())
@@ -321,7 +321,8 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
         assertEquals("zip", published.fileExtension)
         assertEquals(now, published.completedAt)
         assertEquals(now.plus(retention), published.expiresAt)
-        verify { archiveStore.promote(any(), storageKey) }
+        assertEquals(listOf(storageKey), fakeArchiveStore.promoted.keys.toList())
+        assertEquals(stagedHash, fakeArchiveStore.promoted.getValue(storageKey).contentHash)
     }
 
     @Test
