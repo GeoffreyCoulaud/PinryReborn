@@ -175,9 +175,12 @@ internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {
     protected val stagedByteSize = 2048L
     protected val stagedHash = "staged-sha256"
 
+    /** The handle the first staging answers with, held apart from the fake's own var, which moves. */
+    protected val stagedFile = StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash)
+
     /** The store as a fake, for the cases whose criterion is what the disk holds afterwards. */
     protected val fakeArchiveStore = FakeExportArchiveStore(
-        staged = StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash),
+        staged = stagedFile,
         transactionOf = { transactions.current },
     )
 
