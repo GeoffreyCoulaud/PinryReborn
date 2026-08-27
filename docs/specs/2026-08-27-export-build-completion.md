@@ -106,7 +106,7 @@ staged file through `ExportArchiveStore.discard`, which takes a `StagedFile` and
 attempt's bytes.
 
 The datasource pins `minConnections` and `maxConnections` to 1
-(`api-application/src/main/resources/application.properties:9,16`, pinned by
+(`api-application/src/main/resources/application.properties:15,16`, pinned by
 `ProductionDatasourceDeclarationTest`), and a transaction is what serialises a read-write pair
 (`agents/engineering.md:202-208`). The two publish transactions therefore serialise, and "the first to
 publish wins" needs no token. **The guarantee is per JVM**: it does not survive a second process on
@@ -150,14 +150,33 @@ the difference.)*
 
 Three things this settles, each of which an angle found wrong in the first draft:
 
-**The grace in pass 1 is not decoration.** `EbeanTaskQueue.claimNext:112-120` moves a task to `DEAD`
-inline as soon as its attempts are spent, without regard for handlers still running. With a one
-minute lease, a reaper every thirty seconds and three attempts, a build whose tail runs long can have
-a `DEAD` task while up to three builders are still working. Without the grace, pass 1 writes `FAILED`,
-and every one of those builders then meets a non-`PENDING` row at its fence and throws away a complete,
-valid archive. `exports.interrupted_grace` defaults to `PT15M`, comfortably past
-`lease_duration x max_attempts`. Pass 1 arbitrates a race, not a certainty, and the grace is what
-makes the arbitration safe.
+**The grace in pass 1 is not decoration, and its value is not derived from the lease.**
+`EbeanTaskQueue.claimNext:112-120` moves a task to `DEAD` inline as soon as its attempts are spent,
+without regard for handlers still running, so a `DEAD` task does not mean no builder is working.
+Without a grace, pass 1 writes `FAILED` under those builders, and each of them then meets a
+non-`PENDING` row at its fence and throws away a complete, valid archive. **This lot would then close
+three defects and open a fourth, worse than any of them**, on precisely the accounts whose archive
+costs most to rebuild.
+
+*(Corrected: an earlier draft set the grace to `PT15M` and justified it as "comfortably past
+`lease_duration x max_attempts`", which is `PT3M`. That product does not bound anything relevant. The
+grace is measured from `requestedAt`, and the danger runs from `requestedAt` until the **last**
+builder stops. An attempt is not bounded by the lease: `renewLease` fires per page of pins and per
+image (`UserDataExportBuilder.kt:236`, `:318`), so an attempt lasts as long as its staging progresses.
+Three attempts over a multi-gigabyte account exceed fifteen minutes easily.)*
+
+The grace must therefore dominate the longest staging this instance can plausibly perform, and the
+repository has already put a number on exactly that question: `exports.staged_file_max_age`, the age
+past which a staged file is presumed orphaned, that is, the age at which the repository already
+declares a build dead. `exports.interrupted_grace` takes the same default, `PT6H`, and its KDoc says
+why it is that number and not a derivative of the lease.
+
+The asymmetry is deliberate. Condemning too early destroys a valid archive; condemning too late keeps
+one user's slot busy for longer, and `DELETE` already frees it by hand. The costs are not
+comparable, so the grace is generous.
+
+The real fix is upstream: a task whose handler is still running should not be killed. That is
+`claimNext`'s inline kill, an argued decision outside this lot, and section 8 files it.
 
 **Passes 2 and 3 no longer overlap.** In the first draft, `expire()` kept deleting the bytes without
 clearing the key, so pass 3 selected the same row in the same run, counted it twice and reissued the
@@ -181,7 +200,10 @@ that idempotence **on the port**, since pass 3's termination now depends on it a
 `ExportArchiveStore.delete` currently promises nothing.
 
 **Both new selections are bounded** by `exports.sweep_batch_size` (default 500, the figure
-`garbage-collection.orphan_batch_size` already uses). The first run after deployment is a backlog
+`garbage-collection.orphan_batch_size` already uses), **and pass 1's selection is ordered by
+`requestedAt` ascending**. Pass 3 converges without an order because acting on a row destroys its own
+selection predicate; pass 1 does not, because the grace filter is applied after the selection, so an
+unordered batch of recent `PENDING` rows could starve the old ones indefinitely. The first run after deployment is a backlog
 catch-up, not a steady state: today every terminal row keeps its key on purpose, so pass 3's first
 selection is the whole history of terminal exports. It converges over successive ticks.
 
@@ -312,11 +334,18 @@ data on the row, not a new HTTP status: `failureCode` is an unconstrained `Strin
   and make the class KDoc enumerate what it really does, as `ReapAbandonedUserDataImports` does. The
   KDoc rewrite is in this lot; the rename is proposed as a backlog item, not to Improve, which is not
   one of the four exits (`docs/adr/0010`).
-- **`EbeanTaskQueue.claimNext` keeps killing an exhausted task inline.** It is an argued decision
-  (`docs/specs/2026-07-22-user-data-export.md:506`), a notification would stay best-effort, and pass 1
-  plus its grace makes it harmless for exports.
+- **`EbeanTaskQueue.claimNext` keeps killing an exhausted task inline**, while its handler may still
+  be running. It is an argued decision (`docs/specs/2026-07-22-user-data-export.md:506`) and a
+  notification would stay best-effort, so this lot does not change it. Pass 1's grace does not make it
+  harmless, it makes the collision improbable: an account whose staging outlasts
+  `exports.staged_file_max_age` can still have a builder condemned under it. The upstream fix, not
+  killing a task whose handler holds a live lease, is filed as its own item.
+- **No measurement is taken of the two new selections.** Both scan `user_data_exports` without an
+  index on `state` or `storage_key`, as the import twin already does on its own table. The repository
+  asks for a measurement on a query that grows with the data; this lot inherits the twin's shape
+  rather than measuring it, and says so instead of implying the question was settled.
 - **`ReapOrphanedStorage` is not re-keyed**, which settles the question the backlog item left open.
-  Two arguments, both verified: the key is a pure function of the id, which is what lets
+  Two arguments, both verified: the key is knowable without reading the row, which is what lets
   `AccountDeletionCleaner` reclaim bytes after the row is deleted; and `storage_key` carries no index
   (`dbmigration/1.10.sql`, `1.11.sql`), so keying on it is a full scan per batch. *(Corrected: the
   first draft carried a third argument, that `DELETED` and `EXPIRED` rows keep their key on purpose.
