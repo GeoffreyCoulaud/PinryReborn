@@ -52,7 +52,7 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
         assertEquals(rivalStaged, fakeArchiveStore.promoted[storageKey])
         assertEquals(rivalStaged.contentHash, stored()?.sha256)
         assertEquals(rivalStaged.byteSize, stored()?.byteSize)
-        assertEquals(listOf(fakeArchiveStore.staged), fakeArchiveStore.discarded)
+        assertEquals(listOf(stagedFile), fakeArchiveStore.discarded)
         assertEquals(emptyList<String>(), fakeArchiveStore.deleted)
     }
 
@@ -68,7 +68,7 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
         // Then
         assertEquals(UserDataExportState.DELETED, stored()?.state)
         assertTrue(fakeArchiveStore.promoted.isEmpty(), "a refused attempt promotes nothing")
-        assertEquals(listOf(fakeArchiveStore.staged), fakeArchiveStore.discarded)
+        assertEquals(listOf(stagedFile), fakeArchiveStore.discarded)
         assertEquals(emptyList<String>(), fakeArchiveStore.deleted)
     }
 
@@ -85,7 +85,7 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
         // Then
         assertNull(stored())
         assertTrue(fakeArchiveStore.promoted.isEmpty(), "a refused attempt promotes nothing")
-        assertEquals(listOf(fakeArchiveStore.staged), fakeArchiveStore.discarded)
+        assertEquals(listOf(stagedFile), fakeArchiveStore.discarded)
         assertEquals(emptyList<String>(), fakeArchiveStore.deleted)
     }
 
@@ -118,7 +118,7 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
         assertEquals(UserDataExportState.FAILED, stored()?.state)
         assertEquals("BUILD_FAILED", stored()?.failureCode)
         assertTrue(fakeArchiveStore.promoted.isEmpty(), "a promote that threw left no archive")
-        assertEquals(listOf(fakeArchiveStore.staged), fakeArchiveStore.discarded)
+        assertEquals(listOf(stagedFile), fakeArchiveStore.discarded)
     }
 
     @Test
@@ -170,7 +170,7 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
             fakeStoreBuilder.build(exportId, isLastAttempt = false, renewLease = {})
         }
         assertEquals(UserDataExportState.PENDING, stored()?.state)
-        assertEquals(listOf(fakeArchiveStore.staged), fakeArchiveStore.discarded)
+        assertEquals(listOf(stagedFile), fakeArchiveStore.discarded)
     }
 
     @Test
@@ -186,6 +186,6 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
         }
         assertEquals(UserDataExportState.FAILED, stored()?.state)
         assertEquals("BUILD_FAILED", stored()?.failureCode)
-        assertEquals(listOf(fakeArchiveStore.staged), fakeArchiveStore.discarded)
+        assertEquals(listOf(stagedFile), fakeArchiveStore.discarded)
     }
 }
