@@ -5,16 +5,26 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.UserDataExportBuilder
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportRetentionLifecycle
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportsConfig
+import io.quarkus.arc.Arc
 import io.quarkus.test.junit.QuarkusMock
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.TestProfile
@@ -28,6 +38,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -346,8 +357,12 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertTrue(pollUntilFileGone(archivePath), "the archive file should be removed from disk")
     }
 
-    /** A PENDING row whose request is past the grace, so the sweep's answer is [taskId]'s state alone. */
-    private fun seedInterruptedExport(auth: IntegrationTest.AuthenticatedUser, taskId: UUID): UUID {
+    /** A PENDING row seeded rather than requested, so no worker races what the case does to it. */
+    private fun seedPendingExport(
+        auth: IntegrationTest.AuthenticatedUser,
+        taskId: UUID? = null,
+        requestedAt: Instant = Instant.now(),
+    ): UUID {
         val exportId = UUID.randomUUID()
         userDataExportRepository.save(
             UserDataExport(
@@ -355,12 +370,20 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
                 userId = auth.user.id,
                 state = UserDataExportState.PENDING,
                 formatVersion = 1,
-                requestedAt = Instant.now().minus(exportsConfig.interruptedGrace()).minus(Duration.ofHours(1)),
+                requestedAt = requestedAt,
                 taskId = taskId,
             ),
         )
         return exportId
     }
+
+    /** A PENDING row whose request is past the grace, so the sweep's answer is [taskId]'s state alone. */
+    private fun seedInterruptedExport(auth: IntegrationTest.AuthenticatedUser, taskId: UUID): UUID =
+        seedPendingExport(
+            auth,
+            taskId = taskId,
+            requestedAt = Instant.now().minus(exportsConfig.interruptedGrace()).minus(Duration.ofHours(1)),
+        )
 
     // --- Purge: driven directly through the injected ReapExpiredUserDataExports bean ---
 
@@ -460,6 +483,73 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         // Drained for the same reason as the superseding build above: the case must not hand back
         // while the worker still holds the single test connection.
         assertEquals("READY", pollUntilReady(auth, acceptedId), "the accepted request should build")
+    }
+
+    /**
+     * A real repository in every respect but the READY write, which lands before it throws: refusing
+     * ahead of that write would leave the same row behind and prove no rollback ran.
+     */
+    private class RefusingThePublish(private val real: UserDataExportRepositoryInterface) :
+        UserDataExportRepositoryInterface by real {
+        override fun save(export: UserDataExport): UserDataExport {
+            val saved = real.save(export)
+            if (export.state == UserDataExportState.READY) throw IOException(PUBLISH_REFUSAL)
+            return saved
+        }
+    }
+
+    /**
+     * The real build with one seam replaced. Wired by hand rather than mocked: the repository bean is
+     * a class Kotlin sees as final, and `QuarkusMock` demands a mock its proxy could stand in for.
+     */
+    private fun buildRefusingThePublish(exportId: UUID, isLastAttempt: Boolean) {
+        val arc = Arc.container()
+        UserDataExportBuilder(
+            exportRepository = RefusingThePublish(userDataExportRepository),
+            userRepository = arc.instance(UserRepositoryInterface::class.java).get(),
+            pinRepository = arc.instance(PinRepositoryInterface::class.java).get(),
+            imageRepository = arc.instance(ImageRepositoryInterface::class.java).get(),
+            boardRepository = arc.instance(BoardRepositoryInterface::class.java).get(),
+            tagRepository = arc.instance(TagRepositoryInterface::class.java).get(),
+            imageStore = arc.instance(ImageStore::class.java).get(),
+            archiveStore = arc.instance(ExportArchiveStore::class.java).get(),
+            transactionRunner = arc.instance(TransactionRunner::class.java).get(),
+            clock = arc.instance(Clock::class.java).get(),
+            applicationVersion = "test",
+            pageSize = exportsConfig.pageSize(),
+            retention = exportsConfig.retention(),
+            minimumFreeBytes = exportsConfig.minimumFreeBytes(),
+        ).build(exportId, isLastAttempt = isLastAttempt, renewLease = {})
+    }
+
+    @Test
+    fun `Given a publish that rolled back over promoted bytes, Then a sweep takes them off the disk`() {
+        // Given: the residue `docs/adr/0017` decision 2 admits, which no api-usecases case can build
+        // since that runner never rolls back. The build is driven attempt by attempt so the row is
+        // read between them, and the row is seeded rather than requested so no worker races it.
+        val auth = createAuthenticatedUser()
+        val exportId = seedPendingExport(auth)
+        val archivePath = archivePathFor(exportId)
+        val refused = assertThrows<IOException> { buildRefusingThePublish(exportId, isLastAttempt = false) }
+        assertEquals(PUBLISH_REFUSAL, refused.message)
+        val pending = requireNotNull(userDataExportRepository.findById(exportId))
+        assertEquals(UserDataExportState.PENDING, pending.state, "the READY write should not outlive its transaction")
+        assertEquals(
+            "exports/$exportId.zip",
+            pending.storageKey,
+            "the key is stamped before the staging, so the row already names what the promote left",
+        )
+        assertTrue(Files.exists(archivePath), "the promote runs inside the transaction, and ahead of the write")
+
+        // When: the last attempt, whose marking is what makes the row terminal, then one sweep
+        assertThrows<IOException> { buildRefusingThePublish(exportId, isLastAttempt = true) }
+        val failed = requireNotNull(userDataExportRepository.findById(exportId))
+        assertEquals(UserDataExportState.FAILED, failed.state, "the last attempt is what makes the row terminal")
+        assertTrue(Files.exists(archivePath), "nothing on the failure path reclaims the promoted bytes")
+        reapExpiredUserDataExports.reap()
+
+        // Then: stated on the disk, since a row that stopped naming the bytes would satisfy anything else
+        assertFalse(Files.exists(archivePath), "the sweep should take the bytes the rolled-back publish left")
     }
 
     @Test
@@ -631,5 +721,8 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
 
         /** What the refused staging sweep throws, so the captured line can be told from any other. */
         const val REFUSAL = "the staging directory refuses to be walked"
+
+        /** What the refused publish throws, so the case reads its own failure and not another. */
+        const val PUBLISH_REFUSAL = "the export row refuses to be published"
     }
 }
