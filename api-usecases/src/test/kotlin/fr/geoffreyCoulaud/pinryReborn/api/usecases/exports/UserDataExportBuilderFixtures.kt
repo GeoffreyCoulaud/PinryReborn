@@ -139,9 +139,8 @@ internal class FakeExportArchiveStore(
 }
 
 /**
- * What a build over [FakeExportArchiveStore] reads and writes through: a row store the writes land in,
- * and a re-read hook a racing actor lands on (fencing spec section 9). No mock archive store here, so
- * a case whose criterion is the disk cannot answer it with a verification on a store it never drove.
+ * What a build over [FakeExportArchiveStore] reads and writes through, mock store excluded: a case
+ * whose criterion is the disk cannot answer it with a verification on a store it never drove.
  */
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base, as the import suite has.
 internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {

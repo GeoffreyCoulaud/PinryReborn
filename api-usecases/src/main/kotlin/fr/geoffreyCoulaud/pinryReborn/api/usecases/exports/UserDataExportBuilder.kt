@@ -20,7 +20,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.deleteQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
@@ -59,7 +58,7 @@ class UserDataExportBuilder(
 
     /**
      * The worker's `account.export` task handler entry point (spec §8). Loads the export and its
-     * user, checks free space, stages and promotes the archive, then publishes the row. Every write
+     * user, checks free space, stages the archive, then promotes and publishes it. Every write
      * it makes is a compare-and-set on `PENDING` (`docs/adr/0016`), so a build racing a cancellation
      * or an account deletion can never resurrect a row the user was told was gone. [isLastAttempt]
      * controls whether a build failure marks the export `FAILED` (last attempt) or leaves it
@@ -76,8 +75,7 @@ class UserDataExportBuilder(
         // reclaimable even if this row never gets a further write.
         val stamped = stampStorageKey(exportId, storageKey) ?: return
         val staged = stageOrFail(stamped, user, isLastAttempt, renewLease)
-        archiveStore.promote(staged, storageKey)
-        publish(exportId, storageKey, staged)
+        completeOrFail(exportId, storageKey, staged, isLastAttempt)
     }
 
     /** The attempt's own guard, over a window this handler owns: the fences below cover the rest. */
@@ -105,6 +103,21 @@ class UserDataExportBuilder(
             throw error
         }
 
+    /**
+     * Step 8 of `docs/specs/2026-07-22-user-data-export.md` over the completion: the staged file goes
+     * on every attempt, the row is marked on the last, and the failure is rethrown for the queue.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun completeOrFail(exportId: UUID, storageKey: String, staged: StagedFile, isLastAttempt: Boolean) {
+        try {
+            publish(exportId, storageKey, staged)
+        } catch (error: Throwable) {
+            archiveStore.discard(staged)
+            if (isLastAttempt) markFailed(exportId, "BUILD_FAILED")
+            throw error
+        }
+    }
+
     /** The row this write left, not the copy read before it: what the staging reads is what it wrote. */
     private fun stampStorageKey(exportId: UUID, storageKey: String): UserDataExport? =
         exportRepository.saveFenced(transactionRunner, exportId, ::stillPending) {
@@ -126,18 +139,20 @@ class UserDataExportBuilder(
     }
 
     /**
-     * Re-reads the row inside a transaction and only publishes if it is still `PENDING`: cancelled
-     * (`DELETED`) or superseded by an account deletion in the meantime both leave it something else,
-     * in which case the just-promoted bytes are deleted instead of being resurrected as `READY`.
+     * The promote runs inside the fence rather than before it (`docs/adr/0017`): two attempts of one
+     * build both read a legitimate `PENDING` row, so the loser can only be told apart here, and it
+     * learns it has lost before it has touched the canonical key. It discards its own staged file,
+     * a handle that cannot name the winner's bytes.
      */
     private fun publish(exportId: UUID, storageKey: String, staged: StagedFile) {
-        val published = transactionRunner.inTransaction { publishIfStillPending(exportId, staged) }
-        if (!published) archiveStore.deleteQuietly(storageKey)
+        val published = transactionRunner.inTransaction { promoteIfStillPending(exportId, storageKey, staged) }
+        if (!published) archiveStore.discard(staged)
     }
 
-    private fun publishIfStillPending(exportId: UUID, staged: StagedFile): Boolean {
+    private fun promoteIfStillPending(exportId: UUID, storageKey: String, staged: StagedFile): Boolean {
         val current = exportRepository.findById(exportId)
         if (current?.state != UserDataExportState.PENDING) return false
+        archiveStore.promote(staged, storageKey)
         exportRepository.save(
             current.copy(
                 state = UserDataExportState.READY,
