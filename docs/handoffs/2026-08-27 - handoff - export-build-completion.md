@@ -60,6 +60,14 @@ that exist, or the row reads a terminal state and its bytes are reclaimed.
    vacuously over a divergent column, and the bytes become unreachable to every sweep.
 7. **Adding a class to the default test profile changes what else runs beside it.** One integration
    suite counts every row in `tasks` and expects one.
+8. **A green gate is not a green CI, and this lot proved that too.** `AGENTS.md` says CI enumerates
+   the gate's parts and also builds the container image, which no local command covers. The startup
+   check refused every boot: `/var/lib` is root-owned, uid 1001 cannot create under it, and the
+   Dockerfile prepared the import directory only. Its comment even said why, and this lot made that
+   comment false by giving the export half the same startup observer. **A startup check that creates
+   a directory is a change to the image, not only to the code.** The fix carries the twin of
+   `ImportDataDirectoryImageTest`, which reads the Dockerfile from inside the gate, so the next
+   occurrence is local rather than reachable only by building the image.
 
 ## What is not validated
 
