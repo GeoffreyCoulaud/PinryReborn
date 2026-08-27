@@ -51,7 +51,8 @@ refused, and the refused one has already promoted onto the shared key and still 
 has to stop the loser from promoting, not tell it sooner that it lost.
 
 **A key per attempt** works and is cheaper to reason about. It also removes the property that the key
-is a pure function of the export id, and the orphan sweep depends on that property structurally:
+is knowable without reading the row, being a function of the export id and the store's archive
+format, and the orphan sweep depends on that property structurally:
 `ReapOrphanedStorage.parseId` accepts only `<prefix><uuid>.<ext>` and, by its own written contract,
 skips and never deletes a key it cannot parse; `forEachStorageKeyOnDisk` does not descend into
 subdirectories. A per-attempt key is therefore invisible to the sweep, and the loser's archive
@@ -79,7 +80,7 @@ canonical key, so it promotes nothing and deletes nothing; it discards its own s
 handle that cannot name another attempt's bytes.
 
 The premise is that `minConnections` and `maxConnections` are pinned to 1
-(`api-application/src/main/resources/application.properties:9,16`, pinned by
+(`api-application/src/main/resources/application.properties:15,16`, pinned by
 `ProductionDatasourceDeclarationTest`) and that a transaction is what serialises a read-write pair
 (`agents/engineering.md:202-208`, `docs/adr/0009`). **The guarantee is per JVM**: it does not survive a
 second process on the same database file, nor raising `maxConnections`. Recorded here because the
@@ -142,7 +143,7 @@ fencing spec attached to this defect.
 - A promoted archive whose transaction rolled back is reclaimed after the row becomes terminal and the
   next sweep runs: `exports.purge_interval` plus whatever remains of the task's retry budget, not one
   interval as an earlier draft said. Bounded, invisible to any HTTP caller, and disk only.
-- The key stays a pure function of the export id. That property is load-bearing in the builder, the
+- The key stays knowable without reading the row. That property is load-bearing in the builder, the
   account cleaner and the orphan sweep, and until this lot it lived as a duplicated string literal in
   two modules. The specification gives it one home, `ExportArchiveKey`, mirroring the import's.
 - The transaction now holds a filesystem rename on the single write connection. The staging, which is
