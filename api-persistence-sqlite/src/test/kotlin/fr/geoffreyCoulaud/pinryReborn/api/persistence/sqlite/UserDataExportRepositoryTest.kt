@@ -226,6 +226,95 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         assertTrue(expired.isEmpty())
     }
 
+    // --- sweep selections ---
+
+    // Enumerated rather than read off isTerminal: the expectation is the spec's, not the predicate's.
+    private val terminalStates = listOf(
+        UserDataExportState.FAILED,
+        UserDataExportState.EXPIRED,
+        UserDataExportState.DELETED,
+        UserDataExportState.SUPERSEDED,
+    )
+
+    // One row per state on its own user: the partial unique index allows one PENDING per user.
+    private fun saveExport(
+        state: UserDataExportState,
+        requestedAt: Instant = Instant.parse("2026-07-22T10:00:00Z"),
+        archived: Boolean = true,
+    ): UserDataExport {
+        val export = pendingExport(createAndSaveUser().id, requestedAt)
+        val storageKey = if (archived) "exports/${export.id}.zip" else null
+        return repository.save(export.copy(state = state, storageKey = storageKey))
+    }
+
+    @Test
+    fun `Given one export per state, Then findPending answers with the pending one alone`() {
+        // Given: one row per state, so a predicate widened by accident is caught here
+        val pending = saveExport(UserDataExportState.PENDING)
+        UserDataExportState.entries
+            .filterNot { it == UserDataExportState.PENDING }
+            .forEach { saveExport(it) }
+
+        // When
+        val found = repository.findPending(limit = 10)
+
+        // Then
+        assertEquals(listOf(pending.id), found.map { it.id })
+    }
+
+    @Test
+    fun `Given more pending exports than the limit, Then findPending answers the oldest ones in order`() {
+        // Given: the sweep filters on the grace after the selection, so an unordered batch of recent
+        // rows would starve the oldest ones for good
+        val base = Instant.parse("2026-07-22T10:00:00Z")
+        val oldest = saveExport(UserDataExportState.PENDING, base)
+        val middle = saveExport(UserDataExportState.PENDING, base.plusSeconds(60))
+        saveExport(UserDataExportState.PENDING, base.plusSeconds(120))
+
+        // When
+        val found = repository.findPending(limit = 2)
+
+        // Then
+        assertEquals(listOf(oldest.id, middle.id), found.map { it.id })
+    }
+
+    @Test
+    fun `Given one export per state naming an archive, Then only the terminal ones are reclaimable`() {
+        // Given: one row per state, so a predicate widened by accident is caught here
+        val reclaimableIds = terminalStates.map { saveExport(it).id }.toSet()
+        (UserDataExportState.entries - terminalStates.toSet()).forEach { saveExport(it) }
+
+        // When
+        val reclaimable = repository.findReclaimableTerminal(limit = 10)
+
+        // Then
+        assertEquals(reclaimableIds, reclaimable.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `Given a terminal export whose archive is already gone, Then it is not reclaimable`() {
+        // Given: the column is the sweep's only index into the residue, so a null one is nothing to do
+        saveExport(UserDataExportState.EXPIRED, archived = false)
+
+        // When
+        val reclaimable = repository.findReclaimableTerminal(limit = 10)
+
+        // Then
+        assertTrue(reclaimable.isEmpty())
+    }
+
+    @Test
+    fun `Given more reclaimable exports than the limit, Then findReclaimableTerminal stops at the limit`() {
+        // Given: bounded at the query, so a first run over a whole history does not materialise it
+        repeat(3) { saveExport(UserDataExportState.DELETED) }
+
+        // When
+        val reclaimable = repository.findReclaimableTerminal(limit = 2)
+
+        // Then
+        assertEquals(2, reclaimable.size)
+    }
+
     // --- last requested ---
 
     @Test
