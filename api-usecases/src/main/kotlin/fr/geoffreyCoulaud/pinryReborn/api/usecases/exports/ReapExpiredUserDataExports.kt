@@ -49,8 +49,18 @@ class ReapExpiredUserDataExports(
         val failed = failInterruptedBuilds(now)
         val expired = expireReadyExports(now)
         val reclaimed = reclaimTerminalArchives()
-        archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge))
+        discardStagedFiles(now)
         return ExportSweepCounts(failed, expired, reclaimed)
+    }
+
+    /** Its own net, as a row has: a refused walk of the staging directory must not cost the three counts. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun discardStagedFiles(now: Instant) {
+        try {
+            archiveStore.discardOrphanedStagedFiles(now.minus(stagedFileMaxAge))
+        } catch (e: Exception) {
+            logger.warn(e) { "export staging sweep failed" }
+        }
     }
 
     /**
