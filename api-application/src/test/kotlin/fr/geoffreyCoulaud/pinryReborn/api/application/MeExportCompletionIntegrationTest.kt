@@ -537,11 +537,8 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
 
         // Then
         assertEquals(1, logged.size, "one line per sweep, got $logged")
-        val eachCount = listOf("0 failed", "2 expired", "1 reclaimed")
-        assertTrue(
-            eachCount.all { logged.first().contains(it) },
-            "the sweep line must name every pass count, got: ${logged.first()}",
-        )
+        // The whole line, which is what an operator reads: "0 failed" is a substring of "10 failed".
+        assertEquals("export sweep: 0 failed, 2 expired, 1 reclaimed", logged.first())
     }
 
     // --- Headers come from the stored row, not the adapter's current format ---
