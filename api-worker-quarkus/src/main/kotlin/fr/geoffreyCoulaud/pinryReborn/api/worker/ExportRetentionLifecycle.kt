@@ -27,8 +27,10 @@ class ExportRetentionLifecycle(
         @Observes ignored: ShutdownEvent,
     ) = stop()
 
+    // safeReap, not reap: `discardOrphanedStagedFiles` walks the staging directory outside any row's
+    // own isolation, so the sweep can still throw as a whole, and on startup that ends the boot.
     fun start() {
-        reapExpiredUserDataExports.reap()
+        safeReap()
         val purgeIntervalMs = config.purgeInterval().toMillis().coerceAtLeast(1)
         purgeScheduler.scheduleWithFixedDelay(
             { safeReap() },
@@ -38,10 +40,15 @@ class ExportRetentionLifecycle(
         )
     }
 
+    /**
+     * [report] is a seam: a log handler attached in a test of this class reads nothing, so the line
+     * an operator reads cannot be pinned through the log itself.
+     */
     @Suppress("TooGenericExceptionCaught")
-    fun safeReap() {
+    fun safeReap(report: (String) -> Unit = { logger.info { it } }) {
         try {
-            reapExpiredUserDataExports.reap()
+            val counts = reapExpiredUserDataExports.reap()
+            report("export sweep: ${counts.failed} failed, ${counts.expired} expired, ${counts.reclaimed} reclaimed")
         } catch (e: Exception) {
             logger.error(e) { "export purge failed" }
         }
