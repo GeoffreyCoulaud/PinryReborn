@@ -40,6 +40,7 @@ class UserDataExportRequesterTest : BaseTest() {
     private val now = Instant.parse("2026-07-22T10:00:00Z")
     private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val factor = "good-password"
+    private val oldKey = "exports/old.zip"
     private val requester =
         UserDataExportRequester(
             repository, archiveStore, enqueueTask, reauthenticator, clock, transactionRunner,
@@ -207,18 +208,19 @@ class UserDataExportRequesterTest : BaseTest() {
     }
 
     @Test
-    fun `Given a ready export, Then it is superseded and its bytes deleted after the commit`() {
-        // Given
+    fun `Given a ready export, Then it is superseded, still names its bytes, and they are deleted after`() {
+        // Given: the row keeps the key, so a delete that fails leaves the residue named by the only
+        // column the sweep can select on (spec section 4.4). Nulling it hid the bytes from every pass.
         stubTransactionPassthrough()
         every { reauthenticator.reauthenticate(user, factor) } just runs
         every { clock.now() } returns now
         every { repository.findPendingForUser(user.id) } returns null
         every { repository.findLastRequestedAtForUser(user.id) } returns null
-        val ready = readyExport(storageKey = "exports/old.zip")
+        val ready = readyExport(storageKey = oldKey)
         every { repository.findReadyForUser(user.id) } returns ready
         every { repository.save(any()) } answers { firstArg() }
         stubEnqueue()
-        every { archiveStore.delete("exports/old.zip") } just runs
+        every { archiveStore.delete(oldKey) } just runs
 
         // When
         requester.request(user, factor)
@@ -226,10 +228,10 @@ class UserDataExportRequesterTest : BaseTest() {
         // Then
         verify {
             repository.save(
-                match { it.id == ready.id && it.state == UserDataExportState.SUPERSEDED && it.storageKey == null },
+                match { it.id == ready.id && it.state == UserDataExportState.SUPERSEDED && it.storageKey == oldKey },
             )
         }
-        verify { archiveStore.delete("exports/old.zip") }
+        verify { archiveStore.delete(oldKey) }
     }
 
     @Test
@@ -301,17 +303,17 @@ class UserDataExportRequesterTest : BaseTest() {
         every { clock.now() } returns now
         every { repository.findPendingForUser(user.id) } returns null
         every { repository.findLastRequestedAtForUser(user.id) } returns null
-        val ready = readyExport(storageKey = "exports/old.zip")
+        val ready = readyExport(storageKey = oldKey)
         every { repository.findReadyForUser(user.id) } returns ready
         every { repository.save(any()) } answers { firstArg() }
         stubEnqueue()
-        every { archiveStore.delete("exports/old.zip") } throws RuntimeException("io")
+        every { archiveStore.delete(oldKey) } throws RuntimeException("io")
 
         // When
         val result = requester.request(user, factor)
 
         // Then
         assertEquals(UserDataExportState.PENDING, result.state)
-        verify { archiveStore.delete("exports/old.zip") }
+        verify { archiveStore.delete(oldKey) }
     }
 }
