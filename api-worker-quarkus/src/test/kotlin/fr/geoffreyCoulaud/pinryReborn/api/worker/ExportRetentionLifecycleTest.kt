@@ -7,9 +7,14 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import java.util.logging.Handler
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 
 class ExportRetentionLifecycleTest {
     private val reap: ReapExpiredUserDataExports = mockk(relaxed = true)
@@ -59,6 +64,32 @@ class ExportRetentionLifecycleTest {
     }
 
     @Test
+    fun `Given a reap that throws at startup, Then the application still starts and keeps its schedule`() {
+        // Given
+        every { config.purgeInterval() } returns Duration.ofSeconds(1)
+        every { reap.reap() } throws RuntimeException("boom")
+        // When (no exception escapes)
+        lifecycle().start()
+        // Then
+        verify { scheduler.scheduleWithFixedDelay(any(), 1000L, 1000L, TimeUnit.MILLISECONDS) }
+    }
+
+    @Test
+    fun `Given a reap that moved rows, Then one line reports the count of each pass`() {
+        // Given
+        every { reap.reap() } returns ExportSweepCounts(failed = 1, expired = 2, reclaimed = 3)
+        // When
+        val logged = capturingLifecycleLogs { lifecycle().safeReap() }
+        // Then
+        assertEquals(1, logged.size, "one line per sweep, got $logged")
+        val eachCount = listOf("1 failed", "2 expired", "3 reclaimed")
+        assertTrue(
+            eachCount.all { logged.first().contains(it) },
+            "the sweep line must name every pass count, got: ${logged.first()}",
+        )
+    }
+
+    @Test
     fun `Given shutdown, Then it shuts the scheduler down`() {
         // When
         lifecycle().stop()
@@ -82,5 +113,28 @@ class ExportRetentionLifecycleTest {
         lifecycle().onStop(mockk<ShutdownEvent>())
         // Then
         verify { scheduler.shutdown() }
+    }
+
+    /** slf4j binds to the JBoss LogManager here, which is the JUL one, so a plain JUL handler sees the line. */
+    private fun capturingLifecycleLogs(sweep: () -> Unit): List<String> {
+        val records = mutableListOf<LogRecord>()
+        val handler =
+            object : Handler() {
+                override fun publish(record: LogRecord) {
+                    records += record
+                }
+
+                override fun flush() = Unit
+
+                override fun close() = Unit
+            }
+        val logger = Logger.getLogger(ExportRetentionLifecycle::class.java.name)
+        logger.addHandler(handler)
+        try {
+            sweep()
+        } finally {
+            logger.removeHandler(handler)
+        }
+        return records.map { it.message ?: "" }
     }
 }
