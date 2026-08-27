@@ -27,8 +27,9 @@ class ExportRetentionLifecycle(
         @Observes ignored: ShutdownEvent,
     ) = stop()
 
-    // safeReap, not reap: `swept()` wraps the action on one row, so the three selections that feed
-    // it are outside every net, and a sweep that throws as a whole ends the boot it started in.
+    // safeReap, not reap: `swept()` wraps the action on one row, so the three selections that feed it
+    // and the task lookup pass 1 makes per pending row are outside every net, and a sweep that throws
+    // as a whole ends the boot it started in.
     fun start() {
         safeReap()
         val purgeIntervalMs = config.purgeInterval().toMillis().coerceAtLeast(1)
