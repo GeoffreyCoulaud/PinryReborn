@@ -618,8 +618,10 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
     }
 
     private companion object {
+        // Deliberately apart, where production gives both the same PT6H: equal here, the two would be
+        // interchangeable and a sweep reading one for the other would pass every case in this file.
         private val INTERRUPTED_GRACE: Duration = Duration.ofHours(6)
-        private val STAGED_FILE_MAX_AGE: Duration = Duration.ofHours(6)
+        private val STAGED_FILE_MAX_AGE: Duration = Duration.ofHours(2)
         private const val SWEEP_BATCH_SIZE = 500
         private val FORMAT = ArchiveFormat("application/zip", "zip")
 
