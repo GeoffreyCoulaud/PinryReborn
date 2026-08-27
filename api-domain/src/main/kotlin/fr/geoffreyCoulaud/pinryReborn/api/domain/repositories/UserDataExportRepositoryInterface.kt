@@ -6,6 +6,9 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import java.time.Instant
 import java.util.UUID
 
+// One method per question an export use case asks of the store, which trips the per-interface
+// threshold. Suppressed rather than split, as UserDataExportRepository is for the same rule.
+@Suppress("TooManyFunctions")
 interface UserDataExportRepositoryInterface {
     fun save(export: UserDataExport): UserDataExport
 
@@ -25,6 +28,15 @@ interface UserDataExportRepositoryInterface {
     fun findLastRequestedAtForUser(userId: UUID): Instant?
 
     fun findExpiredReadyExports(now: Instant): List<UserDataExport>
+
+    /**
+     * `PENDING` rows oldest first, bounded at the query: the sweep applies its grace after the
+     * selection, so an unordered batch of recent rows would starve the oldest ones for good.
+     */
+    fun findPending(limit: Int): List<UserDataExport>
+
+    /** Terminal rows that still name an archive, so the sweep reclaims each one exactly once. */
+    fun findReclaimableTerminal(limit: Int): List<UserDataExport>
 
     fun findAllExportIdsForUser(userId: UUID): List<UUID>
 

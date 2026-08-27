@@ -116,6 +116,23 @@ class UserDataExportRepository(
             .findList()
             .map { it.toDomain() }
 
+    override fun findPending(limit: Int): List<UserDataExport> =
+        QUserDataExportModel()
+            .state.equalTo(UserDataExportState.PENDING.name)
+            .orderBy()
+            .requestedAt.asc()
+            .setMaxRows(limit)
+            .findList()
+            .map { it.toDomain() }
+
+    override fun findReclaimableTerminal(limit: Int): List<UserDataExport> =
+        QUserDataExportModel()
+            .state.isIn(TerminalExportStates.all)
+            .storageKey.isNotNull()
+            .setMaxRows(limit)
+            .findList()
+            .map { it.toDomain() }
+
     override fun findAllExportIdsForUser(userId: UUID): List<UUID> =
         QUserDataExportModel().user.id.equalTo(userId).findList().map { it.id }
 
@@ -127,5 +144,10 @@ class UserDataExportRepository(
 
     override fun deleteAllForUser(userId: UUID) {
         QUserDataExportModel().user.id.equalTo(userId).delete()
+    }
+
+    /** The states nothing more will happen to, spelled as the column stores them. */
+    private object TerminalExportStates {
+        val all: Set<String> = UserDataExportState.entries.filter { it.isTerminal }.map { it.name }.toSet()
     }
 }
