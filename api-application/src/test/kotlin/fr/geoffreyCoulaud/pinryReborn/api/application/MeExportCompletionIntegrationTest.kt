@@ -341,7 +341,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertTrue(pollUntilFileGone(archivePath), "the archive file should be removed from disk")
     }
 
-    /** A build nothing is driving any more: its task is settled and its request is past the grace. */
+    /** A PENDING row whose request is past the grace, so the sweep's answer is [taskId]'s state alone. */
     private fun seedInterruptedExport(auth: IntegrationTest.AuthenticatedUser, taskId: UUID): UUID {
         val exportId = UUID.randomUUID()
         userDataExportRepository.save(
@@ -415,7 +415,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `Given a pending export whose task is dead, Then the sweep fails it and the next request is taken`() {
+    fun `Given two pending exports of the same age, Then only the one whose task is dead is failed`() {
         // Given: a kind no handler is registered for, which the runtime settles to DEAD on its own
         // (`TaskProcessor.kt:37-39`). A row naming no task at all would exercise "absent" instead,
         // and killing a real export task would race the live worker.
@@ -424,6 +424,14 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         val task = enqueueTask.enqueue(kind = "no.handler", payload = "{}", maxAttempts = 1)
         assertTrue(pollUntilTaskDead(task.id), "the runtime should settle a handler-less task to DEAD")
         val exportId = seedInterruptedExport(auth, task.id)
+        // Spec criterion 5, same age and same sweep: a condemnation reading the grace alone takes
+        // this row too. Its owner is another account, since a second PENDING row of `auth` would
+        // make the request below the 409 this case exists to rule out. Its task is delayed rather
+        // than running, so it stays live without a handler racing the assertion.
+        val building = createAuthenticatedUser()
+        val liveTask =
+            enqueueTask.enqueue(kind = "no.handler", payload = "{}", maxAttempts = 1, delay = Duration.ofHours(1))
+        val buildingId = seedInterruptedExport(building, liveTask.id)
 
         // When
         reapExpiredUserDataExports.reap()
@@ -432,6 +440,9 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         val swept = requireNotNull(userDataExportRepository.findById(exportId))
         assertEquals(UserDataExportState.FAILED, swept.state)
         assertEquals("EXPORT_INTERRUPTED", swept.failureCode)
+        val untouched = requireNotNull(userDataExportRepository.findById(buildingId))
+        assertEquals(UserDataExportState.PENDING, untouched.state, "a row whose task is live is left alone")
+        assertNull(untouched.failureCode, "a row the sweep left alone carries no failure code")
         // 202 rather than merely "not 409": this profile pins exports.minimum_interval to PT0S,
         // where production answers 429 for as long as the cooldown runs.
         val acceptedId = given()
