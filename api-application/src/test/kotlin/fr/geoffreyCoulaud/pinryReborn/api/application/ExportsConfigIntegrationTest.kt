@@ -4,6 +4,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportsConfig
 import io.quarkus.test.junit.QuarkusTest
 import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
 
@@ -22,7 +23,9 @@ class ExportsConfigIntegrationTest {
         // as long as its staging progresses, so a shorter grace condemns a live builder, which then
         // meets a non-PENDING row at its fence and throws away a complete archive.
         assertEquals(Duration.ofHours(6), config.interruptedGrace())
-        assertEquals(config.stagedFileMaxAge(), config.interruptedGrace())
+        // The invariant is the floor, not the equality: a longer grace only delays freeing a slot,
+        // a shorter one destroys a live builder's archive.
+        assertTrue(config.interruptedGrace() >= config.stagedFileMaxAge())
     }
 
     @Test
