@@ -25,8 +25,8 @@ data class ExportSweepCounts(val failed: Int, val expired: Int, val reclaimed: I
  * reclaiming bytes is pass 3's job for every terminal state. Passes 2 and 3 would otherwise take the
  * same row in one run, count it twice and issue the same delete twice.
  *
- * Deliberately not `@ApplicationScoped`: the two `Duration`s, the batch size and [ExportArchiveStore]
- * have no CDI producer, so annotating this bean would fail Quarkus's build-time bean validation in
+ * Deliberately not `@ApplicationScoped`: the two `Duration`s and the batch size are plain values ARC
+ * cannot resolve, so annotating this bean would fail Quarkus's build-time bean validation in
  * `api-application`. `ExportProducers` is the single place that constructs it.
  *
  * Each row is isolated in its own try/catch and a failure is logged at WARN rather than aborting the

@@ -69,8 +69,8 @@ class UserDataExportDeleter(
     }
 
     /**
-     * Decided on the copy the fence refused, whose key no path here clears: a gone row still names the
-     * bytes a first release lost. Best-effort, the sweep's third pass being the guaranteed repair.
+     * Decided on the copy read before the fence, whose key no path here clears: a gone row still names
+     * the bytes a first release lost. Best-effort, the sweep's third pass being the guaranteed repair.
      */
     private fun releaseStranded(found: UserDataExport) {
         if (!found.state.isGone) return
