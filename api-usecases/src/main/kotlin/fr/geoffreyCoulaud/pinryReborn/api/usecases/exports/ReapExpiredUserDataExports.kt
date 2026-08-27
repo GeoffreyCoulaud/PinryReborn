@@ -137,7 +137,7 @@ class ReapExpiredUserDataExports(
     private companion object {
         private val logger = KotlinLogging.logger {}
 
-        /** Spec section 10's failure code for a build whose attempt is not coming back. */
+        /** The failure code for a build no attempt is coming back to, which the user reads on the row. */
         const val EXPORT_INTERRUPTED = "EXPORT_INTERRUPTED"
     }
 }
