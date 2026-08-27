@@ -35,7 +35,7 @@ interface UserDataExportRepositoryInterface {
      */
     fun findPending(limit: Int): List<UserDataExport>
 
-    /** Terminal rows that still name an archive, so the sweep reclaims each one exactly once. */
+    /** Terminal rows that still name an archive, so a row is held here until its bytes are gone. */
     fun findReclaimableTerminal(limit: Int): List<UserDataExport>
 
     fun findAllExportIdsForUser(userId: UUID): List<UUID>

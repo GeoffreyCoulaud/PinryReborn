@@ -7,5 +7,8 @@ import java.util.UUID
  * what lets the account cleaner and the orphan sweep name bytes no row still speaks for.
  */
 object ExportArchiveKey {
-    fun forExport(exportId: UUID, fileExtension: String): String = "exports/$exportId.$fileExtension"
+    /** The directory half, so a startup check probes what a key really resolves under. */
+    const val DIRECTORY = "exports"
+
+    fun forExport(exportId: UUID, fileExtension: String): String = "$DIRECTORY/$exportId.$fileExtension"
 }
