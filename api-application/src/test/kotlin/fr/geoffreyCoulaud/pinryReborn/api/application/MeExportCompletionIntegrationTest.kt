@@ -4,15 +4,18 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
+import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportRetentionLifecycle
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportsConfig
+import io.quarkus.test.junit.QuarkusMock
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.TestProfile
 import io.restassured.RestAssured.given
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -35,6 +39,7 @@ import java.util.Base64
 import java.util.HexFormat
 import java.util.UUID
 import java.util.logging.Handler
+import java.util.logging.Level
 import java.util.logging.LogRecord
 import java.util.logging.Logger
 import java.util.zip.ZipFile
@@ -478,27 +483,30 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
     // --- Observability: the line an operator reads, on the channel it is read from ---
 
     /** slf4j binds to the JBoss LogManager, which is the JUL one, so a plain JUL handler sees the line. */
-    private fun capturingSweepLogs(sweep: () -> Unit): List<String> {
-        val messages = mutableListOf<String>()
+    private fun capturingLogsOf(loggerName: String, action: () -> Unit): List<LogRecord> {
+        val records = mutableListOf<LogRecord>()
         val handler =
             object : Handler() {
                 override fun publish(record: LogRecord) {
-                    messages += record.message.orEmpty()
+                    records += record
                 }
 
                 override fun flush() = Unit
 
                 override fun close() = Unit
             }
-        val logger = Logger.getLogger(ExportRetentionLifecycle::class.java.name)
+        val logger = Logger.getLogger(loggerName)
         logger.addHandler(handler)
         try {
-            sweep()
+            action()
         } finally {
             logger.removeHandler(handler)
         }
-        return messages
+        return records
     }
+
+    private fun capturingSweepLogs(sweep: () -> Unit): List<String> =
+        capturingLogsOf(ExportRetentionLifecycle::class.java.name, sweep).map { it.message.orEmpty() }
 
     /** A row already past its expiry, so one sweep expires it and then reclaims whatever it names. */
     private fun seedExpiredReadyExport(auth: IntegrationTest.AuthenticatedUser, withBytes: Boolean) {
@@ -539,6 +547,34 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertEquals(1, logged.size, "one line per sweep, got $logged")
         // The whole line, which is what an operator reads: "0 failed" is a substring of "10 failed".
         assertEquals("export sweep: 0 failed, 2 expired, 1 reclaimed", logged.first())
+    }
+
+    /** A real store in every respect but the one call this case refuses. */
+    private class RefusingStagingSweep(dataDir: String) :
+        ExportArchiveStore by FilesystemZipExportArchiveStore(dataDir) {
+        override fun discardOrphanedStagedFiles(olderThan: Instant): Int = throw IOException(REFUSAL)
+    }
+
+    @Test
+    fun `Given a staging sweep the store refuses, Then the net says so with the cause`() {
+        // Given: the walk of the staging directory, refused. It is the only call of a run that no
+        // row's isolation covers, and the store is replaced for this case alone, delegating every
+        // other call to a real one so the passes ahead of it behave as they always do.
+        val auth = createAuthenticatedUser()
+        seedExpiredReadyExport(auth, withBytes = false)
+        QuarkusMock.installMockForType(RefusingStagingSweep(exportsConfig.dataDir()), ExportArchiveStore::class.java)
+
+        // When
+        val logged = capturingLogsOf(ReapExpiredUserDataExports::class.java.name) {
+            assertEquals(1, reapExpiredUserDataExports.reap().expired, "the refusal must not cost the passes")
+        }
+
+        // Then: absorbed, and named on the channel, cause included. A net that swallows in silence
+        // leaves an operator with a sweep that reports its counts and never drops a staged file.
+        val warning = logged.singleOrNull { it.message == "export staging sweep failed" }
+        assertNotNull(warning, "the absorbed refusal should reach the log, got $logged")
+        assertEquals(Level.WARNING, warning?.level)
+        assertEquals(REFUSAL, warning?.thrown?.message, "the line should carry the cause it absorbed")
     }
 
     // --- Headers come from the stored row, not the adapter's current format ---
@@ -592,5 +628,8 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
     private companion object {
         const val POLL_ATTEMPTS = 50
         const val POLL_INTERVAL_MS = 200L
+
+        /** What the refused staging sweep throws, so the captured line can be told from any other. */
+        const val REFUSAL = "the staging directory refuses to be walked"
     }
 }
