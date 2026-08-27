@@ -208,8 +208,14 @@ catch-up, not a steady state: today every terminal row keeps its key on purpose,
 selection is the whole history of terminal exports. It converges over successive ticks.
 
 **The startup sweep moves behind `safeReap()`.** `ExportRetentionLifecycle.start():31` calls `reap()`
-bare, so with these passes added a disk that refuses one delete would fail the boot. Nothing about
-reclaiming residue should stop the API from serving.
+bare. Nothing about reclaiming residue should stop the API from serving.
+
+*(Corrected: an earlier draft justified this by "a disk that refuses one delete would fail the boot".
+That is false, and stating a reason narrower than the truth invites the next cleanup to take the
+guard back out. Each row is isolated, so one refused delete never reaches the caller. What is outside
+every net is the rest: the three selections, the per-row task lookup pass 1 makes inside its filter,
+and the staged-file sweep. The three passes widen that surface, they do not create it, and the defect
+predates this lot.)*
 
 ### 4.4 The supersede keeps its key
 
@@ -453,4 +459,9 @@ out of scope entirely, see section 8.)*
 the same accounting the import twin declares. Today nothing reads that number, at either call site.
 The lot logs one line per sweep with a count per pass (`failed`, `expired`, `reclaimed`), so an
 operator whose exports all turn `EXPORT_INTERRUPTED` at three in the morning has something to read.
-A best-effort delete says so where the number is read.
+*(Corrected: an earlier draft closed on "a best-effort delete says so where the number is read". The
+lot does not satisfy it and this is the honest statement instead: the counts name rows acted on, and
+a row whose delete threw is not among them, which is what the reader needs. Saying so **in the line
+itself** was never specified beyond that one sentence, and the sentence is withdrawn rather than left
+prescribing something nothing implements. The staged-file sweep's own refusal logs separately, at
+WARN, and is pinned.)*
