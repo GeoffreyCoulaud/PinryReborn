@@ -210,7 +210,7 @@ class UserDataExportDeleterTest : BaseTest() {
 
     @Test
     fun `Given a failed export, Then it is marked DELETED and nothing is released`() {
-        // Given: a failure holds no bytes and its attempt has settled, so the state is the one write
+        // Given: the bytes a failure can hold are the sweep's third pass, so the state is the one write
         stubRow(exportWith(state = UserDataExportState.FAILED))
         stubRowWrites()
 

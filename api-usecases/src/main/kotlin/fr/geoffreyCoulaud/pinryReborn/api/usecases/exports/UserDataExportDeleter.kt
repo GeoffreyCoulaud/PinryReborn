@@ -51,9 +51,9 @@ class UserDataExportDeleter(
      */
     private fun release(deleted: UserDataExport) {
         when (deleted.state) {
-            // The Boolean is dropped deliberately (class KDoc). The key is derived rather than read:
-            // the row names nothing, and a promote whose transaction rolled back is unreachable to
-            // every fence. No window against a live attempt, since the two transactions serialise.
+            // The Boolean is dropped deliberately (class KDoc). The key is derived, not read: it names
+            // where a build promotes whatever the column holds, and a row cut short before its stamp
+            // holds nothing at all. No window against a live attempt: the two transactions serialise.
             UserDataExportState.PENDING -> {
                 deleted.taskId?.let { cancelTask.cancel(it) }
                 archiveStore.deleteQuietly(derivedKey(deleted.id))
@@ -63,7 +63,9 @@ class UserDataExportDeleter(
             // cleanup is best-effort) does not apply. The row moved first, so a disk failure leaves a
             // row promising less than it holds rather than more (`docs/adr/0016`, decision 4).
             UserDataExportState.READY -> archiveStore.delete(deleted.storageKey!!)
-            // FAILED, the only other state the fence lets through: no bytes, and a settled attempt.
+            // FAILED, the only other state the fence lets through, and it can hold bytes: a promote
+            // whose publish rolled back leaves some. Left to the sweep's third pass rather than
+            // released here, the row naming them throughout and no client seeing the delay.
             else -> Unit
         }
     }
@@ -77,7 +79,7 @@ class UserDataExportDeleter(
         found.storageKey?.let { archiveStore.deleteQuietly(it) }
     }
 
-    /** Derived rather than read: the residue this releases is bytes no row ever recorded a key for. */
+    /** The key a build promotes onto, which the column carries only once the stamp has landed. */
     private fun derivedKey(exportId: UUID): String =
         ExportArchiveKey.forExport(exportId, archiveStore.format.fileExtension)
 
