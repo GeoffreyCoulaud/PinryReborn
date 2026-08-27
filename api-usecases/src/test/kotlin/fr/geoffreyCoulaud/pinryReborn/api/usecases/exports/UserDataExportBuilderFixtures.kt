@@ -104,6 +104,9 @@ internal class FakeExportArchiveStore(
     /** What lands once this attempt has staged, which is where a rival's whole transaction fits. */
     var afterStage: () -> Unit = {}
 
+    /** What a discard does before it lands, so a case drives the unlink the net must survive. */
+    var beforeDiscard: () -> Unit = {}
+
     // Named apart from the fixture's own stageCalls, which counts the mock: a rival keyed on the
     // wrong one never arrives, and the case goes green without testing the race.
     /** How far a build got, which is what a racing actor lands on rather than a call ordinal. */
@@ -134,6 +137,7 @@ internal class FakeExportArchiveStore(
     }
 
     override fun discard(staged: StagedFile) {
+        beforeDiscard()
         discarded += staged
     }
 

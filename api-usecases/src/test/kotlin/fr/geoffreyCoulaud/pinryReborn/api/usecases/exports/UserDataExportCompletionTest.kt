@@ -122,6 +122,44 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
     }
 
     @Test
+    fun `Given a discard that throws on the last attempt, Then the export is still FAILED`() {
+        // Given: the temp file will not unlink, which must not cost the marking. Propagating here
+        // would skip markFailed and mask the original failure, leaving the row PENDING for good.
+        stubFakeStoreBuild()
+        fakeArchiveStore.beforePromote = { error("the archive could not be promoted") }
+        fakeArchiveStore.beforeDiscard = { error("the staged file could not be unlinked") }
+
+        // When / Then: the failure that reaches the queue is the promote's, not the discard's
+        val thrown = assertThrows(IllegalStateException::class.java) {
+            fakeStoreBuilder.build(exportId, isLastAttempt = true, renewLease = {})
+        }
+        assertEquals("the archive could not be promoted", thrown.message)
+        assertEquals(UserDataExportState.FAILED, stored()?.state)
+        assertEquals("BUILD_FAILED", stored()?.failureCode)
+    }
+
+    @Test
+    fun `Given a build that publishes, Then the archive is on the key before the row reads READY`() {
+        // Given: the fence order is read, test, promote, write. A write-then-promote inversion is
+        // caught here only, the rival case pinning nothing later than the predicate.
+        stubFakeStoreBuild()
+        beforeWrite = { row ->
+            if (row.state == UserDataExportState.READY) {
+                assertTrue(
+                    fakeArchiveStore.promoted.containsKey(storageKey),
+                    "the row went READY over a key holding nothing",
+                )
+            }
+        }
+
+        // When
+        fakeStoreBuilder.build(exportId, isLastAttempt = false, renewLease = {})
+
+        // Then
+        assertEquals(UserDataExportState.READY, stored()?.state)
+    }
+
+    @Test
     fun `Given a promote that throws on an earlier attempt, Then the export stays PENDING and the file is discarded`() {
         // Given
         stubFakeStoreBuild()

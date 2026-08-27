@@ -38,6 +38,10 @@ fun RenditionCache.evictImageQuietly(imageId: UUID) =
 fun ExportArchiveStore.deleteQuietly(storageKey: String) =
     StorageCleanup.runQuietly("export $storageKey") { delete(storageKey) }
 
+/** Best-effort [ExportArchiveStore.discard]: logs WARN and swallows on failure. */
+fun ExportArchiveStore.discardQuietly(staged: StagedFile) =
+    StorageCleanup.runQuietly("staged export ${staged.path}") { discard(staged) }
+
 /** Best-effort [ImportArchiveStore.delete]: logs WARN and swallows on failure. */
 fun ImportArchiveStore.deleteQuietly(storageKey: String) =
     StorageCleanup.runQuietly("import $storageKey") { delete(storageKey) }
