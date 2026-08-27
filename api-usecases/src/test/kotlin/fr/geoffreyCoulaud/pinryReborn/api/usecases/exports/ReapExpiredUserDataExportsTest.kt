@@ -110,6 +110,16 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         every { archiveStore.delete(any()) } answers { deletedArchives += firstArg<String>() }
     }
 
+    /** One key the store refuses and every other taken, which is how one half of a double delete fails. */
+    private fun stubArchiveDeletionRefusing(refusedKey: String) {
+        stubArchiveFormat()
+        every { archiveStore.delete(any()) } answers {
+            val key = firstArg<String>()
+            if (key == refusedKey) throw IOException("permission denied")
+            deletedArchives += key
+        }
+    }
+
     /**
      * The racing actor committing between the batch selection and this row's write, which only a read
      * inside the write's transaction sees: answered outside it, the fence would pass unfenced code.
@@ -402,15 +412,74 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         stubSweep()
         stubRowWrites()
         stubArchiveDeletion()
-        val divergent = anExport(UserDataExportState.SUPERSEDED, storageKey = "exports/divergent.txt")
+        val divergent = anExport(UserDataExportState.SUPERSEDED, storageKey = DIVERGENT_KEY)
 
         // When
         val counts = reaper.reap()
 
         // Then
         assertEquals(ExportSweepCounts(failed = 0, expired = 0, reclaimed = 1), counts)
-        assertEquals(listOf(keyOf(divergent.id), "exports/divergent.txt"), deletedArchives)
+        assertEquals(listOf(keyOf(divergent.id), DIVERGENT_KEY), deletedArchives)
         assertNull(stored(divergent.id).storageKey)
+    }
+
+    @Test
+    fun `Given a terminal export whose column's bytes will not go, Then the row keeps naming them`() {
+        // Given: the derived key goes and the column's refuses. A second delete made quiet would report
+        // the row reclaimed and clear the column, stranding real bytes as section 2.4's defect did.
+        stubSweep()
+        val divergent = anExport(UserDataExportState.SUPERSEDED, storageKey = DIVERGENT_KEY)
+        stubArchiveDeletionRefusing(DIVERGENT_KEY)
+
+        // When
+        val counts = reaper.reap()
+
+        // Then
+        assertEquals(ExportSweepCounts(failed = 0, expired = 0, reclaimed = 0), counts)
+        assertEquals(listOf(keyOf(divergent.id)), deletedArchives)
+        assertEquals(DIVERGENT_KEY, stored(divergent.id).storageKey)
+        // The fence is never opened, which is the half a swallowed refusal would reach anyway
+        verify(exactly = 0) { repository.findById(any()) }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given a terminal export whose derived bytes will not go, Then the column keeps naming its own`() {
+        // Given: the mirror. Quieting this half hides the archive a dead builder left on the derived
+        // key, which is the residue the derivation exists to name.
+        stubSweep()
+        val divergent = anExport(UserDataExportState.SUPERSEDED, storageKey = DIVERGENT_KEY)
+        stubArchiveDeletionRefusing(keyOf(divergent.id))
+
+        // When
+        val counts = reaper.reap()
+
+        // Then: the derived key goes first, so the column's is not reached this run either
+        assertEquals(ExportSweepCounts(failed = 0, expired = 0, reclaimed = 0), counts)
+        assertEquals(emptyList<String>(), deletedArchives)
+        assertEquals(DIVERGENT_KEY, stored(divergent.id).storageKey)
+        verify(exactly = 0) { repository.findById(any()) }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given two terminal exports and one whose bytes will not go, Then the other is still reclaimed`() {
+        // Given: a try/catch around the loop rather than around the row would abandon the rest of the
+        // batch, which is the isolation this class promises.
+        stubSweep()
+        stubRowWrites()
+        val refused = exportNamingItsBytes(UserDataExportState.SUPERSEDED)
+        val swept = exportNamingItsBytes(UserDataExportState.EXPIRED)
+        stubArchiveDeletionRefusing(keyOf(refused.id))
+
+        // When
+        val counts = reaper.reap()
+
+        // Then
+        assertEquals(ExportSweepCounts(failed = 0, expired = 0, reclaimed = 1), counts)
+        assertEquals(listOf(keyOf(swept.id)), deletedArchives)
+        assertEquals(keyOf(refused.id), stored(refused.id).storageKey)
+        assertNull(stored(swept.id).storageKey)
     }
 
     @Test
@@ -518,5 +587,8 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         private val STAGED_FILE_MAX_AGE: Duration = Duration.ofHours(6)
         private const val SWEEP_BATCH_SIZE = 500
         private val FORMAT = ArchiveFormat("application/zip", "zip")
+
+        /** A column naming bytes the derivation does not, which is what makes the double delete two. */
+        private const val DIVERGENT_KEY = "exports/divergent.txt"
     }
 }
