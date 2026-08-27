@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.usecases.exports
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.User
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.PassthroughTransactionRunner
@@ -14,12 +15,14 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
+import java.io.IOException
 import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -44,6 +47,9 @@ class UserDataExportDeleterTest : BaseTest() {
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
     private val storageKey = "exports/$exportId.zip"
+
+    /** The key a build derives, which is where a promote whose transaction rolled back left bytes. */
+    private val derivedKey = ExportArchiveKey.forExport(exportId, FORMAT.fileExtension)
 
     /** The rows as the store holds them, so a refusal is read as the row it left rather than as a call. */
     private val rows = mutableMapOf<UUID, UserDataExport>()
@@ -88,6 +94,11 @@ class UserDataExportDeleterTest : BaseTest() {
         }
     }
 
+    /** Read only where the key is derived rather than read off the row, which is the PENDING arm. */
+    private fun stubArchiveFormat() {
+        every { archiveStore.format } returns FORMAT
+    }
+
     @Test
     fun `Given a deletion being written, Then the row is read and written in one transaction`() {
         // Given: the predicate alone holds against two successive transactions, and a build landing
@@ -111,7 +122,9 @@ class UserDataExportDeleterTest : BaseTest() {
         val taskId = randomUUID()
         stubRow(exportWith(state = UserDataExportState.PENDING, taskId = taskId))
         stubRowWrites()
+        stubArchiveFormat()
         every { cancelTask.cancel(taskId) } returns true
+        every { archiveStore.delete(derivedKey) } just runs
 
         // When
         deleter.delete(user, exportId)
@@ -126,12 +139,44 @@ class UserDataExportDeleterTest : BaseTest() {
         // Given: the column is nullable because the row exists before its task does
         stubRow(exportWith(state = UserDataExportState.PENDING, taskId = null))
         stubRowWrites()
+        stubArchiveFormat()
+        every { archiveStore.delete(derivedKey) } just runs
 
         // When
         deleter.delete(user, exportId)
 
         // Then
         verify(exactly = 0) { cancelTask.cancel(any()) }
+        assertEquals(UserDataExportState.DELETED, stored()?.state)
+    }
+
+    @Test
+    fun `Given a pending export, Then the bytes a rolled-back promote left are released`() {
+        // Given: the row names no key, so only the derivation can reach the residue ADR 0017 decision
+        // 2 admits. The two transactions serialise, so a live attempt refuses at its own fence.
+        stubRow(exportWith(state = UserDataExportState.PENDING, taskId = null))
+        stubRowWrites()
+        stubArchiveFormat()
+        every { archiveStore.delete(derivedKey) } just runs
+
+        // When
+        deleter.delete(user, exportId)
+
+        // Then
+        verify { archiveStore.delete(derivedKey) }
+        assertEquals(UserDataExportState.DELETED, stored()?.state)
+    }
+
+    @Test
+    fun `Given a store that refuses a pending export's residue, Then the deletion still succeeds`() {
+        // Given: residue cleanup, not the user's operation, so a disk failure must not answer 500
+        stubRow(exportWith(state = UserDataExportState.PENDING, taskId = null))
+        stubRowWrites()
+        stubArchiveFormat()
+        every { archiveStore.delete(derivedKey) } throws IOException("permission denied")
+
+        // When / Then: no exception escapes
+        deleter.delete(user, exportId)
         assertEquals(UserDataExportState.DELETED, stored()?.state)
     }
 
@@ -148,6 +193,18 @@ class UserDataExportDeleterTest : BaseTest() {
         // Then
         verify { archiveStore.delete(storageKey) }
         assertEquals(UserDataExportState.DELETED, stored()?.state)
+    }
+
+    @Test
+    fun `Given a store that refuses a ready export's bytes, Then the failure reaches the caller`() {
+        // Given: this delete IS the user's DELETE, not a side-effect cleanup, so it keeps propagating
+        // while the two residue paths around it do not
+        stubRow(exportWith(state = UserDataExportState.READY, storageKey = storageKey))
+        stubRowWrites()
+        every { archiveStore.delete(storageKey) } throws IOException("permission denied")
+
+        // When / Then
+        assertThrows(IOException::class.java) { deleter.delete(user, exportId) }
     }
 
     @Test
@@ -183,6 +240,34 @@ class UserDataExportDeleterTest : BaseTest() {
         verify(exactly = 0) { repository.save(any()) }
         verify(exactly = 0) { archiveStore.delete(any()) }
         verify(exactly = 0) { cancelTask.cancel(any()) }
+    }
+
+    @Test
+    fun `Given a superseded export naming a key, Then deleting it releases those bytes`() {
+        // Given: a supersede keeps its key since the export build completion lot, so this is the first
+        // gone state that reaches the stranded release with something to release
+        stubRow(exportWith(state = UserDataExportState.SUPERSEDED, storageKey = storageKey))
+        every { archiveStore.delete(storageKey) } just runs
+
+        // When
+        deleter.delete(user, exportId)
+
+        // Then: the fence refuses, so the release is the whole request and no write follows it
+        verify { archiveStore.delete(storageKey) }
+        assertEquals(UserDataExportState.SUPERSEDED, stored()?.state)
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given a store that refuses a superseded export's bytes, Then the deletion still succeeds`() {
+        // Given: the row is already gone to its owner, so this release repairs residue rather than
+        // performing the request, and a disk that refuses must not turn a 204 into a 500
+        stubRow(exportWith(state = UserDataExportState.SUPERSEDED, storageKey = storageKey))
+        every { archiveStore.delete(storageKey) } throws IOException("permission denied")
+
+        // When / Then: no exception escapes, and pass 3 of the sweep remains the guaranteed repair
+        deleter.delete(user, exportId)
+        assertEquals(UserDataExportState.SUPERSEDED, stored()?.state)
     }
 
     @Test
@@ -260,7 +345,9 @@ class UserDataExportDeleterTest : BaseTest() {
         val read = exportWith(state = UserDataExportState.PENDING, taskId = taskId)
         stubRacedRow(read, read.copy(storageKey = storageKey))
         stubRowWrites()
+        stubArchiveFormat()
         every { cancelTask.cancel(taskId) } returns true
+        every { archiveStore.delete(derivedKey) } just runs
 
         // When
         deleter.delete(user, exportId)
@@ -268,5 +355,9 @@ class UserDataExportDeleterTest : BaseTest() {
         // Then
         assertEquals(UserDataExportState.DELETED, stored()?.state)
         assertEquals(storageKey, stored()?.storageKey)
+    }
+
+    private companion object {
+        private val FORMAT = ArchiveFormat("application/zip", "zip")
     }
 }
