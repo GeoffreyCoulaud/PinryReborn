@@ -139,7 +139,11 @@ fencing spec attached to this defect.
   `api-usecases` tests never rolls back, so no unit test can even construct the residue; what holds
   decision 2 is review, and the specification says so rather than implying a guard exists.
 - The staging directory and the archive directory must share a filesystem, checked at startup. A
-  deployment that splits them needs a different design for the promote.
+  deployment that splits them needs a different design for the promote. **The check creates both
+  directories before comparing their stores, which bounds what it can catch to mounts that already
+  exist**: a volume nobody mounted is created locally and passes, and the archives then land on the
+  root disk. Refusing instead would refuse every first boot on an empty volume, which is the worse
+  of the two, but the limit is real and belongs here rather than in a comment at the site.
 - A promoted archive whose transaction rolled back is reclaimed after the row becomes terminal and the
   next sweep runs: `exports.purge_interval` plus whatever remains of the task's retry budget, not one
   interval as an earlier draft said. Bounded, invisible to any HTTP caller, and disk only.

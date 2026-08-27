@@ -2,6 +2,8 @@ package fr.geoffreyCoulaud.pinryReborn.api.worker
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
+import io.mockk.verify
 import io.quarkus.runtime.StartupEvent
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -60,5 +62,38 @@ class ExportDataDirectoryCheckTest {
         // Then
         assertTrue(Files.isDirectory(dataDir.resolve("tmp")))
         assertTrue(Files.isDirectory(dataDir.resolve("exports")))
+    }
+
+    @Test
+    fun `Given the startup event, Then it delegates to the check rather than merely creating`() {
+        // Given: creating the directories and comparing their stores are two things, and only the
+        // second is the precondition ADR 0017 rests on
+        val dataDir = tempDir.resolve("delegated")
+        every { config.dataDir() } returns dataDir.toString()
+        val spied = spyk(ExportDataDirectoryCheck(config))
+
+        // When
+        spied.onStart(mockk<StartupEvent>())
+
+        // Then
+        verify { spied.verifySameFileStore(dataDir.resolve("tmp"), dataDir.resolve("exports"), any()) }
+    }
+
+    @Test
+    fun `Given an archive path that is a file, Then the refusal names the configuration key`() {
+        // Given: the mirror wraps its io so an operator gets the key, not a bare AccessDeniedException
+        val dataDir = tempDir.resolve("blocked")
+        Files.createDirectories(dataDir)
+        Files.createFile(dataDir.resolve("exports"))
+        every { config.dataDir() } returns dataDir.toString()
+
+        // When
+        val error = assertThrows(IllegalStateException::class.java) { check().onStart(mockk<StartupEvent>()) }
+
+        // Then
+        assertTrue(
+            error.message.orEmpty().contains("exports.data_dir"),
+            "the refusal should name the configuration key: ${error.message}",
+        )
     }
 }

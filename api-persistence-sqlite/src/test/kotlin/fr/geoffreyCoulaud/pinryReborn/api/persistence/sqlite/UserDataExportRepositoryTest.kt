@@ -266,10 +266,12 @@ class UserDataExportRepositoryTest : RepositoryTest() {
     fun `Given more pending exports than the limit, Then findPending answers the oldest ones in order`() {
         // Given: the sweep filters on the grace after the selection, so an unordered batch of recent
         // rows would starve the oldest ones for good
+        // Seeded newest first: an unordered scan answers rowid order, so seeding oldest first would
+        // leave this green with no ORDER BY at all.
         val base = Instant.parse("2026-07-22T10:00:00Z")
-        val oldest = saveExport(UserDataExportState.PENDING, base)
-        val middle = saveExport(UserDataExportState.PENDING, base.plusSeconds(60))
         saveExport(UserDataExportState.PENDING, base.plusSeconds(120))
+        val middle = saveExport(UserDataExportState.PENDING, base.plusSeconds(60))
+        val oldest = saveExport(UserDataExportState.PENDING, base)
 
         // When
         val found = repository.findPending(limit = 2)

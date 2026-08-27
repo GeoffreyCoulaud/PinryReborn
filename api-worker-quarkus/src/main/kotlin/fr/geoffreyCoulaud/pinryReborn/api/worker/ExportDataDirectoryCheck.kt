@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportArchiveKey
 import io.quarkus.runtime.StartupEvent
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.event.Observes
@@ -19,21 +20,24 @@ class ExportDataDirectoryCheck(
     ) {
         // The two names FilesystemZipExportArchiveStore resolves under the data dir.
         val dataDir = Path.of(config.dataDir())
-        verifySameFileStore(dataDir.resolve("tmp"), dataDir.resolve("exports"))
+        verifySameFileStore(dataDir.resolve("tmp"), dataDir.resolve(ExportArchiveKey.DIRECTORY))
     }
 
     /**
-     * [storeOf] is a seam: `@TempDir` gives one filesystem, and `DataDirPaths` records that static
-     * mocking of `java.nio.file.Files` deadlocks this project's test JVM.
+     * [storeOf] is a seam: static mocking of `java.nio.file.Files` deadlocks this test JVM, which
+     * `DataDirPaths` records. Creating first bounds this to mounts that exist, argued in ADR 0017.
      */
     fun verifySameFileStore(
         stagingDir: Path,
         archiveDir: Path,
         storeOf: (Path) -> Any = { Files.getFileStore(it) },
     ) {
-        Files.createDirectories(stagingDir)
-        Files.createDirectories(archiveDir)
-        check(storeOf(stagingDir) == storeOf(archiveDir)) {
+        val (stagingStore, archiveStore) = runCatching {
+            Files.createDirectories(stagingDir)
+            Files.createDirectories(archiveDir)
+            storeOf(stagingDir) to storeOf(archiveDir)
+        }.getOrElse { throw IllegalStateException("exports.data_dir is not usable: $stagingDir, $archiveDir", it) }
+        check(stagingStore == archiveStore) {
             "exports staging and archives must share a filesystem, otherwise the promote copies the " +
                 "whole archive while holding the write connection: $stagingDir and $archiveDir"
         }
