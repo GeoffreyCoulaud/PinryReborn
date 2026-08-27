@@ -40,15 +40,13 @@ class ExportRetentionLifecycle(
         )
     }
 
-    /**
-     * [report] is a seam: a log handler attached in a test of this class reads nothing, so the line
-     * an operator reads cannot be pinned through the log itself.
-     */
     @Suppress("TooGenericExceptionCaught")
-    fun safeReap(report: (String) -> Unit = { logger.info { it } }) {
+    fun safeReap() {
         try {
             val counts = reapExpiredUserDataExports.reap()
-            report("export sweep: ${counts.failed} failed, ${counts.expired} expired, ${counts.reclaimed} reclaimed")
+            logger.info {
+                "export sweep: ${counts.failed} failed, ${counts.expired} expired, ${counts.reclaimed} reclaimed"
+            }
         } catch (e: Exception) {
             logger.error(e) { "export purge failed" }
         }
