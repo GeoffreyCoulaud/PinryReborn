@@ -46,7 +46,8 @@ class UserDataExportDeleterTest : BaseTest() {
     private val user = User(id = randomUUID(), name = "alice", createdAt = TestTime.now)
     private val exportId = randomUUID()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
-    private val storageKey = "exports/$exportId.zip"
+    /** Deliberately not what the derivation produces: an arm reading the column must not pass by deriving. */
+    private val storageKey = "exports/$exportId.tgz"
 
     /** The key a build derives, which is where a promote whose transaction rolled back left bytes. */
     private val derivedKey = ExportArchiveKey.forExport(exportId, FORMAT.fileExtension)
