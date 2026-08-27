@@ -20,6 +20,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepo
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.discardQuietly
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
@@ -112,7 +113,9 @@ class UserDataExportBuilder(
         try {
             publish(exportId, storageKey, staged)
         } catch (error: Throwable) {
-            archiveStore.discard(staged)
+            // Quietly: a discard that throws here would skip the marking and mask the original
+            // failure, leaving the row PENDING for good, which is the defect this net closes.
+            archiveStore.discardQuietly(staged)
             if (isLastAttempt) markFailed(exportId, "BUILD_FAILED")
             throw error
         }
@@ -146,12 +149,13 @@ class UserDataExportBuilder(
      */
     private fun publish(exportId: UUID, storageKey: String, staged: StagedFile) {
         val published = transactionRunner.inTransaction { promoteIfStillPending(exportId, storageKey, staged) }
-        if (!published) archiveStore.discard(staged)
+        // Best-effort, as everywhere else: a refusal is the correct outcome, and a temp file that
+        // will not unlink must not turn it into a task failure (`docs/adr/0003`).
+        if (!published) archiveStore.discardQuietly(staged)
     }
 
     private fun promoteIfStillPending(exportId: UUID, storageKey: String, staged: StagedFile): Boolean {
-        val current = exportRepository.findById(exportId)
-        if (current?.state != UserDataExportState.PENDING) return false
+        val current = exportRepository.findById(exportId)?.takeIf(::stillPending) ?: return false
         archiveStore.promote(staged, storageKey)
         exportRepository.save(
             current.copy(
