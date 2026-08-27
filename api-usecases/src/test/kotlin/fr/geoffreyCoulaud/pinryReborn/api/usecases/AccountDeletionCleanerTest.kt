@@ -19,6 +19,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportIssu
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportArchiveKey
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.TestTime
 import io.mockk.every
@@ -145,7 +146,7 @@ class AccountDeletionCleanerTest : BaseTest() {
         }
         // The key is DERIVED from the id, not read from the row, so a build that died before writing
         // its row (leaving a promoted file with no storageKey column) is still reclaimed.
-        verify { exportArchiveStore.delete("exports/$exportId.zip") }
+        verify { exportArchiveStore.delete(ExportArchiveKey.forExport(exportId, "zip")) }
     }
 
     @Test
@@ -281,6 +282,6 @@ class AccountDeletionCleanerTest : BaseTest() {
         verify { imageStore.delete(secondImage.storageKey) }
         verify { renditions.evictImage(firstImage.id) }
         verify { renditions.evictImage(secondImage.id) }
-        verify { exportArchiveStore.delete("exports/$exportId.zip") }
+        verify { exportArchiveStore.delete(ExportArchiveKey.forExport(exportId, "zip")) }
     }
 }

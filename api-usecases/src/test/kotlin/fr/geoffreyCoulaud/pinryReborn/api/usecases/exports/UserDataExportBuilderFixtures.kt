@@ -106,7 +106,7 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     protected val userId: UUID = randomUUID()
     protected val user = User(id = userId, name = "alice", createdAt = Instant.parse("2020-01-01T00:00:00Z"))
     protected val exportId: UUID = randomUUID()
-    protected val storageKey = "exports/$exportId.zip"
+    protected val storageKey = ExportArchiveKey.forExport(exportId, "zip")
     protected val stagedByteSize = 2048L
     protected val stagedHash = "staged-sha256"
 

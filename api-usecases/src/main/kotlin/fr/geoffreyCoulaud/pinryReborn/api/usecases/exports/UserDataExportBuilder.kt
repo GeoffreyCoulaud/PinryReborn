@@ -70,7 +70,7 @@ class UserDataExportBuilder(
         val export = pendingExport(exportId) ?: return
         val user = requireUser(export)
         requireFreeSpace(export)
-        val storageKey = storageKeyFor(exportId)
+        val storageKey = ExportArchiveKey.forExport(exportId, archiveStore.format.fileExtension)
         // Referenced BEFORE it exists: the purge and the account cleaner both derive this same key
         // from the export id (spec §10), so a build that dies right after promote() is still
         // reclaimable even if this row never gets a further write.
@@ -104,8 +104,6 @@ class UserDataExportBuilder(
             if (isLastAttempt) markFailed(export.id, "BUILD_FAILED")
             throw error
         }
-
-    private fun storageKeyFor(exportId: UUID): String = "exports/$exportId.${archiveStore.format.fileExtension}"
 
     /** The row this write left, not the copy read before it: what the staging reads is what it wrote. */
     private fun stampStorageKey(exportId: UUID, storageKey: String): UserDataExport? =
