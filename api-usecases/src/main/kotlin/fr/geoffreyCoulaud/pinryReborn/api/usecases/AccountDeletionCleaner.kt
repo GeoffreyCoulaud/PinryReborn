@@ -15,6 +15,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportIssu
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserPasswordHashRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportArchiveKey
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ImportArchiveKey
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
@@ -76,7 +77,9 @@ class AccountDeletionCleaner(
         // Derive each archive key from its id, not from the (now-deleted) row: this reclaims an
         // archive promoted by a builder that died before writing its storageKey column.
         for (exportId in exportIds) {
-            exportArchiveStore.deleteQuietly(exportStorageKey(exportId))
+            exportArchiveStore.deleteQuietly(
+                ExportArchiveKey.forExport(exportId, exportArchiveStore.format.fileExtension),
+            )
         }
         // Both sides of the lifecycle: an archive already promoted, and an upload still under tmp/ that
         // nothing else would reclaim before the staged-file age caught it.
@@ -85,7 +88,4 @@ class AccountDeletionCleaner(
             importArchiveStore.discardPartialUploadQuietly(importId)
         }
     }
-
-    private fun exportStorageKey(exportId: UUID): String =
-        "exports/$exportId.${exportArchiveStore.format.fileExtension}"
 }
