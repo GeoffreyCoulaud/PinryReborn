@@ -27,8 +27,8 @@ class ExportRetentionLifecycle(
         @Observes ignored: ShutdownEvent,
     ) = stop()
 
-    // safeReap, not reap: `discardOrphanedStagedFiles` walks the staging directory outside any row's
-    // own isolation, so the sweep can still throw as a whole, and on startup that ends the boot.
+    // safeReap, not reap: `swept()` wraps the action on one row, so the three selections that feed
+    // it are outside every net, and a sweep that throws as a whole ends the boot it started in.
     fun start() {
         safeReap()
         val purgeIntervalMs = config.purgeInterval().toMillis().coerceAtLeast(1)
