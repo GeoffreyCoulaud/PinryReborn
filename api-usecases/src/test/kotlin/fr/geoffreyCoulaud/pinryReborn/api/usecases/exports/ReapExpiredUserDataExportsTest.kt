@@ -76,6 +76,15 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
 
     /** What every run reads, whether or not it finds anything: the three selections and the tmp sweep. */
     private fun stubSweep() {
+        stubSelections()
+        every { archiveStore.discardOrphanedStagedFiles(any()) } answers {
+            orphanCutoff = firstArg()
+            0
+        }
+    }
+
+    /** Apart from the tmp sweep, so a case can refuse that one without shadowing a stub nothing reaches. */
+    private fun stubSelections() {
         every { clock.now() } returns now
         every { repository.findPending(any()) } answers {
             selectionLimits += firstArg<Int>()
@@ -87,10 +96,6 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
         every { repository.findReclaimableTerminal(any()) } answers {
             selectionLimits += firstArg<Int>()
             rows.values.filter { row -> row.state.isTerminal && row.storageKey != null }
-        }
-        every { archiveStore.discardOrphanedStagedFiles(any()) } answers {
-            orphanCutoff = firstArg()
-            0
         }
     }
 
@@ -615,6 +620,23 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
 
         // Then
         assertEquals(now.minus(STAGED_FILE_MAX_AGE), orphanCutoff)
+    }
+
+    @Test
+    fun `Given a staging sweep the store refuses, Then the run still reports what its passes moved`() {
+        // Given: the tmp walk runs once the three passes have written their rows, so a failure there
+        // costs the counts they earned, and the sole scenario the startup guard exists for logs nothing
+        stubSelections()
+        stubRowWrites()
+        stubArchiveDeletion()
+        exportNamingItsBytes(UserDataExportState.READY)
+        every { archiveStore.discardOrphanedStagedFiles(any()) } throws IOException("permission denied")
+
+        // When
+        val counts = reaper.reap()
+
+        // Then
+        assertEquals(ExportSweepCounts(failed = 0, expired = 1, reclaimed = 1), counts)
     }
 
     private companion object {
