@@ -147,6 +147,10 @@ fencing spec attached to this defect.
 - A promoted archive whose transaction rolled back is reclaimed after the row becomes terminal and the
   next sweep runs: `exports.purge_interval` plus whatever remains of the task's retry budget, not one
   interval as an earlier draft said. Bounded, invisible to any HTTP caller, and disk only.
+  **One path is slower and the earlier figure missed it**: when `claimNext` kills an attempts-exhausted
+  task inline, no handler runs, so no `markFailed` ever marks the row and it stays `PENDING` until
+  `exports.interrupted_grace` has passed. The worst case is therefore the grace plus one purge
+  interval, `PT7H` on the defaults, not the retry budget plus one.
 - The key stays knowable without reading the row. That property is load-bearing in the builder, the
   account cleaner and the orphan sweep, and until this lot it lived as a duplicated string literal in
   two modules. The specification gives it one home, `ExportArchiveKey`, mirroring the import's.

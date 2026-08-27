@@ -244,7 +244,12 @@ fixtures file records that this class has already been split once for this reaso
   list on the fake. `PassthroughTransactionRunner.current` records the outermost open transaction and
   cannot see ordering within it, so this assertion alone would pass against an implementation that
   promotes before testing the predicate. It is the complement, never the pin.
-- The rival is installed through the `reread` hook keyed on `stageCalls > 0`, never on a call ordinal:
+- **This instrument was wrong and Act replaced it.** A rival installed through the `reread` hook lands
+  inside the loser's own fenced read, where an implementation that promotes before testing the
+  predicate still ends in the expected state. The rival became a whole transaction landing between
+  the staging and the completion, which is also the only place it fits on one connection. The
+  original reasoning follows, kept because it names the trap it fell into.
+- The rival was to be installed through the `reread` hook keyed on `stageCalls > 0`, never on a call ordinal:
   the hook also fires on `stampStorageKey`'s own fenced read (`ExportAccess.kt:12-20`), and a rival
   landing there exits the build before it stages.
 - `UserDataExportBuilderTest.kt:420` and `:436` invert, and their now-unreached
@@ -405,11 +410,15 @@ One task, depending on everything.
 
 ## What this plan does not settle
 
-- **Spec criterion 7**, the promoted-then-rolled-back residue, is pinned by no test at any level. The
-  first draft placed it here; `api-application` has no fault-injection facility (no
-  `quarkus-junit5-mockito`, no `QuarkusMock` anywhere in the repository), so a hand-seeded version
-  would exercise criterion 8 and be labelled criterion 7. ADR 0017 already says what holds decision 2:
-  review, not the gate. Introducing fault injection is its own lot.
+- ~~**Spec criterion 7**, the promoted-then-rolled-back residue, is pinned by no test at any level.~~
+  **Settled after all, and the reason it was dropped expired during Act.** The entry read: "`api-application`
+  has no fault-injection facility (no `quarkus-junit5-mockito`, no `QuarkusMock` anywhere in the
+  repository), so a hand-seeded version would exercise criterion 8 and be labelled criterion 7."
+  `QuarkusMock` entered the repository in this very lot, in that very class, to pin a sweep refusal.
+  The holistic review caught the stale justification; the case now exists, with the fault injected at
+  the repository rather than the store, since a store can only throw before the row write and would
+  roll back a transaction that had written nothing. This is the only gate-level net on ADR 0017's
+  decision 2, and the lot came within one review of shipping without it on a reason that had rotted.
 - **The heartbeat's return value**, out of the lot by the spec's section 8, rewritten as a backlog item
   with its real reach: both handlers, the exception type, and its exclusion from task 9's widened net.
 - **`claimNext` killing a task whose handler still runs.** Task 11's grace makes the collision

@@ -184,10 +184,14 @@ delete. Moving the delete out of `expire()` leaves one rule instead of two: **a 
 writes the state and nothing else; reclaiming bytes is pass 3's job, for every terminal state.** The
 row still loses its bytes within the same `reap()`, since pass 3 runs after pass 2.
 
-**Pass 3 deletes the derived key, not the column's.** The import does exactly this and says why
-(`ReapAbandonedUserDataImports.kt:81`: "Derived key, so a dead completer's archive is named"). The
-column drives *selection* (`storage_key IS NOT NULL`, so the pass converges); the *deletion* targets
-`ExportArchiveKey.forExport(id)`. A row whose column disagrees with the derivation would otherwise
+**Pass 3 deletes both keys when they differ.** *(Corrected: this section first said "the derived key,
+not the column's", citing the import twin, which does delete only the derived one. Deleting the
+derived key alone succeeds vacuously when the column disagrees, because deletion is idempotent; the
+column is then cleared, and the bytes it named become unreachable to every sweep. That is section
+2.4 reintroduced, in the pass written to close it. The delivered code deletes the union.)* The column
+drives *selection* (`storage_key IS NOT NULL`, so the pass converges); the *deletion* targets both
+`ExportArchiveKey.forExport(id)` and the column's key. A row whose column disagrees with the
+derivation would otherwise
 keep its bytes for good.
 
 The bytes go before the key is cleared, which is the reverse of `docs/adr/0016` decision 4. The reason
@@ -213,9 +217,14 @@ bare. Nothing about reclaiming residue should stop the API from serving.
 *(Corrected: an earlier draft justified this by "a disk that refuses one delete would fail the boot".
 That is false, and stating a reason narrower than the truth invites the next cleanup to take the
 guard back out. Each row is isolated, so one refused delete never reaches the caller. What is outside
-every net is the rest: the three selections, the per-row task lookup pass 1 makes inside its filter,
-and the staged-file sweep. The three passes widen that surface, they do not create it, and the defect
-predates this lot.)*
+every net is the three selections and the per-row task lookup pass 1 makes inside its filter. The
+three passes widen that surface, they do not create it, and the defect predates this lot.)*
+
+*(Corrected twice, which is worth recording: the note above first listed the staged-file sweep among
+the unprotected calls. It was, until this lot gave it a net of its own, so the correction of a false
+sentence introduced another one. That net is not prescribed anywhere above because it came out of a
+block review: it exists so `reap()` returns its counts even when the staging walk throws, which is
+the one failure the guard is named for. Its refusal logs at WARN and is pinned.)*
 
 ### 4.4 The supersede keeps its key
 
@@ -407,7 +416,13 @@ draft named:
   the predicate after records the same number and passes. It also does not exist for a non-repository
   port: recording `promote` needs a new list in the fixtures.)* The co-transaction assertion is kept
   as a complement, with that new list;
-- the rival is installed through the `reread` hook keyed on `stageCalls > 0`, not on an ordinal: the
+- *(Corrected: the rival is **not** installed through the `reread` hook. Written that way it lands
+  during the loser's own fenced read, so an implementation that promotes before testing the predicate
+  overwrites and is then overwritten by the rival, leaving the expected end state and passing. Two
+  serialised transactions cannot interleave that way in the first place. The rival is a whole
+  transaction landing between the staging and the completion, and the mutation proving the difference
+  is in the commit that moved it. What follows was the reasoning for the original instrument.)*
+- the rival was to be installed through the `reread` hook keyed on `stageCalls > 0`, not on an ordinal: the
   same hook also fires on `stampStorageKey`'s own fenced read, and a rival landing there exits the
   build before it ever stages;
 - promote throws on the last attempt: `FAILED` / `BUILD_FAILED`, and `discard` was called. Red today;
