@@ -57,45 +57,51 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   `config/detekt/detekt.yml`; renaming it, which its own KDoc anticipates, touches eight files. The
   seven entities with no dangerous pair are insert-only, single-actor or already compare-and-set, and
   are named in the export spec's section 8 so nobody re-derives the list.
-- **Two attempts of one export build can overlap, and the loser deletes the winner's archive.**
-  `tasks.lease_duration` is `PT1M`, and the last stretch of a build renews nothing: the manifest
-  write, the channel force on a multi-gigabyte ZIP, and the promote. `EbeanTaskQueue.reapExpired`
-  returns the task to `PENDING`, a second worker claims it, and **both attempts read a legitimate
-  `PENDING` row**, so no predicate on state can tell them apart and the export lot's fences pass both
-  (`docs/specs/2026-08-15-export-row-fencing.md` section 8). Both derive the same storage key from the
-  export id and both promote onto it; the loser's `publish` fence then refuses and calls
-  `deleteQuietly` on the key the winner just published. The row reads `READY`, the archive is gone,
-  the download answers `500` rather than `410`, and `ReapOrphanedStorage` cannot see it because it
-  reclaims only keys with no row. The fix is a claim token on the export row, as
-  `UserDataImportRunner.runToken` is on the import: a column and a migration, which is why the export
-  lot left it out. Filed with it, and enabling it: **`TaskContext.renewLease` is typed `() -> Unit`**
-  while `TaskQueueInterface.renewLease` answers a `Boolean` documenting that it no-ops once the task
-  is no longer `RUNNING` under this lease. The result is coerced away, so a handler is never told its
-  lease is gone and keeps working. Surfacing it, or having the context throw, is what would let a long
-  handler stop itself. Named by the export fencing lot and deliberately left out of it.
-- **Superseding an export can strand its archive, and the comment that says otherwise is wrong.**
-  `UserDataExportRequester.createPending` moves the previous `READY` row to `SUPERSEDED` **and nulls
-  its `storageKey`** inside the transaction, then deletes the bytes outside it with `deleteQuietly`.
-  The order and the best-effort delete are both deliberate and argued at the site, but the comment
-  closes with "The orphan archive is reclaimed by the periodic garbage collection", and it is not:
-  `ReapOrphanedStorage` reclaims a key only when `findMissingExportIds` says **no row carries that
-  id**, and the superseded row is still there. So a `deleteQuietly` that swallows a real failure
-  leaves an archive that no state names and no sweep can find, for the life of the row. Same shape as
-  the defect the export fencing lot closed on the deleter, on a path that lot had no mandate to
-  change. To decide: whether the sweep should key on "no row *names* this key" rather than "no row has
-  this id", which would also cover the `DELETED` and `EXPIRED` rows that keep their key. Named by the
-  export fencing lot and deliberately left out of it.
-- **An export can stay `PENDING` for good, and no sweep clears it.** `EbeanTaskQueue.claimNext` kills
-  an attempts-exhausted task inline (`state = DEAD`, `return null`) **without ever invoking the
-  handler**, so `UserDataExportBuilder.markFailed` never runs and the export row keeps its `PENDING`
-  state. `ReapExpiredUserDataExports` selects only `READY` rows past `expiresAt`, so nothing sweeps
-  it; `ReapTerminalTasks` then deletes the `DEAD` task after `garbage-collection.terminal_task_grace`
-  (`P7D`), removing the forensic link. The user holds his one `uq_user_data_exports_pending` slot and
-  every `POST /api/v1/me/exports` answers `409` until he happens to `DELETE` the stuck row, which does
-  work. The import half has exactly the sweep the export half lacks:
-  `ReapAbandonedUserDataImports.failInterruptedRuns` finds `RUNNING` imports whose task is gone and
-  fences them to `FAILED`. An export twin is the shape. Named by the export fencing lot and
-  deliberately left out of it.
+- **A task handler is never told it lost its lease.** `TaskContext.renewLease` is typed `() -> Unit`
+  while `TaskQueueInterface.renewLease` answers a `Boolean` documenting that the caller "must stop
+  working on it"; `TaskProcessor` coerces the answer away. A long handler therefore keeps spending
+  disk and CPU on work it can no longer publish. Filed out of the export completion lot
+  (`docs/specs/2026-08-27-export-build-completion.md` section 8) with its real reach, which is the
+  reason it was not done there: `() -> Boolean` is not assignable to a `() -> Unit` parameter in
+  Kotlin, so **both** handlers break at compile time, and the natural repair is a lambda that swallows
+  the answer again, hiding the defect better than today. The import half is the one that matters, its
+  runner writing into account data continuously. An abandonment must also be excluded from the export
+  builder's failure net, or an evicted attempt writes `FAILED` over a row whose winner is still
+  building. Correctness no longer depends on it: the promote now sits inside the publishing fence.
+- **`EbeanTaskQueue.claimNext` kills a task whose handler may still be running.** It moves an
+  attempts-exhausted task to `DEAD` inline, without regard for handlers in flight, which is an argued
+  decision (`docs/specs/2026-07-22-user-data-export.md` section 15) that the export sweep now has to
+  work around: its interrupted-build pass carries a `PT6H` grace purely because a dead task does not
+  mean no builder is working. An account whose staging outlasts that grace can still have a live
+  builder condemned under it, and the builder then discards a complete archive. The upstream fix is to
+  not kill a task whose handler holds a live lease. Named by the export completion lot.
+- **Two defects in the import half, found while mirroring it.** `ReapAbandonedUserDataImports.reap()`'s
+  KDoc names the wrong pass as the reason for its ordering: `abandonStaleUploads` selects rows that
+  have no `storageKey` yet, so it is `failInterruptedRuns` that makes a key-holding row terminal. And
+  `ImportLifecycle.start()` calls its sweep bare, outside its own `safe` wrapper, so a sweep that
+  throws fails the boot; the export half was corrected in its own lot, this one was left alone on
+  purpose.
+- **The export reclaim pass has no order, and a permanently refused delete blocks its head.**
+  `findReclaimableTerminal` converges only because acting on a row destroys its own selection
+  predicate, which is false for exactly the row whose delete throws, the case the lot pins on purpose.
+  With `exports.sweep_batch_size` such rows, the pass stalls for good. Order the selection, or mark
+  the refusals. Named by the export completion lot's holistic review.
+- **`ReapExpiredUserDataExports` runs three passes under a name that says one**, and
+  `ExportArchiveKey.DIRECTORY` has two remaining rivals: `ReapOrphanedStorage.EXPORTS_PREFIX` in the
+  same module, and the `"tmp"` segment duplicated across `ExportDataDirectoryCheck` and the three
+  filesystem stores. The rename and the unification are each their own task
+  (`agents/workflow.md`, Scope). The class KDoc was updated in the lot so it says what it really does.
+- **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the
+  fake-store base, so a case driven by the mock still sees the fake store and an assertion on it would
+  pass vacuously, the mirror of the failure mode the split was built to prevent. No case does it
+  today. The shape that closes both directions is a shared base with two siblings. Named by the export
+  completion lot's block 3 review.
+- **`TaskQueueBootIntegrationTest` counts every row in `tasks` and expects exactly one**, in a profile
+  shared with twenty classes, one of which deletes an account and so enqueues a task. Counting its own
+  kind would preserve the intent and remove the coupling. Surfaced by an unreproduced single failure
+  during the export completion lot, whose cause was found to be elsewhere and fixed; this one was left
+  because the mechanism was never demonstrated, and repairing an unexplained symptom hides the next
+  one.
 - **The export endpoints publish a status they do not answer, and no error at all.**
   `MeExportController` carries no `@APIResponse`, so SmallRye reads each status off the return type
   and a runtime `ResponseBuilder` carries none: `POST /api/v1/me/exports` is published as `200` where
