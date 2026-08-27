@@ -256,6 +256,41 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
     }
 
     @Test
+    fun `Given a pending export whose age has just reached the grace, Then the build is left alone`() {
+        // Given: the boundary the grace is read on, equality included. Section 4.3 makes the asymmetry
+        // deliberate, so a build reaching the grace this instant is still one holding an archive.
+        stubSweep()
+        anExport(UserDataExportState.PENDING, requestedAt = now.minus(INTERRUPTED_GRACE), taskId = null)
+
+        // When
+        val counts = reaper.reap()
+
+        // Then: the fence is never opened, which is where a row condemned at equality would go
+        assertEquals(ExportSweepCounts(failed = 0, expired = 0, reclaimed = 0), counts)
+        verify(exactly = 0) { repository.findById(any()) }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun `Given an interrupted build naming its bytes, Then one run fails it and reclaims them`() {
+        // Given: the builder stamps its key before it stages, so a row nothing is driving any more
+        // almost always names a file. This is the ordinary shape of a pass 1 row, not the bare one.
+        stubSweep()
+        stubRowWrites()
+        stubArchiveDeletion()
+        val stuck = exportNamingItsBytes(UserDataExportState.PENDING)
+
+        // When
+        val counts = reaper.reap()
+
+        // Then: pass 1 makes it terminal and pass 3 takes the bytes in that same passage
+        assertEquals(ExportSweepCounts(failed = 1, expired = 0, reclaimed = 1), counts)
+        assertEquals(UserDataExportState.FAILED, stored(stuck.id).state)
+        assertEquals(listOf(keyOf(stuck.id)), deletedArchives)
+        assertNull(stored(stuck.id).storageKey)
+    }
+
+    @Test
     fun `Given a pending export deleted while the sweep read it, Then no failure is written over it`() {
         // Given: the owner's DELETE lands between the selection and the fence, and a FAILED written
         // over it would lose the reason the row is gone
