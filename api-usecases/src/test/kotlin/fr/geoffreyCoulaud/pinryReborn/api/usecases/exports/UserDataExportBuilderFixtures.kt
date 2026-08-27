@@ -88,12 +88,18 @@ internal class FakeExportArchiveStore(
     override val format: ArchiveFormat = ArchiveFormat("application/zip", "zip"),
     /** What the next staging answers with: a var, so two attempts of one build hold distinct handles. */
     var staged: StagedFile = StagedFile(path = "tmp/staged.zip", byteSize = 1L, contentHash = "staged"),
+    /** The open transaction a promote ran in, so the fence and its effect are read as one number. */
+    private val transactionOf: () -> Int? = { null },
 ) : ExportArchiveStore {
     /** The canonical keys and the bytes each holds: what a losing attempt must never overwrite. */
     val promoted = linkedMapOf<String, StagedFile>()
     val discarded = mutableListOf<StagedFile>()
     val deleted = mutableListOf<String>()
+    val promotedInTransactions = mutableListOf<Int?>()
     val sink = RecordingSink()
+
+    /** What a promote does before it lands, so a case drives the disk failure the net must cover. */
+    var beforePromote: () -> Unit = {}
 
     // Named apart from the fixture's own stageCalls, which counts the mock: a rival keyed on the
     // wrong one never arrives, and the case goes green without testing the race.
@@ -110,6 +116,8 @@ internal class FakeExportArchiveStore(
     }
 
     override fun promote(staged: StagedFile, storageKey: String) {
+        beforePromote()
+        promotedInTransactions += transactionOf()
         promoted[storageKey] = staged
     }
 
@@ -131,11 +139,12 @@ internal class FakeExportArchiveStore(
 }
 
 /**
- * What the builder suite reads and writes through, split off for the 600-line class bound: a row store
- * the writes land in, and a re-read hook a racing actor lands on (fencing spec section 9).
+ * What a build over [FakeExportArchiveStore] reads and writes through: a row store the writes land in,
+ * and a re-read hook a racing actor lands on (fencing spec section 9). No mock archive store here, so
+ * a case whose criterion is the disk cannot answer it with a verification on a store it never drove.
  */
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base, as the import suite has.
-internal abstract class UserDataExportBuilderFixtures : BaseTest() {
+internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {
     protected val exportRepository = mockk<UserDataExportRepositoryInterface>()
     protected val userRepository = mockk<UserRepositoryInterface>()
     protected val pinRepository = mockk<PinRepositoryInterface>()
@@ -143,7 +152,6 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     protected val boardRepository = mockk<BoardRepositoryInterface>()
     protected val tagRepository = mockk<TagRepositoryInterface>()
     protected val imageStore = mockk<ImageStore>()
-    protected val archiveStore = mockk<ExportArchiveStore>()
     protected val clock = mockk<Clock>()
 
     /** Run inline, so a read inside the fence is told from the one the build took before it. */
@@ -163,20 +171,17 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     /** The store as a fake, for the cases whose criterion is what the disk holds afterwards. */
     protected val fakeArchiveStore = FakeExportArchiveStore(
         staged = StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash),
+        transactionOf = { transactions.current },
     )
 
-    protected val builder = builderOver(archiveStore)
-
-    /** The same builder over the fake store, so a case reads the disk instead of the mock's calls. */
+    /** The builder over the fake store, so a case reads the disk instead of a store's calls. */
     protected val fakeStoreBuilder = builderOver(fakeArchiveStore)
 
-    private fun builderOver(store: ExportArchiveStore) = UserDataExportBuilder(
+    protected fun builderOver(store: ExportArchiveStore) = UserDataExportBuilder(
         exportRepository, userRepository, pinRepository, imageRepository, boardRepository, tagRepository,
         imageStore, store, transactions, clock, applicationVersion = "1.2.3", pageSize = pageSize,
         retention = retention, minimumFreeBytes = minimumFreeBytes,
     )
-
-    protected lateinit var sink: RecordingSink
 
     /** The rows as the store holds them, so a refusal is read as the row it left rather than as a call. */
     protected val rows = mutableMapOf<UUID, UserDataExport>()
@@ -184,8 +189,8 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     /** How a re-read answers, null included. The racing cases replace it rather than restubbing. */
     protected var reread: (UserDataExport) -> UserDataExport? = { it }
 
-    /** How far the build got, which is what a racing actor lands on rather than a call ordinal. */
-    protected var stageCalls = 0
+    /** What a row write does before it lands, so a case fails one write and lets the next through. */
+    protected var beforeWrite: (UserDataExport) -> Unit = {}
 
     /** Which transaction each read and each write ran in, `null` outside one: a fence is one number. */
     protected val readInTransactions = mutableListOf<Int?>()
@@ -196,28 +201,6 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
             id = exportId, userId = userId, state = UserDataExportState.PENDING,
             formatVersion = formatVersion, requestedAt = now,
         )
-
-    protected fun aPin(
-        id: UUID = randomUUID(),
-        tags: List<Tag> = emptyList(),
-        softDeletedAt: Instant? = null,
-        createdAt: Instant = now,
-        updatedAt: Instant = now,
-    ) = Pin(
-        id = id, author = user, sourceContextUrl = "https://example.org/a", sourceMediaUrl = null,
-        description = "desc", tags = tags, boards = emptyList(), softDeletedAt = softDeletedAt,
-        createdAt = createdAt, updatedAt = updatedAt,
-    )
-
-    protected fun anImage(pinId: UUID, id: UUID = randomUUID(), mimeType: String = "image/jpeg") = Image(
-        id = id, pinId = pinId, mimeType = mimeType, width = 10, height = 10, animated = false,
-        byteSize = 3L, contentHash = "content-hash", storageKey = "originals/$id", createdAt = now,
-    )
-
-    protected fun aBoard(id: UUID = randomUUID(), name: String = "board", softDeletedAt: Instant? = null) = Board(
-        id = id, author = user, name = name, description = "d", softDeletedAt = softDeletedAt,
-        createdAt = now, updatedAt = now,
-    )
 
     /** The row as the store holds it now, which is what a refusal is asserted on. */
     protected fun stored(id: UUID = exportId): UserDataExport? = rows[id]
@@ -237,7 +220,7 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     protected fun stubRowWrites() {
         every { exportRepository.save(any()) } answers {
             writtenInTransactions += transactions.current
-            firstArg<UserDataExport>().also(::seedRow)
+            firstArg<UserDataExport>().also(beforeWrite).also(::seedRow)
         }
     }
 
@@ -264,20 +247,22 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
         }
     }
 
-    protected fun stubArchiveStore() {
-        sink = RecordingSink()
-        every { archiveStore.stage(any()) } answers {
-            stageCalls++
-            firstArg<(ArchiveSink) -> Unit>().invoke(sink)
-            StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash)
-        }
-    }
-
-    /** A staging that fails once the build has committed to it, which is the window site 2 answers for. */
-    protected fun stubFailingStage() {
-        every { archiveStore.stage(any()) } answers {
-            stageCalls++
-            error("the archive could not be staged")
+    /**
+     * The other attempt of the same build, publishing at the next re-read. Both attempts read a
+     * legitimate `PENDING` row, so the winner is whoever holds the transaction first (ADR 0017).
+     */
+    protected fun rivalPublishesWhen(landed: () -> Boolean, rivalStaged: StagedFile) {
+        reread = { row ->
+            when {
+                landed() -> {
+                    fakeArchiveStore.promote(rivalStaged, storageKey)
+                    row.copy(
+                        state = UserDataExportState.READY, storageKey = storageKey,
+                        byteSize = rivalStaged.byteSize, sha256 = rivalStaged.contentHash,
+                    ).also(::seedRow)
+                }
+                else -> row
+            }
         }
     }
 
@@ -303,6 +288,73 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
         every { tagRepository.findAllTagsForUser(user) } returns emptyList()
     }
 
+    /**
+     * The whole path for [fakeStoreBuilder]: the fake answers the free space, the format and the
+     * staging itself, so no mock store is stubbed and `checkUnnecessaryStub` stays satisfied.
+     */
+    protected fun stubFakeStoreBuild(row: UserDataExport = anExport()) {
+        stubRow(row)
+        stubRowWrites()
+        every { userRepository.findUserById(userId) } returns user
+        every { clock.now() } returns now
+        stubEmptyCollections()
+    }
+}
+
+/**
+ * The same fixtures plus the archive store as a mock, for the cases whose window opens before the
+ * completion: the entry guards, the two fenced writes and the staging failures.
+ */
+@Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base, as the import suite has.
+internal abstract class UserDataExportBuilderFixtures : UserDataExportFakeStoreFixtures() {
+    protected val archiveStore = mockk<ExportArchiveStore>()
+
+    protected val builder = builderOver(archiveStore)
+
+    protected lateinit var sink: RecordingSink
+
+    /** How far the build got, which is what a racing actor lands on rather than a call ordinal. */
+    protected var stageCalls = 0
+
+    protected fun aPin(
+        id: UUID = randomUUID(),
+        tags: List<Tag> = emptyList(),
+        softDeletedAt: Instant? = null,
+        createdAt: Instant = now,
+        updatedAt: Instant = now,
+    ) = Pin(
+        id = id, author = user, sourceContextUrl = "https://example.org/a", sourceMediaUrl = null,
+        description = "desc", tags = tags, boards = emptyList(), softDeletedAt = softDeletedAt,
+        createdAt = createdAt, updatedAt = updatedAt,
+    )
+
+    protected fun anImage(pinId: UUID, id: UUID = randomUUID(), mimeType: String = "image/jpeg") = Image(
+        id = id, pinId = pinId, mimeType = mimeType, width = 10, height = 10, animated = false,
+        byteSize = 3L, contentHash = "content-hash", storageKey = "originals/$id", createdAt = now,
+    )
+
+    protected fun aBoard(id: UUID = randomUUID(), name: String = "board", softDeletedAt: Instant? = null) = Board(
+        id = id, author = user, name = name, description = "d", softDeletedAt = softDeletedAt,
+        createdAt = now, updatedAt = now,
+    )
+
+    protected fun stubArchiveStore() {
+        sink = RecordingSink()
+        every { archiveStore.stage(any()) } answers {
+            stageCalls++
+            firstArg<(ArchiveSink) -> Unit>().invoke(sink)
+            StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash)
+        }
+    }
+
+    /** A staging that fails once the build has committed to it, which is the window site 2 answers for. */
+    protected fun stubFailingStage() {
+        every { archiveStore.stage(any()) } answers {
+            stageCalls++
+            error("the archive could not be staged")
+        }
+    }
+
     /** What a build reads before it stages: the row, the account, the disk and the archive format. */
     protected fun stubBuildEntry(row: UserDataExport = anExport()) {
         stubRow(row)
@@ -324,17 +376,5 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
         stubArchiveStore()
         stubEmptyCollections()
         every { archiveStore.promote(any(), any()) } just runs
-    }
-
-    /**
-     * The same path for [fakeStoreBuilder]: the fake answers the free space, the format and the
-     * staging itself, so the mock is left unstubbed and `checkUnnecessaryStub` stays satisfied.
-     */
-    protected fun stubFakeStoreBuild(row: UserDataExport = anExport()) {
-        stubRow(row)
-        stubRowWrites()
-        every { userRepository.findUserById(userId) } returns user
-        every { clock.now() } returns now
-        stubEmptyCollections()
     }
 }

@@ -8,8 +8,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.exceptions.PermanentTaskException
 import io.mockk.every
-import io.mockk.just
-import io.mockk.runs
 import io.mockk.verify
 import java.io.ByteArrayInputStream
 import java.util.UUID.randomUUID
@@ -301,29 +299,7 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
         verify(exactly = 0) { archiveStore.stage(any()) }
     }
 
-    // -- build(): the two fenced writes and the publish that follows them -----------------------
-
-    @Test
-    fun `Given a successful build, Then the row carries size, digest, media type and extension`() {
-        // Given: over the fake store, so the archive is read as what the disk holds afterwards
-        stubFakeStoreBuild()
-
-        // When
-        fakeStoreBuilder.build(exportId, isLastAttempt = false, renewLease = {})
-
-        // Then
-        val published = requireNotNull(stored())
-        assertEquals(UserDataExportState.READY, published.state)
-        assertEquals(storageKey, published.storageKey)
-        assertEquals(stagedByteSize, published.byteSize)
-        assertEquals(stagedHash, published.sha256)
-        assertEquals("application/zip", published.mediaType)
-        assertEquals("zip", published.fileExtension)
-        assertEquals(now, published.completedAt)
-        assertEquals(now.plus(retention), published.expiresAt)
-        assertEquals(listOf(storageKey), fakeArchiveStore.promoted.keys.toList())
-        assertEquals(stagedHash, fakeArchiveStore.promoted.getValue(storageKey).contentHash)
-    }
+    // -- build(): the two fenced writes before the completion (UserDataExportCompletionTest) -----
 
     @Test
     fun `Given a key being stamped, Then the row is read and written in one transaction`() {
@@ -404,37 +380,6 @@ internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
         assertEquals("user no longer exists", error.reason)
         assertNull(stored())
         verify(exactly = 0) { exportRepository.save(any()) }
-    }
-
-    @Test
-    fun `Given an export cancelled during the build, Then READY is not written and the bytes are deleted`() {
-        // Given: the DELETE lands after the archive is staged, which is the window publish fences
-        stubHappyPathBuild()
-        deleteWhen { stageCalls > 0 }
-        every { archiveStore.delete(any()) } just runs
-
-        // When
-        builder.build(exportId, isLastAttempt = false, renewLease = {})
-
-        // Then
-        assertEquals(UserDataExportState.DELETED, stored()?.state)
-        verify { archiveStore.delete(storageKey) }
-    }
-
-    @Test
-    fun `Given the export row is gone before publishing, Then READY is not written and the bytes are deleted`() {
-        // Given: the row was hard-deleted between staging and publishing (account deletion), so the
-        // re-read inside the transaction finds nothing at all, not merely a non-PENDING row.
-        stubHappyPathBuild()
-        eraseWhen { stageCalls > 0 }
-        every { archiveStore.delete(any()) } just runs
-
-        // When
-        builder.build(exportId, isLastAttempt = false, renewLease = {})
-
-        // Then
-        assertNull(stored())
-        verify { archiveStore.delete(storageKey) }
     }
 
     @Test
