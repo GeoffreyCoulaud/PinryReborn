@@ -81,6 +81,54 @@ internal class RecordingSink : ArchiveSink {
 }
 
 /**
+ * A fake [ExportArchiveStore] holding what the disk holds, so a criterion about the canonical key is
+ * asserted as state rather than as `verify(exactly = 0)` on the call the test itself configured.
+ */
+internal class FakeExportArchiveStore(
+    override val format: ArchiveFormat = ArchiveFormat("application/zip", "zip"),
+    /** What the next staging answers with: a var, so two attempts of one build hold distinct handles. */
+    var staged: StagedFile = StagedFile(path = "tmp/staged.zip", byteSize = 1L, contentHash = "staged"),
+) : ExportArchiveStore {
+    /** The canonical keys and the bytes each holds: what a losing attempt must never overwrite. */
+    val promoted = linkedMapOf<String, StagedFile>()
+    val discarded = mutableListOf<StagedFile>()
+    val deleted = mutableListOf<String>()
+    val sink = RecordingSink()
+
+    /** How far a build got, which is what a racing actor lands on rather than a call ordinal. */
+    var stageCalls = 0
+        private set
+
+    override fun hasFreeSpace(requiredBytes: Long): Boolean = true
+
+    override fun stage(block: (ArchiveSink) -> Unit): StagedFile {
+        stageCalls++
+        block(sink)
+        return staged
+    }
+
+    override fun promote(staged: StagedFile, storageKey: String) {
+        promoted[storageKey] = staged
+    }
+
+    override fun openStream(storageKey: String, skipBytes: Long): InputStream =
+        error("a build never reads an archive back")
+
+    override fun delete(storageKey: String) {
+        deleted += storageKey
+        promoted.remove(storageKey)
+    }
+
+    override fun discard(staged: StagedFile) {
+        discarded += staged
+    }
+
+    override fun discardOrphanedStagedFiles(olderThan: Instant): Int = 0
+
+    override fun forEachStorageKeyOnDisk(block: (Sequence<String>) -> Unit) = block(promoted.keys.asSequence())
+}
+
+/**
  * What the builder suite reads and writes through, split off for the 600-line class bound: a row store
  * the writes land in, and a re-read hook a racing actor lands on (fencing spec section 9).
  */
@@ -110,9 +158,19 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
     protected val stagedByteSize = 2048L
     protected val stagedHash = "staged-sha256"
 
-    protected val builder = UserDataExportBuilder(
+    /** The store as a fake, for the cases whose criterion is what the disk holds afterwards. */
+    protected val fakeArchiveStore = FakeExportArchiveStore(
+        staged = StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash),
+    )
+
+    protected val builder = builderOver(archiveStore)
+
+    /** The same builder over the fake store, so a case reads the disk instead of the mock's calls. */
+    protected val fakeStoreBuilder = builderOver(fakeArchiveStore)
+
+    private fun builderOver(store: ExportArchiveStore) = UserDataExportBuilder(
         exportRepository, userRepository, pinRepository, imageRepository, boardRepository, tagRepository,
-        imageStore, archiveStore, transactions, clock, applicationVersion = "1.2.3", pageSize = pageSize,
+        imageStore, store, transactions, clock, applicationVersion = "1.2.3", pageSize = pageSize,
         retention = retention, minimumFreeBytes = minimumFreeBytes,
     )
 
@@ -264,5 +322,17 @@ internal abstract class UserDataExportBuilderFixtures : BaseTest() {
         stubArchiveStore()
         stubEmptyCollections()
         every { archiveStore.promote(any(), any()) } just runs
+    }
+
+    /**
+     * The same path for [fakeStoreBuilder]: the fake answers the free space, the format and the
+     * staging itself, so the mock is left unstubbed and `checkUnnecessaryStub` stays satisfied.
+     */
+    protected fun stubFakeStoreBuild(row: UserDataExport = anExport()) {
+        stubRow(row)
+        stubRowWrites()
+        every { userRepository.findUserById(userId) } returns user
+        every { clock.now() } returns now
+        stubEmptyCollections()
     }
 }
