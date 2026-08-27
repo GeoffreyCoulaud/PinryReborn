@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportsConfig
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.TestProfile
@@ -17,6 +20,8 @@ import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -65,6 +70,12 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
     @Inject
     lateinit var objectMapper: ObjectMapper
 
+    @Inject
+    lateinit var enqueueTask: EnqueueTask
+
+    @Inject
+    lateinit var taskQueue: TaskQueueInterface
+
     private fun stepUp(password: String) =
         "password " + Base64.getUrlEncoder().encodeToString(password.toByteArray())
 
@@ -101,6 +112,15 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
             Thread.sleep(POLL_INTERVAL_MS)
         }
         return lastState
+    }
+
+    /** Bounded poll until the runtime has settled [taskId], which for a handler-less kind means DEAD. */
+    private fun pollUntilTaskDead(taskId: UUID): Boolean {
+        repeat(POLL_ATTEMPTS) {
+            if (taskQueue.findById(taskId)?.state == TaskState.DEAD) return true
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        return false
     }
 
     /** Bounded poll until [exportId]'s row is gone (proof the account-deletion worker erased it). */
@@ -314,6 +334,22 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertTrue(pollUntilFileGone(archivePath), "the archive file should be removed from disk")
     }
 
+    /** A build nothing is driving any more: its task is settled and its request is past the grace. */
+    private fun seedInterruptedExport(auth: IntegrationTest.AuthenticatedUser, taskId: UUID): UUID {
+        val exportId = UUID.randomUUID()
+        userDataExportRepository.save(
+            UserDataExport(
+                id = exportId,
+                userId = auth.user.id,
+                state = UserDataExportState.PENDING,
+                formatVersion = 1,
+                requestedAt = Instant.now().minus(exportsConfig.interruptedGrace()).minus(Duration.ofHours(1)),
+                taskId = taskId,
+            ),
+        )
+        return exportId
+    }
+
     // --- Purge: driven directly through the injected ReapExpiredUserDataExports bean ---
 
     @Test
@@ -338,6 +374,79 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         val reaped = requireNotNull(userDataExportRepository.findById(exportId))
         assertEquals(UserDataExportState.EXPIRED, reaped.state)
         assertFalse(Files.exists(archivePath), "the archive bytes should be removed once expired")
+    }
+
+    @Test
+    fun `Given a superseded export whose archive delete failed, Then the next sweep takes its bytes and its key`() {
+        // Given: the requester deletes a superseded archive best-effort, after its transaction
+        // (`UserDataExportRequester.kt:53`). This module has no fault injection, so the bytes are
+        // written back to stand for the delete that did not happen.
+        val password = "password123"
+        val auth = createAuthenticatedUser(password = password)
+        val supersededId = requestExport(auth, password)
+        assertEquals("READY", pollUntilReady(auth, supersededId))
+        val archiveBytes = downloadBytes(auth, supersededId)
+        val archivePath = archivePathFor(supersededId)
+        requestExport(auth, password)
+        Files.write(archivePath, archiveBytes)
+        val superseded = requireNotNull(userDataExportRepository.findById(supersededId))
+        assertEquals(UserDataExportState.SUPERSEDED, superseded.state)
+        assertNotNull(superseded.storageKey, "a superseded row keeps the key that names its residue")
+
+        // When
+        reapExpiredUserDataExports.reap()
+
+        // Then
+        assertFalse(Files.exists(archivePath), "the residue should leave the disk")
+        assertNull(
+            requireNotNull(userDataExportRepository.findById(supersededId)).storageKey,
+            "the row should stop naming bytes the sweep has taken",
+        )
+    }
+
+    @Test
+    fun `Given a pending export whose task is dead, Then the sweep fails it and the next request is taken`() {
+        // Given: a kind no handler is registered for, which the runtime settles to DEAD on its own
+        // (`TaskProcessor.kt:37-39`). A row naming no task at all would exercise "absent" instead,
+        // and killing a real export task would race the live worker.
+        val password = "password123"
+        val auth = createAuthenticatedUser(password = password)
+        val task = enqueueTask.enqueue(kind = "no.handler", payload = "{}", maxAttempts = 1)
+        assertTrue(pollUntilTaskDead(task.id), "the runtime should settle a handler-less task to DEAD")
+        val exportId = seedInterruptedExport(auth, task.id)
+
+        // When
+        reapExpiredUserDataExports.reap()
+
+        // Then
+        val swept = requireNotNull(userDataExportRepository.findById(exportId))
+        assertEquals(UserDataExportState.FAILED, swept.state)
+        assertEquals("EXPORT_INTERRUPTED", swept.failureCode)
+        // 202 rather than merely "not 409": this profile pins exports.minimum_interval to PT0S,
+        // where production answers 429 for as long as the cooldown runs.
+        given()
+            .authenticatedAs(auth)
+            .header("X-Reauthentication", stepUp(password))
+            .`when`().post("/api/v1/me/exports")
+            .then().statusCode(202)
+    }
+
+    @Test
+    fun `Given a READY export, Then the downloaded body has the length and digest its row declares`() {
+        // Given: a real archive, built and published by the real worker
+        val password = "password123"
+        val auth = createAuthenticatedUser(password = password)
+        val exportId = requestExport(auth, password)
+        assertEquals("READY", pollUntilReady(auth, exportId))
+
+        // When
+        val body = downloadBytes(auth, exportId)
+
+        // Then: the archive itself, not the entries inside it, which a losing attempt's bytes would
+        // satisfy just as well once they had overwritten the canonical key
+        val row = requireNotNull(userDataExportRepository.findById(exportId))
+        assertEquals(row.byteSize, body.size.toLong(), "the served archive should be as long as its row declares")
+        assertEquals(row.sha256, sha256Hex(body), "the served archive should hash to what its row declares")
     }
 
     // --- Headers come from the stored row, not the adapter's current format ---
