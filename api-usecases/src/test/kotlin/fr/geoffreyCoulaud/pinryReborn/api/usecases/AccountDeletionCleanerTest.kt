@@ -134,7 +134,10 @@ class AccountDeletionCleanerTest : BaseTest() {
         every { pins.findAllPinIdsForUser(user) } returns emptyList()
         val exportId = randomUUID()
         every { exports.findAllExportIdsForUser(userId) } returns listOf(exportId)
-        every { exportArchiveStore.format } returns ArchiveFormat(mediaType = "application/zip", fileExtension = "zip")
+        // A format the store does not ship, so the expectation below is a literal rather than a
+        // second call to the derivation: an implementation ignoring its extension answers zip here.
+        every { exportArchiveStore.format } returns
+            ArchiveFormat(mediaType = "application/x-tar", fileExtension = "tar")
 
         // When
         cleaner.deleteAccountData(userId)
@@ -146,7 +149,7 @@ class AccountDeletionCleanerTest : BaseTest() {
         }
         // The key is DERIVED from the id, not read from the row, so a build that died before writing
         // its row (leaving a promoted file with no storageKey column) is still reclaimed.
-        verify { exportArchiveStore.delete(ExportArchiveKey.forExport(exportId, "zip")) }
+        verify { exportArchiveStore.delete("exports/$exportId.tar") }
     }
 
     @Test

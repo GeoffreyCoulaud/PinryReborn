@@ -95,14 +95,16 @@ internal class FakeExportArchiveStore(
     val deleted = mutableListOf<String>()
     val sink = RecordingSink()
 
+    // Named apart from the fixture's own stageCalls, which counts the mock: a rival keyed on the
+    // wrong one never arrives, and the case goes green without testing the race.
     /** How far a build got, which is what a racing actor lands on rather than a call ordinal. */
-    var stageCalls = 0
+    var stagings = 0
         private set
 
     override fun hasFreeSpace(requiredBytes: Long): Boolean = true
 
     override fun stage(block: (ArchiveSink) -> Unit): StagedFile {
-        stageCalls++
+        stagings++
         block(sink)
         return staged
     }

@@ -60,5 +60,9 @@ class UserDataExportStateTest {
         // Then
         assertEquals(emptyList<UserDataExportState>(), goneButNotTerminal)
         assertEquals(listOf(UserDataExportState.FAILED), terminalButNotGone)
+
+        // And: a seventh state would leave both predicates false without failing anything above, so
+        // the count is what forces the next author to answer the question.
+        assertEquals(6, UserDataExportState.entries.size)
     }
 }
