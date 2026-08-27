@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.BoardRepositoryInt
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.PinRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TagRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TaskQueueInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInterface
@@ -82,17 +83,21 @@ class ExportProducers {
             minimumFreeBytes = config.minimumFreeBytes(),
         )
 
+    @Suppress("LongParameterList")
     @Produces
     @ApplicationScoped
     fun reapExpiredUserDataExports(
         repository: UserDataExportRepositoryInterface,
         archiveStore: ExportArchiveStore,
+        taskQueue: TaskQueueInterface,
         clock: Clock,
         transactionRunner: TransactionRunner,
         config: ExportsConfig,
     ): ReapExpiredUserDataExports =
         ReapExpiredUserDataExports(
-            repository, archiveStore, clock, transactionRunner,
+            repository, archiveStore, taskQueue, clock, transactionRunner,
+            interruptedGrace = config.interruptedGrace(),
             stagedFileMaxAge = config.stagedFileMaxAge(),
+            sweepBatchSize = config.sweepBatchSize(),
         )
 }

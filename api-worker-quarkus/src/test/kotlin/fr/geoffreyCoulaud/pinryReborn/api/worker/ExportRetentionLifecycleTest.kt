@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportSweepCounts
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
 import io.mockk.every
 import io.mockk.mockk
@@ -50,7 +51,7 @@ class ExportRetentionLifecycleTest {
     @Test
     fun `Given a clean reap, Then safeReap delegates once`() {
         // Given
-        every { reap.reap() } returns 0
+        every { reap.reap() } returns ExportSweepCounts(failed = 0, expired = 0, reclaimed = 0)
         // When
         lifecycle().safeReap()
         // Then
