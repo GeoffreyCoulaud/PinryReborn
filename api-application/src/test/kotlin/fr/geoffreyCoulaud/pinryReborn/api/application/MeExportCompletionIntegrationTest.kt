@@ -11,6 +11,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
+import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportRetentionLifecycle
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportsConfig
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.TestProfile
@@ -33,6 +34,9 @@ import java.time.Instant
 import java.util.Base64
 import java.util.HexFormat
 import java.util.UUID
+import java.util.logging.Handler
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 import java.util.zip.ZipFile
 
 /**
@@ -66,6 +70,9 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
 
     @Inject
     lateinit var exportsConfig: ExportsConfig
+
+    @Inject
+    lateinit var exportRetentionLifecycle: ExportRetentionLifecycle
 
     @Inject
     lateinit var objectMapper: ObjectMapper
@@ -447,6 +454,75 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         val row = requireNotNull(userDataExportRepository.findById(exportId))
         assertEquals(row.byteSize, body.size.toLong(), "the served archive should be as long as its row declares")
         assertEquals(row.sha256, sha256Hex(body), "the served archive should hash to what its row declares")
+    }
+
+    // --- Observability: the line an operator reads, on the channel it is read from ---
+
+    /** slf4j binds to the JBoss LogManager, which is the JUL one, so a plain JUL handler sees the line. */
+    private fun capturingSweepLogs(sweep: () -> Unit): List<String> {
+        val messages = mutableListOf<String>()
+        val handler =
+            object : Handler() {
+                override fun publish(record: LogRecord) {
+                    messages += record.message.orEmpty()
+                }
+
+                override fun flush() = Unit
+
+                override fun close() = Unit
+            }
+        val logger = Logger.getLogger(ExportRetentionLifecycle::class.java.name)
+        logger.addHandler(handler)
+        try {
+            sweep()
+        } finally {
+            logger.removeHandler(handler)
+        }
+        return messages
+    }
+
+    /** A row already past its expiry, so one sweep expires it and then reclaims whatever it names. */
+    private fun seedExpiredReadyExport(auth: IntegrationTest.AuthenticatedUser, withBytes: Boolean) {
+        val exportId = UUID.randomUUID()
+        val storageKey = "exports/$exportId.zip".takeIf { withBytes }
+        storageKey?.let {
+            val path = Path.of(exportsConfig.dataDir()).resolve(it)
+            Files.createDirectories(path.parent)
+            Files.write(path, "an archive past its retention".toByteArray())
+        }
+        userDataExportRepository.save(
+            UserDataExport(
+                id = exportId,
+                userId = auth.user.id,
+                state = UserDataExportState.READY,
+                formatVersion = 1,
+                requestedAt = Instant.now().minus(Duration.ofDays(8)),
+                completedAt = Instant.now().minus(Duration.ofDays(8)),
+                expiresAt = Instant.now().minus(Duration.ofDays(1)),
+                storageKey = storageKey,
+            ),
+        )
+    }
+
+    @Test
+    fun `Given a sweep the lifecycle guards, Then what each pass moved reaches the log`() {
+        // Given: three counts no two of which are equal, so a line naming them in another pass's
+        // order cannot pass. Only a row still naming bytes is reclaimable, which is what parts the
+        // second count from the third.
+        val auth = createAuthenticatedUser()
+        seedExpiredReadyExport(auth, withBytes = true)
+        seedExpiredReadyExport(auth, withBytes = false)
+
+        // When
+        val logged = capturingSweepLogs { exportRetentionLifecycle.safeReap() }
+
+        // Then
+        assertEquals(1, logged.size, "one line per sweep, got $logged")
+        val eachCount = listOf("0 failed", "2 expired", "1 reclaimed")
+        assertTrue(
+            eachCount.all { logged.first().contains(it) },
+            "the sweep line must name every pass count, got: ${logged.first()}",
+        )
     }
 
     // --- Headers come from the stored row, not the adapter's current format ---
