@@ -101,6 +101,9 @@ internal class FakeExportArchiveStore(
     /** What a promote does before it lands, so a case drives the disk failure the net must cover. */
     var beforePromote: () -> Unit = {}
 
+    /** What lands once this attempt has staged, which is where a rival's whole transaction fits. */
+    var afterStage: () -> Unit = {}
+
     // Named apart from the fixture's own stageCalls, which counts the mock: a rival keyed on the
     // wrong one never arrives, and the case goes green without testing the race.
     /** How far a build got, which is what a racing actor lands on rather than a call ordinal. */
@@ -112,6 +115,7 @@ internal class FakeExportArchiveStore(
     override fun stage(block: (ArchiveSink) -> Unit): StagedFile {
         stagings++
         block(sink)
+        afterStage()
         return staged
     }
 
@@ -247,21 +251,19 @@ internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {
     }
 
     /**
-     * The other attempt of the same build, publishing at the next re-read. Both attempts read a
-     * legitimate `PENDING` row, so the winner is whoever holds the transaction first (ADR 0017).
+     * The other attempt of the same build, whole, between this one's staging and its completion. A
+     * rival landing inside the fence's own read instead is overwritten by a promote placed before it.
      */
-    protected fun rivalPublishesWhen(landed: () -> Boolean, rivalStaged: StagedFile) {
-        reread = { row ->
-            when {
-                landed() -> {
-                    fakeArchiveStore.promote(rivalStaged, storageKey)
-                    row.copy(
-                        state = UserDataExportState.READY, storageKey = storageKey,
-                        byteSize = rivalStaged.byteSize, sha256 = rivalStaged.contentHash,
-                    ).also(::seedRow)
-                }
-                else -> row
-            }
+    protected fun rivalPublishes(rivalStaged: StagedFile) {
+        fakeArchiveStore.afterStage = {
+            fakeArchiveStore.promote(rivalStaged, storageKey)
+            val row = requireNotNull(stored()) { "the rival publishes over this attempt's own stamped row" }
+            seedRow(
+                row.copy(
+                    state = UserDataExportState.READY, storageKey = storageKey,
+                    byteSize = rivalStaged.byteSize, sha256 = rivalStaged.contentHash,
+                ),
+            )
         }
     }
 

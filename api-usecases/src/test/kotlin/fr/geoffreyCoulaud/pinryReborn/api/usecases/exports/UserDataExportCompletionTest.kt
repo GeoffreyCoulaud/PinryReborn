@@ -39,11 +39,11 @@ internal class UserDataExportCompletionTest : UserDataExportFakeStoreFixtures() 
 
     @Test
     fun `Given another attempt that published first, Then the canonical key keeps the bytes it holds`() {
-        // Given: the rival lands on the fence's own re-read, keyed on the staging this attempt did,
-        // so it arrives after this one staged and before it promotes. Both read a legitimate PENDING.
+        // Given: the rival's whole transaction commits between this attempt's staging and its
+        // completion, which is where it fits on one connection. Both read a legitimate PENDING.
         stubFakeStoreBuild()
         val rivalStaged = StagedFile(path = "tmp/rival.zip", byteSize = 4096L, contentHash = "rival-sha256")
-        rivalPublishesWhen({ fakeArchiveStore.stagings > 0 }, rivalStaged)
+        rivalPublishes(rivalStaged)
 
         // When
         fakeStoreBuilder.build(exportId, isLastAttempt = true, renewLease = {})
