@@ -14,6 +14,10 @@
 | `docs/openapi.json` | generated: rewritten by the `pre-commit` hook, checked in CI, never edited by hand |
 | `docs/specs`, `docs/plans`, `docs/adr`, `docs/handoffs` | dated, append-only |
 
+`docs/plans/` is closed to new files: a plan is now the block table inside its specification
+(`docs/adr/0018-a-block-is-a-pull-request.md`, decision 3). The plans already there stay frozen and
+readable like every other dated document.
+
 `.claude/` is harness configuration and code, not documentation: outside this regime.
 
 ## Rules
@@ -23,8 +27,14 @@
   `Status: Superseded by <file>`.
 - **Simultaneity**: a living doc is updated in the same commit as the behaviour it describes,
   never a follow-up `docs:` commit.
-- **The backlog is the pressure valve**: out-of-scope findings are proposed for it rather than
-  done or lost.
+- **The backlog is the pressure valve**: findings the operator declined, or that genuinely belong
+  to another lot, are proposed for it rather than done or lost. What the operator authorised is
+  fixed in the lot instead (`agents/workflow.md`, Scope).
+- **A backlog item holds in two lines**, plus a pointer to the handoff section carrying its
+  reasoning. Symptom and where it lives, nothing else: the argument is already written in the
+  handoff of the lot that filed it, and copying it here stores it twice and makes the file
+  unreadable at the length that costs. Items reached 13 lines each before this rule
+  (`docs/adr/0018-a-block-is-a-pull-request.md`).
 - **Renumbering breaks anchors**: after reordering sections, re-check every cross-reference.
 - **An edit that does not apply is reported**, never assumed landed.
 - **A dated document does not put a number on a living file**: it records what it did; the count

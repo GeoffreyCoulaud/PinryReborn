@@ -1,6 +1,6 @@
 # Review mandate: evidence
 
-**Artefact: a specification, or a plan.** Your brief names which.
+**Artefact: a specification**, block table included.
 
 You are reviewing what the document **claims to be true**, not what it proposes to build. Every
 other angle judges the design; you judge its premises. A design derived correctly from a false

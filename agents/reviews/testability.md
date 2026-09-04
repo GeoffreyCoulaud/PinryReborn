@@ -1,6 +1,6 @@
 # Review mandate: testability
 
-**Artefact: a specification, or a plan.** Your brief names which.
+**Artefact: a specification**, block table included.
 
 You are reviewing whether what this document asks for **can be pinned by a test in this project**,
 under this project's rules. The gate demands 100 % branch coverage per module. Logging is not

@@ -12,11 +12,18 @@ Change the minimum that satisfies the request.
   another repository; a git worktree is its own root.
 - **A failed lookup is a question, not a wider search.** After `git ls-files` plus one ripgrep,
   stop and ask for the path.
-- **Do not fix what was not asked.** Adjacent defects are named in the final message or proposed
-  for the backlog. No diff hunk should be unexplainable by the request.
-- **The boy-scout rule.** An adjacent defect that is trivial, obviously correct, and contained
-  (one site, on a hunk already touched, no design decision, no new test surface) is fixed in the
-  change that finds it and flagged in the final message. Anything beyond is named or backlogged.
+- **An adjacent defect has three tiers** (`docs/adr/0018-a-block-is-a-pull-request.md`, decision 5).
+  No diff hunk should be unexplainable by the request or by the answer the operator gave.
+  1. **Trivial, obviously correct and contained** (one site, on a hunk already touched, no design
+     decision, no new test surface): fixed in the change that finds it, flagged in the final
+     message. This is the boy-scout rule.
+  2. **Larger, and reachable inside this lot**: stop and ask the operator **at the moment of
+     discovery**, stating the defect, the size of the fix and the block it would join. Not at the
+     next boundary: the operator prefers being interrupted while the context is live over
+     rebuilding it afterwards. This tier is where the backlog drains.
+  3. **Refused by the operator, or genuinely another lot's**: the backlog.
+- **Asking is not optional and neither is stopping.** Tier 2 is a question, so the work waits for
+  the answer. Fixing it unasked and backlogging it silently are both wrong.
 - **Do not create unrequested files**, including `CLAUDE.md`/`AGENTS.md` additions.
 - **Do not refactor opportunistically.** Renames and style sweeps are their own task.
 
@@ -73,75 +80,87 @@ Decisions already taken are under Design invariants in `agents/engineering.md`.
 
 ## Phases
 
-Seven phases in order: Discuss, Spec, Plan, Act, Verify, Wrap, Improve. Committing is cheap:
-commit autonomously. Branch before the first file is written. Ask which branching option and
-wait: (1) current branch (never offered on `main`), (2) `git switch -c <branch>`, (3) new
-worktree, (4) other. Naming: `<type>/<kebab-slug>` with a conventional-commit type.
+Discuss and Spec run once for the lot. Then **Act, Verify and Integrate run once per block, in
+series**: a block's pull request is merged before the next block starts. Wrap and Improve close the
+lot. Committing is cheap: commit autonomously.
+
+**Each block is its own branch off `main`**, named `<type>/<kebab-slug>` after the block's subject,
+with a conventional-commit type. Branch before the first file is written. Ask which branching
+option and wait, once for the lot: (1) current branch (never offered on `main`), (2)
+`git switch -c <branch>`, (3) new worktree, (4) other. The answer holds for every block.
 
 ### Tier selection
 
 The tier is the user's decision: state the recommended tier and its trigger, then wait. Recommend
-the higher when two fit; if a higher trigger surfaces mid-task, stop and ask again.
+the higher when both fit; if the higher trigger surfaces mid-task, stop and ask again.
 
-| Tier | Trigger | Phases run | Reviews |
+| Tier | Trigger | What runs | Reviews |
 | --- | --- | --- | --- |
-| Direct | No design decision, no new dependency, no public-surface change, readable in one pass | Act, Verify, Wrap, Improve | Holistic only |
-| Spec | Several modules, or a design decision, dependency, format or public surface | Discuss, Spec, Act, Verify, Wrap, Improve | Spec angles, holistic |
-| Plan | More than three tasks, subagent dispatch, or a migration | All seven | Spec angles, plan angles, block, holistic |
+| Direct | One block: no design decision, no new dependency, no public-surface change, readable in one pass | Act, Verify, Integrate, Wrap, Improve | Block review |
+| Spec | Anything else | Discuss, Spec, then Act, Verify and Integrate per block, Wrap, Improve | Three spec angles; one block review per pull request; holistic before the last pull request merges |
 
-Mandatory escalation to at least Spec: security or auth, data migration, public contract change,
-anything irreversible. Wrap and Improve run in every tier.
+Mandatory escalation to Spec: security or auth, data migration, public contract change, anything
+irreversible. Wrap and Improve run in both tiers. A one-block lot runs no holistic review: its
+block review reads the lot whole.
+
+### What a block is
+
+**A block is the smallest change that can be merged to `main` on its own**
+(`docs/adr/0018-a-block-is-a-pull-request.md`, decision 1). Three conditions:
+
+- **Green alone.** `./gradlew gate` passes at the block's tip. A block therefore never ends between
+  a red test commit and the implementation that answers it.
+- **Coherent alone.** Nothing it adds is unreachable: every new port method has a caller, every
+  configuration key is read, every new state is produced somewhere. Where a surface's real consumer
+  arrives in a later block, the pull request names it and the spec says so.
+- **Readable alone.** The diff excluding dated documents stays under 600 lines, of which under 200
+  are production code. Past that the block splits, or the spec states in one line why it cannot.
+
+**A block also ends where a later task first depends on an earlier task's result.** That rule says
+where the cut is forced; the three conditions say where it happens anyway.
+
+**A block owns the tests that pin the behaviour it delivers.** Collecting them into a later "write
+the tests" block makes them arrive green, with no red they could have been written from, and
+mutation after the fact is what is left to show they hold.
 
 ### The phases
 
 1. **Discuss.** Open `docs/backlog.md`, then plain conversation: no code, no plan, no files.
-2. **Spec.** Goal, acceptance criteria, explicit out-of-scope. Simple work inline; structured
-   work in `docs/specs/<ISO date>-<slug>.md`. **A spec the angles will read is written to a file**,
-   whatever its size: an inline spec gives them no artefact to point at, and the pass silently does
-   not run. **A criterion names the observable, never the instrument.**
+2. **Spec.** One document, `docs/specs/<ISO date>-<slug>.md`: goal, acceptance criteria, explicit
+   out-of-scope, and the block table. **Written to a file whatever its size**: an inline spec gives
+   the angles no artefact to point at, and the pass silently does not run. **A criterion names the
+   observable, never the instrument.**
+   **The block table is the plan, and it is a table**: one row per block, naming what the block
+   delivers, the files it touches, and the acceptance criteria it satisfies. Criteria live in the
+   spec and are not restated per row. Nothing more is written, because the implementer is the agent
+   that read the spec, not a subagent needing a self-contained brief.
+   **The spec names the backlog items adjacent to its subject and closes them**, or states which it
+   leaves and why (The backlog, below).
    Record an ADR in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles no
    architectural question (state the one-line justification for its absence). A delivered ADR is
    never rewritten; only its `Status` field may change.
-   **The spec angles run before the user reads it**, their findings are closed, and the corrected
-   document is what goes for approval: the user's attention is spent on what only they can decide,
-   not on defects an angle finds. Approval ends the phase and gates the plan and the code.
-3. **Plan.** Ordered, independently checkable tasks in `docs/plans/<ISO date>-<slug>.md`, each
-   with acceptance criteria, files and tests. Written after the spec is approved, never before.
-   **Reviewed by the plan angles and by nothing else**: no user approval gates a plan, which derives
-   from an approved spec, so what it needs is a check that the derivation is faithful and complete.
-   The plan also groups its tasks into blocks, which is what Act dispatches and what block review
-   reads: **a block ends where a later task first depends on an earlier task's result.** The
-   grouping is the plan's, and the plan angles review it: one block for the whole plan degrades
-   the scheme to a single review at the end, with no interruption available while anything is in
-   flight.
-   **A task owns the tests that pin the behaviour it delivers.** Collecting them into a later
-   "write the tests" task makes them arrive green, with no red they could have been written from,
-   and mutation after the fact is what is left to show they hold.
-4. **Act.** Subagent-driven by default; inline only for a one-file, one-edit change. In tier Plan,
-   **a completed block is reviewed by a fresh subagent while the next block is being built**: the
-   implementer never reviews its own work, and the review never blocks it either. Findings are
-   arbitrated at the next block boundary, before the block after it is dispatched. A CRITICAL
-   finding is the one interruption, because letting a block build on a broken base is what makes
-   the rework expensive. The reviewer reads the block's frozen commit range, never the working
-   tree. **The last block has no next boundary**: Act does not end until its review has reported
-   and its findings are closed, and Verify starts after that, never alongside it.
-   **A finding whose fix touches work built after the block it concerns is arbitrated as work**,
-   not as a correction: it becomes a task in the next block or a backlog item, under the four
-   exits. Such a fix belongs to no block and is read by no block review, which is one more thing
-   the holistic review in Verify is there for. Wrap reports how many findings took this shape,
-   because that number is the rework this scheme is paying.
-   Tiers Direct and Spec run no block review: their diff is the branch diff the holistic
-   review reads in Verify.
-5. **Verify.** Run the full gate (run, not described), then a holistic review by a fresh subagent
-   over the whole branch diff, never skipped.
-6. **Wrap.** Runs to completion before Improve. (a) Update the backlog in the branch. (b) Write
-   the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was
-   built, pitfalls, what is not validated, next step. (c) Integrate through a PR (rebase only, no
-   local-merge exemption); a PR is merged only after the human has reviewed it, approval never
-   assumed. (d) Tag if the spec called for a release. (e) Clean up the branch or worktree.
-   (f) Report what was done and the friction points, including any angle excluded from a review
-   pass with the reason given, and how many block findings had to be arbitrated as work because
-   later blocks already rested on them: this report is the input to Improve.
+   **The three spec angles run before the user reads it**, their findings are closed, and the
+   corrected document is what goes for approval: the user's attention is spent on what only they
+   can decide, not on defects an angle finds. Approval ends the phase and gates the code.
+3. **Act.** One block, **inline**: the implementation is written by the main loop, not dispatched
+   to a subagent. A block that exceeds the budget anyway may still be dispatched, and the brief
+   says why. Strict TDD as `agents/engineering.md` states it. An adjacent defect found here takes
+   one of the three tiers under Scope, and tier 2 stops the work to ask.
+4. **Verify.** Run the full gate (run, not described). Then a **block review** by a fresh subagent
+   over the block's diff: the implementer never reviews its own work. On the last block of a lot
+   that has more than one, the **holistic review** runs too, over
+   `git diff <lot base>..<this block's head>`, so it reads the whole lot and still gates a merge.
+   Findings are closed before the pull request is offered to the user.
+5. **Integrate.** Open the pull request (rebase only, no local-merge exemption) and hand the user
+   the link. **It is merged only after the human has reviewed it**, approval never assumed. Then
+   clean up the branch or worktree, and the next block starts from `main`.
+6. **Wrap.** Once per lot. Its documents ship in the last block's pull request: (a) the backlog
+   reconciled, an item closed by a block having been deleted in that block's own pull request;
+   (b) the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was
+   built, pitfalls, what is not validated, next step. After the merge: (c) tag if the spec called
+   for a release; (d) report what was done and the friction points, including any angle excluded
+   from a review pass with the reason given, and every tier-2 question asked with the answer it
+   got. That report is the input to Improve.
 7. **Improve.** Begins only once Wrap has fully completed. Never skipped. The question: what
    should the gate have caught? Opens as a discussion: state the failures met and the remedy
    proposed for each, then wait. Each retained remedy takes the cheapest durable form: an agents
@@ -156,18 +175,19 @@ the reasoning that produced them. Reviewers report findings and never edit.
 
 | Review | When | Mandate |
 | --- | --- | --- |
-| Spec angles | On the draft spec, before the user reads it | `evidence`, `falsifiability`, `precedent`, `security`, `operations`, `testability` (six) |
-| Plan angles | On the plan, before any task is dispatched | `plan`, `evidence`, `testability` (three) |
-| Block | When a block completes, alongside the next one (tier Plan only) | `block` |
-| Holistic | In Verify, after the gate is green | `holistic` |
+| Spec angles | On the draft spec, before the user reads it | `evidence` and `falsifiability` always, plus one of `precedent`, `security`, `operations`, `testability` (three) |
+| Block | In Verify, after the gate is green, before the user reads the pull request | `block` |
+| Holistic | In Verify on the last block of a lot that has more than one, before that pull request merges | `holistic` |
 
 Every mandate is `agents/reviews/<name>.md`; the table names them without the path. Angles dispatch
-in parallel, so a pass costs the slowest angle, not their sum. `evidence` and `testability` run in
-both passes, because what a spec asserts and what a plan asserts are not the same statements.
+in parallel, so a pass costs the slowest angle, not their sum.
 
-**Run every angle that declares the artefact under review.** Excluding one is allowed and requires
-a stated reason in the brief, which Wrap reports. "It seemed unlikely to find anything" is not a
-reason; "this lot adds no runtime behaviour, so `operations` has no artefact" is.
+**Two spec angles are fixed and the third is chosen** (`docs/adr/0018-a-block-is-a-pull-request.md`,
+decision 8). `evidence` and `falsifiability` always run: a false premise and a criterion nobody can
+fail are the two defects cheapest to fix in a document and most expensive anywhere else. **The spec
+names its third angle and the reason it was chosen**, and Wrap reports it. "It seemed the most
+likely to find something" is not a reason; "this lot changes an authorization order, so `security`
+owns it" is. Where no subject stands out, say that and pick `testability`.
 
 **Do not read the mandate files**: pass the path and let the subagent read its own mandate. Only
 exception: work whose subject is a mandate itself.
@@ -197,17 +217,31 @@ the brief that the agent works its inbox to empty before reporting.
   `reviewDecision` (GitHub refuses self-approval and every PR is authored by the sole operator).
 - **Everything integrates through a PR**, documentation-only changes included (a local merge to
   `main` bypasses CI).
+- **One block, one PR, in series**: the next block does not start until the current one is merged.
+  Each PR branches from `main`, so there is no stack and no cascading rebase.
+- **A PR run costs about 12 minutes**, container image included. A lot pays that per block, and
+  that is the accepted price of the operator reading about 300 lines at a time.
 - **Clean tree before reporting completion**: `git status --porcelain` shown at wrap.
 - **"Leave as-is" stays available** as an integration option.
 
 ## The backlog
 
 - **Open items only.** No shipped section: completed work is recorded by its handoff, git history
-  and tag. On wrap, delete or narrow the finished item, add discovered ones, update the
-  `Last reviewed` line. After merge, reconcile on `main`.
+  and tag. An item a block closes is deleted in that block's PR; Wrap reconciles on `main`.
+- **A lot closes the backlog items adjacent to its subject.** Binding, not advisory
+  (`docs/adr/0018-a-block-is-a-pull-request.md`, decision 6): the spec names every adjacent item,
+  and for each one it leaves open it states why, which is the operator's to accept. A lot with no
+  adjacent item says so. An adopted item that does not fit the block's budget becomes its own
+  block; it is not thereby dropped.
+- **An item holds in two lines**, plus a pointer to the handoff section carrying its reasoning.
+  The reasoning is already written there, and an entry long enough to need scrolling is an entry
+  nobody rereads. **There is no cap on how many items the backlog holds**: a cap discards findings
+  to satisfy a number, and what grew here was the entries, not their count.
 - **A review finding has four exits**: fixed inside the lot; a backlog item (work someone will
   do); an accepted limit (written where the decision lives, never copied to the backlog); or
-  refused, with the reason in the handoff. Wrap states which exit each finding took.
+  refused, with the reason in the handoff. Wrap states which exit each finding took. The default
+  is the first: the backlog receives what the operator refused or what genuinely belongs to
+  another lot, not what was merely out of the original scope.
 - **Banded by nature before priority**: Open work (P0, P1, P2), Known limits (pointers to
   documents), Before beta (dated events). A limit is not debt.
 
