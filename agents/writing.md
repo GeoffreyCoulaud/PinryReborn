@@ -30,11 +30,16 @@ readable like every other dated document.
 - **The backlog is the pressure valve**: findings the operator declined, or that genuinely belong
   to another lot, are proposed for it rather than done or lost. What the operator authorised is
   fixed in the lot instead (`agents/workflow.md`, Scope).
-- **A backlog item holds in two lines**, plus a pointer to the handoff section carrying its
-  reasoning. Symptom and where it lives, nothing else: the argument is already written in the
-  handoff of the lot that filed it, and copying it here stores it twice and makes the file
-  unreadable at the length that costs. Items reached 13 lines each before this rule
+- **A backlog item holds in two lines**, plus a pointer to the dated document that carries its
+  reasoning. Symptom and where it lives, nothing else: the argument is usually already written in
+  the spec or handoff of the lot that filed it, and copying it here stores it twice and makes the
+  file unreadable at the length that costs. Items reached 13 lines each before this rule
   (`docs/adr/0018-a-block-is-a-pull-request.md`).
+- **An item whose reasoning lives nowhere else keeps it.** Dated documents are append-only, so a
+  finding whose argument was only ever written into the backlog cannot be moved out of it now:
+  compressing it would destroy it, not relocate it. Six of the fourteen items this rule was applied
+  to are in that state. **This is an exception to inherit, not to create**: a new item is filed by a
+  lot that has a spec and a handoff, so its reasoning goes there and the entry stays at two lines.
 - **Renumbering breaks anchors**: after reordering sections, re-check every cross-reference.
 - **An edit that does not apply is reported**, never assumed landed.
 - **A dated document does not put a number on a living file**: it records what it did; the count
