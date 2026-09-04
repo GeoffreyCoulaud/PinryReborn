@@ -151,8 +151,13 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   reason at the site, but the parameter is published as a plain nullable integer with no default and
   spec section 7 writes it as `?offset=N`. A client reading either cannot tell whether omitting it
   starts the upload or is refused. Named by the import lot and deliberately left out of it.
-- **Rewrite the fifteen P2 items to the two-line form.** `agents/writing.md` adopted it; these
-  predate it and average eight lines.
+- **Rewrite the fourteen P2 items that predate the two-line form.** They average 7.6 lines.
+  `docs/adr/0018-a-block-is-a-pull-request.md`, Context, holds the measurement and the reason.
+- **Measure what review costs and what it returns**, from the session transcripts: the share of
+  spend that goes to reviews, and the findings per review by kind. Re-scoped from ADR 0014's
+  re-measurement by `docs/adr/0018-a-block-is-a-pull-request.md`, which changed the regime without
+  answering it and dropped the third quantity (hours between consecutive implementers) as meaningless
+  once Act runs inline.
 
 ## Known limits
 

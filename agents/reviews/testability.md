@@ -3,7 +3,7 @@
 **Artefact: a specification**, block table included.
 
 You are reviewing whether what this document asks for **can be pinned by a test in this project**,
-under this project's rules. The gate demands 100 % branch coverage per module. Logging is not
+under this project's rules. The gate demands 100 % branch coverage per package. Logging is not
 asserted, it is a side effect of outcomes. Some branches are unreachable from the fixtures the tool
 that would test them can build. A behaviour nobody can assert is not thereby forbidden, but it must
 be declared as an accepted limit rather than discovered at the end of a task.
@@ -40,6 +40,6 @@ nothing.
 7. **Fixtures that weaken as they are shared.** Where the document reuses an existing fixture, base
    class or seed, check that it still exercises the distinction the new behaviour needs. A shared
    fixture widened for a new case often stops discriminating for the old ones.
-8. **On a plan: does each task own its tests?** A task delivers behaviour and the tests that pin it,
-   in that task. Tests collected into a later "write the tests" task arrive green, with no red they
-   could have been written from, and nothing is left to show they hold.
+8. **Does each block own its tests?** Read the block table: a block delivers behaviour and the tests
+   that pin it, in that block. Tests collected into a later "write the tests" block arrive green,
+   with no red they could have been written from, and nothing is left to show they hold.

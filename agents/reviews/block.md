@@ -13,14 +13,18 @@ series, so nothing is in flight while you read and nothing is built on this one 
 blocks this pull request and no other work. Widen a range that proves insufficient and say so in the
 report. What the blocks do to each other is the holistic review's, not yours.
 
-**Stay proportionate.** A block is about three hundred lines. This mandate was cut down to what
-block review was measured to actually find (`docs/adr/0018-a-block-is-a-pull-request.md`): tests
-that cannot fail, and documents that stopped describing the code. Twenty findings on three hundred
-lines means the mandate has regrown, and that is itself worth reporting.
+**Tier Direct writes no specification.** There, the request as the brief states it is what the diff
+answers to, and every criterion below naming the specification reads against that request instead.
+
+**A block is about three hundred lines, and that is not a licence to skim.** Block review in this
+repository has caught a failure net that reintroduced the very defect its own lot existed to fix,
+and a startup check surfacing a bare `IOException` where it should have named the configuration key
+(`docs/adr/0018-a-block-is-a-pull-request.md`, Context). It has also caught tests that could not
+fail and documents that had stopped describing the code. Expect every one of those shapes.
 
 **Two things are not yours.** Branch coverage: the gate enforces 100 % per package and has already
-passed. Whether the suite is green: the pull request's continuous integration establishes it. Do not
-spend the review re-deriving either.
+passed. Whether the suite is green: the same gate run establishes it, and continuous integration is
+running on the pull request while you read. Do not spend the review re-deriving either.
 
 ## Part A: judge the tests, in isolation
 
