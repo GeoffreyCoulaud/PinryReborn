@@ -35,9 +35,12 @@ Read the spec, then the full diff. Report findings as
 5. **Test suite as a whole.** Do the tests, collectively, still discriminate? Look for shared
    fixtures that weaken assertions, mocks that assert their own configuration, and coverage
    achieved by tests that would pass against a broken implementation.
-6. **Covered but unrequested.** You run after a green gate, so every branch is exercised by some
-   test. That proves nothing about whether anyone asked for the branch: a test can be written to
-   cover code that should not exist. For each new conditional, option, parameter, fallback and
+6. **Covered but unrequested.** You run after a green gate, so every branch **inside the coverage
+   perimeter** is exercised by some test; `api-application` and the Ebean model packages are outside
+   it (`agents/engineering.md`, Gate perimeter), so there a branch may have no test at all and that
+   is its own finding. Coverage anyway proves nothing about whether anyone asked for the branch: a
+   test can be written to cover code that should not exist. For each new conditional, option,
+   parameter, fallback and
    error path in the diff, name the line of the spec that demanded it. Code whose only
    justification is the test covering it is an unrequested feature: report it and say what should
    be deleted.

@@ -3,7 +3,8 @@
 Status: Accepted
 Date: 2026-09-04
 Amends: `docs/adr/0018-a-block-is-a-pull-request.md`, decision 8, on where the block and holistic
-reviews run. Everything else in that ADR stands, decisions 1 to 7 included.
+reviews run and on two of its cuts to the block mandate. Everything else in that ADR stands,
+decisions 1 to 7 included.
 
 ## Context
 
@@ -35,14 +36,46 @@ defect.
    block review, the holistic review where it applies, and the closing of their findings all happen
    before anything is pushed for integration.
 
-2. **Opening a pull request is the act of handing it over**, so it belongs to Integrate. The link
-   goes to the operator together with the state of its continuous integration run.
+2. **Opening a pull request is the act of handing it over**, so it belongs to Integrate, and it
+   **opens as a draft**. Waiting for continuous integration behind a non-draft pull request would
+   delay the message and not the merge, `enforce_admins` being false; GitHub refusing a merge on a
+   draft is what actually holds it. The run settles, the pull request is marked ready, and the link
+   goes to the operator with the result named.
 
-3. **The mandates read a branch, not a pull request.** `agents/reviews/block.md` reviews a block on
-   its local branch and its "green suite" carve-out points at the gate run that has already passed,
-   with continuous integration named as what re-establishes it afterwards rather than as what is
-   running alongside the review. `agents/reviews/holistic.md` says the last block is still on its
-   branch.
+3. **A red run, or a change the human asks for, returns the block to Verify.** Back to draft, commit
+   the fix, re-run the gate, re-run the block review over the new commits only. A merge never rests
+   on a review that did not read what is being merged. Without this the regime removes "the merge
+   precedes the review" at the start of Integrate and lets it back in at the end.
+
+4. **The mandates read a branch, not a pull request**, and each names *this block's* pull request
+   rather than any, since earlier blocks of the same lot have theirs already. Both are pinned to a
+   fixed commit range rather than to `HEAD`, which moves under a reviewer while its own findings are
+   being closed.
+
+5. **Two of ADR 0018 decision 8's cuts to the block mandate are reversed.** Branch coverage returns,
+   scoped: the gate enforces it only inside the perimeter, and `api-application` and the Ebean model
+   packages are outside it (`agents/engineering.md`), so a new conditional there is the reviewer's.
+   And the pinning to a named commit range returns outright: 0018 dropped it on the premise that in
+   series nothing is in flight, and that premise was falsified inside 0018's own lot, whose block
+   merged mid-review while a follow-on branch edited the files under review. `agents/reviews/holistic.md`
+   criterion 6 carried the same coverage premise and is scoped the same way.
+
+## Block table
+
+One block, `fix/review-before-the-pull-request`: `agents/workflow.md` phases 2, 4, 5 and the review
+tables, `agents/reviews/block.md`, `agents/reviews/holistic.md`, `agents/writing.md`, this ADR, ADR
+0018's `Status`, and the backlog items below. It satisfies every decision above.
+
+**Third angle: none, and the reason.** The three spec angles did not run on this document. It records
+a correction the operator specified in one sentence and proposes nothing they have not already
+decided, and its only factual claims (the PR #74 timings, the continuous integration medians) were
+measured inside this lot with the commands shown in the commit messages. The block review and the
+holistic review both ran and are what this ADR was corrected against. Named here so it is a stated
+exception rather than a silent one.
+
+**Adjacent backlog items.** One is adjacent: "Measure what review costs and what it returns". It
+stays open. This lot changes where reviews run, not what they cost, and the measurement needs
+session transcripts that no command in this repository reads.
 
 ## Consequences
 
@@ -79,13 +112,17 @@ left to record where its findings went. All of them are open work; none was refu
   "reasoning is only here" is in fact carried by that same section; `agents/workflow.md` still states
   the two-line rule with the refuted premise; the "six of fourteen" figure is four; and six MINOR on
   pointer precision, a KDoc the rule does not admit, and a stale line count in `agents/writing.md`.
-  Filed as one backlog item, to be closed by the next block.
-- **Holistic review of the lot** (three CRITICAL, eight MAJOR, six MINOR). Four are their own backlog
-  items because they are decisions rather than edits: decisions 4 and 5 colliding on an over-budget
-  block, the specification freezing before the regime stops changing it, a holistic finding against a
-  merged block having no exit, and the lost ADR-existence check. Four more are filed as small
-  corrections: `AGENTS.md` on what no local command covers, the `P0` band neither file has, the
-  missing ADR back-links with ADR 0014 still `Proposed`, and the branch-coverage premise. The rest are
-  closed in this block: the review table timing both reviews against a pull request, the plurality
-  `agents/reviews/holistic.md` assumed, the twelve-minute figure, and the silently dropped
-  verification of red before green, which both mandates now require again.
+  Filed as one backlog item; no lot owns it yet.
+- **Holistic review of the lot** (three CRITICAL, eight MAJOR, six MINOR), every one accounted for.
+  **Four became their own backlog items**, being decisions rather than edits: decisions 4 and 5
+  colliding on an over-budget block, the specification freezing before the regime stops changing it,
+  a holistic finding against a merged block having no exit, and the lost ADR-existence check.
+  **Three are filed as small corrections**: `AGENTS.md` on what no local command covers, the `P0`
+  band neither file has, and the missing ADR back-links with ADR 0014 still `Proposed`.
+  **Ten are closed in this block**: the review table timing both reviews against a pull request and
+  contradicting the prose on a one-block lot; the branch-coverage premise, in both mandates; the
+  silently dropped verification of red before green, which both now require again; the plurality
+  `agents/reviews/holistic.md` assumed; the twelve-minute figure; Wrap's stale "reconciles on `main`";
+  the two-line rule stated in `agents/workflow.md` without its exception; the holistic dispatched
+  over a floating `HEAD`; the missing route back from a red run or a change request; and this lot
+  running as tier Spec with no specification, which phase 2 now provides for.
