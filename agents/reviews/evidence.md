@@ -38,8 +38,8 @@ one task depends on is MAJOR; a false statement that a decision was taken on is 
    observer fires on a produced bean while the bean was still being discovered by another route
    entirely, and the design built on it failed at implementation.
 6. **The document against itself.** Does any claim contradict another claim in the same document, or
-   a claim in the spec this plan derives from? A count stated twice with two different values is the
-   readable form of this; the subtle form is two sentences that cannot both be true.
+   a claim in the ADR or the backlog item it derives from? A count stated twice with two different
+   values is the readable form of this; the subtle form is two sentences that cannot both be true.
 7. **The claim that decides.** Name the one claim the document's central decision rests on. If it
    turns out false, what happens to the work? Say so explicitly in your report, whatever your
    verdict on it. A reviewer who checked everything and never says which premise is load-bearing has

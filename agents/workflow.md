@@ -34,7 +34,7 @@ Nothing is asserted without the command that established it, nothing changed wit
 - **Claims carry their proof**: show the command and its output, or prefix `UNVERIFIED:` (allowed
   only when no available command can settle the claim; name that command and why it cannot run).
   Git state, test outcomes, file existence and tool availability are never `UNVERIFIED:`.
-- **This binds a spec, an ADR and a plan exactly as it binds a message.** An approved document is
+- **This binds a spec and an ADR exactly as it binds a message.** An approved document is
   not a lighter regime: a statement about a library's behaviour written there without its
   measurement is the most expensive kind of unverified claim, since the work is then planned around
   it.
@@ -87,7 +87,9 @@ lot. Committing is cheap: commit autonomously.
 **Each block is its own branch off `main`**, named `<type>/<kebab-slug>` after the block's subject,
 with a conventional-commit type. Branch before the first file is written. Ask which branching
 option and wait, once for the lot: (1) current branch (never offered on `main`), (2)
-`git switch -c <branch>`, (3) new worktree, (4) other. The answer holds for every block.
+`git switch -c <branch>`, (3) new worktree, (4) other. **The answer sets the shape every later
+block reuses**, not the branch itself: after a block merges the tree is back on `main`, where (1)
+is not offered, so (1) can only ever apply to the first block and the rest follow with (2).
 
 ### Tier selection
 
@@ -100,8 +102,13 @@ the higher when both fit; if the higher trigger surfaces mid-task, stop and ask 
 | Spec | Anything else | Discuss, Spec, then Act, Verify and Integrate per block, Wrap, Improve | Three spec angles; one block review per pull request; holistic before the last pull request merges |
 
 Mandatory escalation to Spec: security or auth, data migration, public contract change, anything
-irreversible. Wrap and Improve run in both tiers. A one-block lot runs no holistic review: its
-block review reads the lot whole.
+irreversible. Wrap and Improve run in both tiers.
+
+**Tier Spec always runs the holistic review, whatever its block count.** Only tier Direct skips it,
+and only because its own trigger excludes everything that mandate is about: no design decision, no
+dependency, no public surface. The block mandate is deliberately narrower and disclaims reading
+across blocks, so it is not a substitute. A one-block lot that escalated to Spec (a migration, an
+authorization change) gets both reviews over the same diff, by two mandates that do not overlap.
 
 ### What a block is
 
@@ -146,21 +153,27 @@ mutation after the fact is what is left to show they hold.
    to a subagent. A block that exceeds the budget anyway may still be dispatched, and the brief
    says why. Strict TDD as `agents/engineering.md` states it. An adjacent defect found here takes
    one of the three tiers under Scope, and tier 2 stops the work to ask.
-4. **Verify.** Run the full gate (run, not described). Then a **block review** by a fresh subagent
-   over the block's diff: the implementer never reviews its own work. On the last block of a lot
-   that has more than one, the **holistic review** runs too, over
+4. **Verify.** Run the full gate (run, not described). **On the last block of the lot, write Wrap's
+   documents first** (phase 6a and 6b): they belong in this block's diff, and a review that runs
+   after them reads them.
+   Then **open the pull request** and only then review: continuous integration starts while the
+   reviewers read, and the reviewers read a real pull request rather than a branch. Its body names
+   what the diff does not say for itself, in particular any surface whose consumer arrives in a
+   later block. Nothing is offered to the user yet.
+   A **block review** by a fresh subagent over the block's diff: the implementer never reviews its
+   own work. In tier Spec, on the last block, the **holistic review** runs too, over
    `git diff <lot base>..<this block's head>`, so it reads the whole lot and still gates a merge.
-   Findings are closed before the pull request is offered to the user.
-5. **Integrate.** Open the pull request (rebase only, no local-merge exemption) and hand the user
-   the link. **It is merged only after the human has reviewed it**, approval never assumed. Then
-   clean up the branch or worktree, and the next block starts from `main`.
-6. **Wrap.** Once per lot. Its documents ship in the last block's pull request: (a) the backlog
-   reconciled, an item closed by a block having been deleted in that block's own pull request;
-   (b) the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was
-   built, pitfalls, what is not validated, next step. After the merge: (c) tag if the spec called
-   for a release; (d) report what was done and the friction points, including any angle excluded
-   from a review pass with the reason given, and every tier-2 question asked with the answer it
-   got. That report is the input to Improve.
+   **Findings are closed before the user is told the pull request exists.**
+5. **Integrate.** Hand the user the link. **It is merged only after the human has reviewed it**
+   (rebase only, no local-merge exemption), approval never assumed. Then clean up the branch or
+   worktree, and the next block starts from `main`.
+6. **Wrap.** Once per lot. Two halves, and the first runs inside the last block, before its Verify:
+   (a) the backlog reconciled, an item closed by a block having been deleted in that block's own
+   pull request; (b) the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current
+   state, what was built, pitfalls, what is not validated, next step. The second half runs after
+   that pull request merges: (c) tag if the spec called for a release; (d) report what was done and
+   the friction points, including the third spec angle chosen with the reason given for it, and
+   every tier-2 question asked with the answer it got. That report is the input to Improve.
 7. **Improve.** Begins only once Wrap has fully completed. Never skipped. The question: what
    should the gate have caught? Opens as a discussion: state the failures met and the remedy
    proposed for each, then wait. Each retained remedy takes the cheapest durable form: an agents
