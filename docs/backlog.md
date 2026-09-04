@@ -10,13 +10,18 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 - **Three bands, by nature.** *Open work* is what someone will do. *Known limits* points at the document that
   records each one and holds no copy of it. *Before beta* holds dated events no session can start early. A limit
   is not debt and is not counted as debt.
-- **Open work is grouped by priority**, not by module. Each item states the context and what must be decided or
-  done, with a pointer to the relevant spec or handoff when one exists. `P0` = product decisions that shape the
-  data model and the UI. `P1` = client ergonomics needed for the web UI and the browser extension. `P2` =
-  operational debt (not UI blockers).
+- **Open work is grouped by priority**, not by module. `P0` = product decisions that shape the data model and
+  the UI. `P1` = client ergonomics needed for the web UI and the browser extension. `P2` = operational debt
+  (not UI blockers).
+- **An item holds in two lines**: the symptom and where it lives, plus a pointer to the handoff section that
+  carries the reasoning. Never a copy of that reasoning (`agents/writing.md`, Rules). There is **no cap on the
+  number of items**.
+- **A lot closes the items adjacent to its subject**, and its spec says why it leaves any of them
+  (`docs/adr/0018-a-block-is-a-pull-request.md`, decision 6). This file is not where adjacent work waits.
 - **A review finding has four exits and only one is this file**: fixed inside the lot, a backlog item, an
   accepted limit written where the decision lives, or refused with the reason in the handoff
-  (`docs/adr/0010-review-finding-dispositions.md`). Wrap states which exit each finding took.
+  (`docs/adr/0010-review-finding-dispositions.md`). Wrap states which exit each finding took. The first is the
+  default: this file receives what the operator declined, not what was merely outside the original scope.
 - When an item is picked up, note the branch or sub-project next to it; when it merges, **delete it from this
   file** (its record now lives in the handoff and the tag).
 
@@ -146,14 +151,8 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   reason at the site, but the parameter is published as a plain nullable integer with no default and
   spec section 7 writes it as `?offset=N`. A client reading either cannot tell whether omitting it
   starts the upload or is refused. Named by the import lot and deliberately left out of it.
-- **Re-measure the review regime after three lots.** `docs/adr/0014-review-budget-upstream.md` moved
-  the review budget upstream on figures taken from the session transcripts, and nothing in this
-  repository reproduces them. After three lots have run under the new regime, re-measure the three
-  quantities the decision moves: the share of spend that goes to reviews, the hours between
-  consecutive implementers, and the findings per review by kind. The question the numbers answer is
-  whether asynchronous block review is paying for its rework and whether the angles are earning
-  their dispatch. Whether the repository should own a transcript-measuring tool rather than a
-  throwaway script is part of the item, not a prerequisite.
+- **Rewrite the fifteen P2 items to the two-line form.** `agents/writing.md` adopted it; these
+  predate it and average eight lines.
 
 ## Known limits
 
