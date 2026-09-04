@@ -1,6 +1,8 @@
 # 0018. A block is a pull request, and the blocks of a lot ship in series
 
-Status: Accepted
+Status: Accepted; decision 8's placement of the two reviews is amended by
+`docs/adr/0019-review-before-the-pull-request.md`, which moves them off the pull request and onto
+the branch. Decisions 1 to 7 stand as written.
 Date: 2026-09-04
 Amends: `docs/adr/0014-review-budget-upstream.md`, whose block review this keeps, whose plan pass
 this folds into the spec pass, and whose spec pass this cuts from six angles to three.

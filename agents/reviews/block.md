@@ -1,8 +1,9 @@
 # Review mandate: block
 
-You are reviewing **one block, as a pull request, before the operator reads it**. You did not write
-it and you have not seen the reasoning that produced it. That is the point: judge the artefact, not
-the intent.
+You are reviewing **one block, on its local branch, before any pull request exists**. You did not
+write it and you have not seen the reasoning that produced it. That is the point: judge the
+artefact, not the intent. Nothing is offered to the operator until your findings are closed, so
+there is no merge racing you.
 
 Report findings as `SEVERITY | file:line | issue | suggested fix`, most severe first, where
 SEVERITY is one of `CRITICAL`, `MAJOR`, `MINOR`. **Do not edit anything.** If you find nothing,
@@ -10,7 +11,7 @@ say so plainly rather than inventing a finding.
 
 **Your subject is the diff your brief names, plus the specification.** Nothing else. Blocks ship in
 series, so nothing is in flight while you read and nothing is built on this one yet: a CRITICAL here
-blocks this pull request and no other work. Widen a range that proves insufficient and say so in the
+stops this block and no other work. Widen a range that proves insufficient and say so in the
 report. What the blocks do to each other is the holistic review's, not yours.
 
 **Tier Direct writes no specification.** There, the request as the brief states it is what the diff
@@ -23,8 +24,8 @@ and a startup check surfacing a bare `IOException` where it should have named th
 fail and documents that had stopped describing the code. Expect every one of those shapes.
 
 **Two things are not yours.** Branch coverage: the gate enforces 100 % per package and has already
-passed. Whether the suite is green: the same gate run establishes it, and continuous integration is
-running on the pull request while you read. Do not spend the review re-deriving either.
+passed. Whether the suite is green: that same gate run establishes it, and continuous integration
+re-establishes it on the pull request afterwards. Do not spend the review re-deriving either.
 
 ## Part A: judge the tests, in isolation
 
@@ -71,6 +72,6 @@ explicitly: the implementation review below is provisional until the tests are f
     the prose the diff touches, not only the code.
 11. **The block stands alone.** It is about to be merged to `main` by itself. Is anything it adds
     unreachable: a port method with no caller, a configuration key nothing reads, a state nothing
-    produces? Where the consumer arrives in a later block, the pull request or the specification
-    should say so; where neither does, that is the finding.
+    produces? Where the consumer arrives in a later block, the specification should say so; where it
+    does not, that is the finding.
 12. **Hygiene.** Stray artefacts, debug leftovers, commented-out code, unrelated formatting churn.
