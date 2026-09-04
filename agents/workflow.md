@@ -99,7 +99,7 @@ the higher when both fit; if the higher trigger surfaces mid-task, stop and ask 
 | Tier | Trigger | What runs | Reviews |
 | --- | --- | --- | --- |
 | Direct | One block: no design decision, no new dependency, no public-surface change, readable in one pass | Act, Verify, Integrate, Wrap, Improve | Block review |
-| Spec | Anything else | Discuss, Spec, then Act, Verify and Integrate per block, Wrap, Improve | Three spec angles; one block review per pull request; holistic before the last pull request merges |
+| Spec | Anything else | Discuss, Spec, then Act, Verify and Integrate per block, Wrap, Improve | Three spec angles; one block review per block; holistic on the last block, all before any pull request opens |
 
 Mandatory escalation to Spec: security or auth, data migration, public contract change, anything
 irreversible. Wrap and Improve run in both tiers.
@@ -119,7 +119,7 @@ authorization change) gets both reviews over the same diff, by two mandates that
   a red test commit and the implementation that answers it.
 - **Coherent alone.** Nothing it adds is unreachable: every new port method has a caller, every
   configuration key is read, every new state is produced somewhere. Where a surface's real consumer
-  arrives in a later block, the pull request names it and the spec says so.
+  arrives in a later block, the spec says so and the pull request repeats it.
 - **Readable alone.** The diff excluding dated documents stays under 600 lines, of which under 200
   are production code. Past that the block splits, or the spec states in one line why it cannot.
 
@@ -153,20 +153,21 @@ mutation after the fact is what is left to show they hold.
    to a subagent. A block that exceeds the budget anyway may still be dispatched, and the brief
    says why. Strict TDD as `agents/engineering.md` states it. An adjacent defect found here takes
    one of the three tiers under Scope, and tier 2 stops the work to ask.
-4. **Verify.** Run the full gate (run, not described). **On the last block of the lot, write Wrap's
-   documents first** (phase 6a and 6b): they belong in this block's diff, and a review that runs
-   after them reads them.
-   Then **open the pull request** and only then review: continuous integration starts while the
-   reviewers read, and the reviewers read a real pull request rather than a branch. Its body names
-   what the diff does not say for itself, in particular any surface whose consumer arrives in a
-   later block. Nothing is offered to the user yet.
-   A **block review** by a fresh subagent over the block's diff: the implementer never reviews its
-   own work. In tier Spec, on the last block, the **holistic review** runs too, over
-   `git diff <lot base>..<this block's head>`, so it reads the whole lot and still gates a merge.
-   **Findings are closed before the user is told the pull request exists.**
-5. **Integrate.** Hand the user the link. **It is merged only after the human has reviewed it**
-   (rebase only, no local-merge exemption), approval never assumed. Then clean up the branch or
-   worktree, and the next block starts from `main`.
+4. **Verify, entirely on the local branch. No pull request exists yet.** Run the full gate (run, not
+   described). **On the last block of the lot, write Wrap's documents first** (phase 6a and 6b):
+   they belong in this block's diff, and a review that runs after them reads them.
+   Then a **block review** by a fresh subagent over the block's commit range: the implementer never
+   reviews its own work. In tier Spec, on the last block, the **holistic review** runs too, over
+   `git diff <lot base>..HEAD`, so it reads the whole lot. Findings are closed here, on the branch.
+   **Opening a pull request is handing it over, so it belongs to the next phase and not this one.**
+   There is no such thing as an open pull request the user has not been offered: it is in their
+   list, it notifies them, and they can merge it. A review still running while one is open is a
+   review whose findings can arrive after the merge.
+5. **Integrate.** Push, open the pull request, and hand the user the link with the state of its
+   continuous integration run named. Its body says what the diff does not say for itself, in
+   particular any surface whose consumer arrives in a later block. **It is merged only after the
+   human has reviewed it** (rebase only, no local-merge exemption), approval never assumed. Then
+   clean up the branch or worktree, and the next block starts from `main`.
 6. **Wrap.** Once per lot. Two halves, and the first runs inside the last block, before its Verify:
    (a) the backlog reconciled, an item closed by a block having been deleted in that block's own
    pull request; (b) the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current

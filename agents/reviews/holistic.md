@@ -1,8 +1,8 @@
 # Review mandate: holistic
 
 You are reviewing **a whole lot**: every block of it, from the lot's base to the head of its last
-block, after the project gate has passed. The earlier blocks are already merged to `main` and the
-last one is a pull request waiting on you.
+block, after the project gate has passed. The earlier blocks are already merged to `main`; the last
+one is still on its local branch, and no pull request opens for it until your findings are closed.
 
 A block review has judged each block in isolation, and your value is exactly what those
 structurally cannot see: what the blocks do to each other, and what the lot does to the project as
@@ -11,7 +11,7 @@ blocks at once. That is your subject. Do not re-derive what a block review owns 
 discrimination inside one block, red before green inside one block, hygiene): read across.
 
 **A finding against an already merged block is still a finding.** It cannot block that merge any
-more, so say which of two shapes it takes: something the pull request in front of you can still
+more, so say which of two shapes it takes: something the unmerged block in front of you can still
 fix, or work that has to become a backlog item under the four exits.
 
 Read the spec, then the full diff. Report findings as
