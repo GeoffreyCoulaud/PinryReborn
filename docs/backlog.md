@@ -13,9 +13,11 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 - **Open work is grouped by priority**, not by module. `P0` = product decisions that shape the data model and
   the UI. `P1` = client ergonomics needed for the web UI and the browser extension. `P2` = operational debt
   (not UI blockers).
-- **An item holds in two lines**: the symptom and where it lives, plus a pointer to the handoff section that
-  carries the reasoning. Never a copy of that reasoning (`agents/writing.md`, Rules). There is **no cap on the
-  number of items**.
+- **An item holds in two lines**: the symptom and where it lives, plus a pointer to the dated document that
+  carries the reasoning. Never a copy of that reasoning (`agents/writing.md`, Rules). The exception is an item
+  whose reasoning was only ever written here, which keeps it: dated documents are append-only, so compressing
+  such an item destroys the argument rather than relocating it. Those are marked below. There is **no cap on
+  the number of items**.
 - **A lot closes the items adjacent to its subject**, and its spec says why it leaves any of them
   (`docs/adr/0018-a-block-is-a-pull-request.md`, decision 6). This file is not where adjacent work waits.
 - **A review finding has four exits and only one is this file**: fixed inside the lot, a backlog item, an
@@ -45,114 +47,52 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 
 ### P2: Operational debt
 
-- **The rows two actors can write are fenced one by one, and nothing structural forces the next one.**
-  `Persistor.merge` writes every column, so saving an entity read earlier restores that entity's whole
-  state, including whatever another actor committed in between. The general answer this item used to
-  propose, a version column on every model that lacks one, is refused:
-  `docs/adr/0016-fence-by-compare-and-set.md` decides that a shared row is fenced by re-reading it and
-  testing a predicate inside the transaction that writes it, the datasource holding one connection
-  (`docs/adr/0012`). `TaskModel`'s `@Version` stays as the live back-stop it is, with no domain
-  surface. The imports are fenced (`docs/specs/2026-08-14-user-data-import.md` sections 6 and 8) and so
-  are the exports (`docs/specs/2026-08-15-export-row-fencing.md`). What is left is two halves. **The
-  writers with a dangerous pair that are still exposed**: `PinModel` and `BoardModel`, whose exposure
-  needs two simultaneous requests from the same owner and whose loss the user repairs by repeating the
-  action, which is why they were left out of the export lot. **The rule that catches the writers
-  nobody fenced**: `ImportStateMergedOutsideTransaction`'s reach is one package, so the `exports`
-  package has no static guard on the shape it now holds. Widening it is one line in
-  `config/detekt/detekt.yml`; renaming it, which its own KDoc anticipates, touches eight files. The
-  seven entities with no dangerous pair are insert-only, single-actor or already compare-and-set, and
-  are named in the export spec's section 8 so nobody re-derives the list.
-- **A task handler is never told it lost its lease.** `TaskContext.renewLease` is typed `() -> Unit`
-  while `TaskQueueInterface.renewLease` answers a `Boolean` documenting that the caller "must stop
-  working on it"; `TaskProcessor` coerces the answer away. A long handler therefore keeps spending
-  disk and CPU on work it can no longer publish. Filed out of the export completion lot
-  (`docs/specs/2026-08-27-export-build-completion.md` section 8) with its real reach, which is the
-  reason it was not done there: `() -> Boolean` is not assignable to a `() -> Unit` parameter in
-  Kotlin, so **both** handlers break at compile time, and the natural repair is a lambda that swallows
-  the answer again, hiding the defect better than today. The import half is the one that matters, its
-  runner writing into account data continuously. An abandonment must also be excluded from the export
-  builder's failure net, or an evicted attempt writes `FAILED` over a row whose winner is still
-  building. Correctness no longer depends on it: the promote now sits inside the publishing fence.
-- **`EbeanTaskQueue.claimNext` kills a task whose handler may still be running.** It moves an
-  attempts-exhausted task to `DEAD` inline, without regard for handlers in flight, which is an argued
-  decision (`docs/specs/2026-07-22-user-data-export.md` section 15) that the export sweep now has to
-  work around: its interrupted-build pass carries a `PT6H` grace purely because a dead task does not
-  mean no builder is working. An account whose staging outlasts that grace can still have a live
-  builder condemned under it, and the builder then discards a complete archive. The upstream fix is to
-  not kill a task whose handler holds a live lease. Named by the export completion lot.
-- **Two defects in the import half, found while mirroring it.** `ReapAbandonedUserDataImports.reap()`'s
-  KDoc names the wrong pass as the reason for its ordering: `abandonStaleUploads` selects rows that
-  have no `storageKey` yet, so it is `failInterruptedRuns` that makes a key-holding row terminal. And
-  `ImportLifecycle.start()` calls its sweep bare, outside its own `safe` wrapper, so a sweep that
-  throws fails the boot; the export half was corrected in its own lot, this one was left alone on
-  purpose.
+- **`PinModel` and `BoardModel` keep a dangerous read-then-write pair unfenced, and the `exports` package has no
+  static guard.** `docs/adr/0016-fence-by-compare-and-set.md`; `docs/specs/2026-08-27-export-build-completion.md`
+  section 8, last item (which also names the seven entities that need no fence).
+- **A task handler is never told it lost its lease**: `TaskContext.renewLease` is `() -> Unit` where the queue
+  answers `Boolean`. Its reach, and why it was not done in the lot that found it:
+  `docs/specs/2026-08-27-export-build-completion.md` section 8, first item.
+- **`EbeanTaskQueue.claimNext` kills a task whose handler may still hold a live lease**, which the export sweep's
+  `PT6H` grace only makes improbable. `docs/specs/2026-08-27-export-build-completion.md` section 8, fourth item.
+- **Two defects in the import half, found while mirroring it.** `ReapAbandonedUserDataImports.reap()`'s KDoc names
+  the wrong pass for its ordering: `abandonStaleUploads` selects rows with no `storageKey` yet, so it is
+  `failInterruptedRuns` that makes a key-holding row terminal. And `ImportLifecycle.start()` calls its sweep
+  outside its own `safe` wrapper, so a throwing sweep fails the boot; the export half was fixed in its own lot.
+  *(Reasoning is only here.)*
 - **The export reclaim pass has no order, and a permanently refused delete blocks its head.**
-  `findReclaimableTerminal` converges only because acting on a row destroys its own selection
-  predicate, which is false for exactly the row whose delete throws, the case the lot pins on purpose.
-  With `exports.sweep_batch_size` such rows, the pass stalls for good. Order the selection, or mark
-  the refusals. Named by the export completion lot's holistic review.
-- **`ReapExpiredUserDataExports` runs three passes under a name that says one**, and
-  `ExportArchiveKey.DIRECTORY` has two remaining rivals: `ReapOrphanedStorage.EXPORTS_PREFIX` in the
-  same module, and the `"tmp"` segment duplicated across `ExportDataDirectoryCheck` and the three
-  filesystem stores. The rename and the unification are each their own task
-  (`agents/workflow.md`, Scope). The class KDoc was updated in the lot so it says what it really does.
-- **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the
-  fake-store base, so a case driven by the mock still sees the fake store and an assertion on it would
-  pass vacuously, the mirror of the failure mode the split was built to prevent. No case does it
-  today. The shape that closes both directions is a shared base with two siblings. Named by the export
-  completion lot's block 3 review.
-- **`TaskQueueBootIntegrationTest` counts every row in `tasks` and expects exactly one**, in a profile
-  shared with twenty classes, one of which deletes an account and so enqueues a task. Counting its own
-  kind would preserve the intent and remove the coupling. Surfaced by an unreproduced single failure
-  during the export completion lot, whose cause was found to be elsewhere and fixed; this one was left
-  because the mechanism was never demonstrated, and repairing an unexplained symptom hides the next
-  one.
-- **The export endpoints publish a status they do not answer, and no error at all.**
-  `MeExportController` carries no `@APIResponse`, so SmallRye reads each status off the return type
-  and a runtime `ResponseBuilder` carries none: `POST /api/v1/me/exports` is published as `200` where
-  it answers `202`, and the only failures in `docs/openapi.json` are the framework's own `401` and
-  `403`. None of the refusals a client has to handle is there: `409 EXPORT_ALREADY_IN_PROGRESS`,
-  `429 EXPORT_TOO_SOON`, `404 EXPORT_DOES_NOT_EXIST`, `409 EXPORT_NOT_READY`, `410 EXPORT_GONE`, and
-  the download's `206` and `416`. **The import half of this defect is fixed and the export half is
-  not**: `MeImportController` declares every status by hand, with the reason in a comment on the
-  first one (`docs/specs/2026-08-14-user-data-import.md` section 7). Two halves of one feature now
-  describe themselves differently, which is the drift this item exists to close. Named by the import
-  lot and deliberately left out of it.
-- **A malformed request body does not answer in this project's error format, and the import lot moved
-  which bodies land there.** `agents/engineering.md` requires one error format everywhere, framework
-  generated malformed payloads included, and no mapper covers Jackson's own failures:
-  `ConstraintViolationExceptionMapper` catches only the bodies that deserialize and then fail
-  `@Valid`, so a body that fails to deserialize gets Quarkus's own `400` rather than a `ProblemDetail`
-  built by `ProblemResponses`. The user data import declared `jackson-module-kotlin` on
-  `api-storage-filesystem`, and an `implementation` dependency reaches `api-application`'s runtime
-  classpath, where `quarkus-kotlin` registers `KotlinModule` on the CDI `ObjectMapper` with no opt-in
-  (`docs/specs/2026-08-14-user-data-import.md` section 5). Every REST request body now binds through
-  it, and a field a DTO declares non-nullable but the body omits fails inside Jackson instead of in
-  the Kotlin constructor's null check. Nothing asserts either shape. To decide: an exception mapper
-  over `JsonProcessingException` and its `MismatchedInputException` subtypes, and which `code` it
-  publishes. Named by the import lot and deliberately left out of it.
-- **`EbeanTaskQueue.reapExpired` selects every expired lease at once.** `findList()` carries no
-  `setMaxRows`, so one sweep materialises and re-saves as many task rows as have expired, row by row
-  inside a single transaction, on the one write connection. Bound the selection the way a claim is
-  bounded. Named by the import lot and deliberately left out of it.
-- **`ImportStateMergedOutsideTransaction` reads a construction as an insert.** A `save` whose argument
-  starts with an upper-case callee is passed as a fresh row, so a row rebuilt from one read elsewhere
-  (`UserDataImport(id = old.id, ...)`) walks through the rule untouched. The inversion is deliberate
-  and its reasons are in the rule's KDoc; what is open is whether a second condition can tell a
-  rebuild from an insert without type resolution. Named by the import lot and deliberately left out
-  of it.
-- **The tag respelling is a contract change nobody published.** `PUT /api/v1/pins/{pinId}/tags` with
-  `Landscape` when `landscape` is stored now answers the stored spelling and creates no second tag
-  (`docs/specs/2026-08-14-user-data-import.md` section 12), and `docs/openapi.json` says nothing about
-  it: the endpoint carries no `@Operation` and no summary of the ASCII fold. Named by the import lot
-  and deliberately left out of it.
-- **An absent `offset` on a chunk upload defaults to 0, undocumented.**
-  `PUT /api/v1/me/imports/{id}/archive` treats a missing `offset` as the start of the upload, with the
-  reason at the site, but the parameter is published as a plain nullable integer with no default and
-  spec section 7 writes it as `?offset=N`. A client reading either cannot tell whether omitting it
-  starts the upload or is refused. Named by the import lot and deliberately left out of it.
-- **Rewrite the fourteen P2 items that predate the two-line form.** They average 7.6 lines.
-  `docs/adr/0018-a-block-is-a-pull-request.md`, Context, holds the measurement and the reason.
+  `findReclaimableTerminal` converges only because acting on a row destroys its own selection predicate, which is
+  false for exactly the row whose delete throws. With `exports.sweep_batch_size` such rows it stalls for good.
+  Order the selection, or mark the refusals. *(Reasoning is only here.)*
+- **`ReapExpiredUserDataExports` runs three passes under a name that says one**
+  (`docs/specs/2026-08-27-export-build-completion.md` section 8, third item), and `ExportArchiveKey.DIRECTORY`
+  still has two rivals: `ReapOrphanedStorage.EXPORTS_PREFIX`, and the `"tmp"` segment duplicated across
+  `ExportDataDirectoryCheck` and the three filesystem stores. Rename and unification are each their own task.
+- **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the fake-store
+  base, so a case driven by the mock still sees the fake store and an assertion on it would pass vacuously. No
+  case does it today; the shape that closes both directions is a shared base with two siblings.
+  *(Reasoning is only here.)*
+- **`TaskQueueBootIntegrationTest` counts every row in `tasks` and expects exactly one**, in a shared profile where
+  another class enqueues one (`docs/handoffs/2026-08-27 - handoff - export-build-completion.md`, pitfall 7).
+  Counting its own kind removes the coupling. Left open on purpose: the mechanism was never reproduced, and
+  repairing an unexplained symptom hides the next one. *(Last sentence: reasoning is only here.)*
+- **`MeExportController` declares no `@APIResponse`**, so `docs/openapi.json` publishes `200` where the endpoint
+  answers `202` and carries none of the export refusals a client must handle. The import half is done and shows
+  the shape to copy: `docs/specs/2026-08-14-user-data-import.md` section 7.
+- **A request body that fails to deserialize gets Quarkus's own `400`, not a `ProblemDetail`**, and the import put
+  every REST body through `KotlinModule` (`docs/specs/2026-08-14-user-data-import.md` section 5), which moved
+  which bodies land there. To decide: a mapper over `JsonProcessingException` and which `code` it publishes.
+- **`EbeanTaskQueue.reapExpired` selects every expired lease at once**: `findList()` carries no `setMaxRows`, so
+  one sweep re-saves every expired row inside a single transaction on the one write connection. Bound it the way
+  a claim is bounded.
+- **`ImportStateMergedOutsideTransaction` reads a construction as an insert**, so a row rebuilt from an earlier
+  read walks through untouched. The inversion is deliberate and the rule's own KDoc says why; open is whether a
+  second condition can tell a rebuild from an insert without type resolution.
+- **The tag respelling is a contract change nobody published.** `PUT /api/v1/pins/{pinId}/tags` answers the stored
+  spelling and `docs/openapi.json` says nothing: no `@Operation`, no summary of the ASCII fold.
+  `docs/specs/2026-08-14-user-data-import.md` section 12.
+- **An absent `offset` on a chunk upload defaults to 0, undocumented.** `PUT /api/v1/me/imports/{id}/archive`;
+  `docs/specs/2026-08-14-user-data-import.md` section 7 writes the parameter as `?offset=N` and states no default.
 - **Measure what review costs and what it returns**, from the session transcripts: the share of
   spend that goes to reviews, and the findings per review by kind. Re-scoped from ADR 0014's
   re-measurement by `docs/adr/0018-a-block-is-a-pull-request.md`, which changed the regime without
