@@ -98,19 +98,18 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
   nowhere else, and that its pointer target argues the fix was dropped. `docs/adr/0019-review-before-the-pull-request.md`,
   Findings filed, names them all.
 - **Decisions 4 and 5 of ADR 0018 cannot both hold for an over-budget block.** Inline Act is justified by a
-  subagent being unable to interrupt, yet a block over budget may be dispatched, and those are the blocks most
-  likely to surface the adjacent defect the tier-2 question is mandatory for. To decide: drop the escape hatch,
-  or say a dispatched block returns its tier-2 discoveries in its report.
+  subagent being unable to interrupt, yet a block over budget may be dispatched, which is where the mandatory
+  tier-2 question becomes impossible. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
 - **A specification freezes at delivery and the regime requires it to keep changing.** Under one branch per
-  block it is delivered in an early block's pull request, while ADR 0018 decision 3 and `agents/workflow.md`
-  require later blocks to correct it, name deferred consumers in it, and record adjacent items in it. To
-  decide: freeze a lot's spec and ADR when its last block merges, and say which block carries them.
-- **A holistic finding against an already merged block has no legitimate exit.** It is not fixable inside the
-  lot without pushing the last block past its budget, and the backlog is now reserved for what the operator
-  refused or what belongs to another lot. Restore Wrap's count of them: that number is the rework series pays.
-- **The ADR-existence check was deleted with `agents/reviews/plan.md` and moved nowhere.** No surviving mandate
-  asks whether a document's decisions were recorded as an ADR, or tests the one-line justification for its
-  absence that `agents/workflow.md` still requires. It belongs in `evidence` or `falsifiability`, which always run.
+  block it is delivered in an early block's pull request, while later blocks must correct it and record
+  adjacent items in it. To decide: freeze a lot's spec when its last block merges, and say which block carries
+  it. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
+- **A holistic finding against an already merged block has no legitimate exit**, being neither fixable in the
+  lot nor the operator's refusal nor another lot's. Restore Wrap's count of them: that number is the rework
+  series pays. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
+- **The ADR-existence check was deleted with `agents/reviews/plan.md` and moved nowhere.** Nothing now tests
+  the one-line justification `agents/workflow.md` accepts for an absent ADR; it belongs in `evidence` or
+  `falsifiability`. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
 - **`AGENTS.md` says no local command covers the image build or the `docs/openapi.json` sync**, and
   `ExportDataDirectoryImageTest` moved the Dockerfile half of that into the gate. Narrow the sentence.
 - **`docs/backlog.md` and `agents/workflow.md` both describe a `P0` band this file does not have**, and name

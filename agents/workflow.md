@@ -146,6 +146,11 @@ mutation after the fact is what is left to show they hold.
    Record an ADR in `docs/adr/<NNNN>-<slug>.md` unless the work demonstrably settles no
    architectural question (state the one-line justification for its absence). A delivered ADR is
    never rewritten; only its `Status` field may change.
+   **A lot whose subject is this process writes its ADR and no separate spec.** Its decisions are
+   the specification, so a second document would restate them and drift. The ADR then carries what
+   the spec would have owed: the block table, the third angle with the reason it was chosen, and the
+   adjacent backlog items with the reason for any left open. Everything else in this phase binds it
+   unchanged. This exception is for the agents documents only, never for product work.
    **The three spec angles run before the user reads it**, their findings are closed, and the
    corrected document is what goes for approval: the user's attention is spent on what only they
    can decide, not on defects an angle finds. Approval ends the phase and gates the code.
@@ -156,22 +161,27 @@ mutation after the fact is what is left to show they hold.
 4. **Verify, entirely on the local branch. No pull request exists yet.** Run the full gate (run, not
    described). **On the last block of the lot, write Wrap's documents first** (phase 6a and 6b):
    they belong in this block's diff, and a review that runs after them reads them.
-   Then a **block review** by a fresh subagent over the block's commit range: the implementer never
-   reviews its own work. In tier Spec, on the last block, the **holistic review** runs too, over
-   `git diff <lot base>..HEAD`, so it reads the whole lot. Findings are closed here, on the branch.
-   **Opening a pull request is handing it over, so it belongs to the next phase and not this one.**
-   There is no such thing as an open pull request the user has not been offered: it is in their
-   list, it notifies them, and they can merge it. A review still running while one is open is a
-   review whose findings can arrive after the merge.
-5. **Integrate.** Push, open the pull request, then **wait for its continuous integration run to
-   settle and hand the user the link with the result named**, green or not. Handing over a link
-   while the run is pending only moves "the merge precedes the evidence" from the reviews onto
-   continuous integration: `enforce_admins` is false, so nothing but this rule holds the merge.
-   Measured on PR #74, whose `validate / gate` reported success 4 minutes 45 after the merge.
+   Then a **block review** by a fresh subagent over the block's commit range, named as a fixed pair
+   of commits and not as `HEAD`: the implementer never reviews its own work, and a floating ref moves
+   under a reviewer while its own findings are being closed. In tier Spec, on the last block, the
+   **holistic review** runs too, over `git diff <lot base>..<this block's head commit>`, so it reads
+   the whole lot. Findings are closed here, on the branch.
+   **No pull request for this block exists during any of it.** There is no such thing as an open
+   pull request the user has not been offered: it is in their list, it notifies them, and they can
+   merge it. A review still running while one is open is a review whose findings can arrive after
+   the merge. Earlier blocks of the same lot have of course already had theirs.
+5. **Integrate.** Push and **open the pull request as a draft**: GitHub refuses a merge on a draft,
+   which is what actually holds it while the run finishes. Waiting without the draft would only
+   delay the message, not the merge, `enforce_admins` being false. Then wait for continuous
+   integration to settle, mark the pull request ready, and hand the user the link with the result
+   named. Measured on PR #74, whose `validate / gate` reported success 4 minutes 45 after the merge.
    The body says what the diff does not say for itself, in particular any surface whose consumer
-   arrives in a later block. **It is merged only after the human has reviewed it** (rebase only,
-   no local-merge exemption), approval never assumed. Then
-   clean up the branch or worktree, and the next block starts from `main`.
+   arrives in a later block. **It is merged only after the human has reviewed it** (rebase only, no
+   local-merge exemption), approval never assumed.
+   **A red run, or a change the human asks for, returns the block to Verify**: put the pull request
+   back to draft, commit the fix, re-run the gate, and re-run the block review over the new commits
+   only. A merge never rests on a review that did not read what is being merged. Then clean up the
+   branch or worktree, and the next block starts from `main`.
 6. **Wrap.** Once per lot. Two halves, and the first runs inside the last block, before its Verify:
    (a) the backlog reconciled, an item closed by a block having been deleted in that block's own
    pull request; (b) the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current
@@ -194,8 +204,8 @@ the reasoning that produced them. Reviewers report findings and never edit.
 | Review | When | Mandate |
 | --- | --- | --- |
 | Spec angles | On the draft spec, before the user reads it | `evidence` and `falsifiability` always, plus one of `precedent`, `security`, `operations`, `testability` (three) |
-| Block | In Verify, after the gate is green, on the branch, before any pull request opens | `block` |
-| Holistic | In Verify on the last block of a tier-Spec lot, whatever its block count, on the branch, before any pull request opens | `holistic` |
+| Block | In Verify, after the gate is green, on the branch, before this block's pull request opens | `block` |
+| Holistic | In Verify on the last block of a tier-Spec lot, whatever its block count, on the branch, before that block's pull request opens | `holistic` |
 
 Every mandate is `agents/reviews/<name>.md`; the table names them without the path. Angles dispatch
 in parallel, so a pass costs the slowest angle, not their sum.
@@ -246,16 +256,18 @@ the brief that the agent works its inbox to empty before reporting.
 ## The backlog
 
 - **Open items only.** No shipped section: completed work is recorded by its handoff, git history
-  and tag. An item a block closes is deleted in that block's PR; Wrap reconciles on `main`.
+  and tag. An item a block closes is deleted in that block's PR; Wrap reconciles in the last block's
+  diff, and the result is re-checked on `main` after that merge.
 - **A lot closes the backlog items adjacent to its subject.** Binding, not advisory
   (`docs/adr/0018-a-block-is-a-pull-request.md`, decision 6): the spec names every adjacent item,
   and for each one it leaves open it states why, which is the operator's to accept. A lot with no
   adjacent item says so. An adopted item that does not fit the block's budget becomes its own
   block; it is not thereby dropped.
-- **An item holds in two lines**, plus a pointer to the handoff section carrying its reasoning.
-  The reasoning is already written there, and an entry long enough to need scrolling is an entry
-  nobody rereads. **There is no cap on how many items the backlog holds**: a cap discards findings
-  to satisfy a number, and what grew here was the entries, not their count.
+- **An item holds in two lines**, plus a pointer to the dated document carrying its reasoning, with
+  the one exception `agents/writing.md` states: an item whose reasoning lives nowhere else keeps it,
+  and says so. An entry long enough to need scrolling is an entry nobody rereads. **There is no cap
+  on how many items the backlog holds**: a cap discards findings to satisfy a number, and what grew
+  here was the entries, not their count.
 - **A review finding has four exits**: fixed inside the lot; a backlog item (work someone will
   do); an accepted limit (written where the decision lives, never copied to the backlog); or
   refused, with the reason in the handoff. Wrap states which exit each finding took. The default
