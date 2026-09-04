@@ -14,6 +14,11 @@ series, so nothing is in flight while you read and nothing is built on this one 
 stops this block and no other work. Widen a range that proves insufficient and say so in the
 report. What the blocks do to each other is the holistic review's, not yours.
 
+**Read the commit range your brief names, never the working tree.** Series is supposed to mean
+nothing moves while you read, and that premise has already been falsified once: the lot that wrote
+it merged a block mid-review and cut a follow-on branch editing the files under review. Pin
+yourself to the named commits and you review what was actually submitted.
+
 **Tier Direct writes no specification.** There, the request as the brief states it is what the diff
 answers to, and every criterion below naming the specification reads against that request instead.
 
@@ -23,9 +28,14 @@ and a startup check surfacing a bare `IOException` where it should have named th
 (`docs/adr/0018-a-block-is-a-pull-request.md`, Context). It has also caught tests that could not
 fail and documents that had stopped describing the code. Expect every one of those shapes.
 
-**Two things are not yours.** Branch coverage: the gate enforces 100 % per package and has already
-passed. Whether the suite is green: that same gate run establishes it, and continuous integration
-re-establishes it on the pull request afterwards. Do not spend the review re-deriving either.
+**Two things are not yours.** Branch coverage inside the gate perimeter: the gate enforces 100 % per
+package there and has already passed. `api-application` and the Ebean model packages are **outside**
+it (`agents/engineering.md`, Gate perimeter), so a new conditional in the composition root or the
+end-to-end suite is yours. Whether the suite is green: that same gate run establishes it.
+
+**What runs only after you.** Continuous integration adds the checks no local command reproduces:
+the container image build, its smoke test, and the `docs/openapi.json` sync. They run for the first
+time once you have finished, so a failure there produces a fix commit no block review reads.
 
 ## Part A: judge the tests, in isolation
 
@@ -48,9 +58,11 @@ worth reviewing.
    asserted, or only the happy path?
 6. **Red before green.** Run `git log --oneline` over the block's commits: a test-only commit
    (`test(scope): ...`) precedes its implementation commit, and its message body carries the red it
-   produced. Take that output as the evidence. Where the body is empty or the history was squashed,
-   report the gap as a finding against the process rather than against the code. Never infer
-   compliance from the absence of evidence.
+   produced. Take that output as the evidence. **Where the body is empty or the history was squashed,
+   check out the test commit and run the test yourself**: in series nothing else is using the tree,
+   so the detached worktree the old rule required is no longer needed. Report the gap as a finding
+   against the process rather than against the code. Never infer compliance from the absence of
+   evidence, and never report the gap without having tried to close it.
 
 **State a verdict on the tests before continuing.** If Part A produced a CRITICAL finding, say so
 explicitly: the implementation review below is provisional until the tests are fixed.
