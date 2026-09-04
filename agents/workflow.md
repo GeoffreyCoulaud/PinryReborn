@@ -163,10 +163,14 @@ mutation after the fact is what is left to show they hold.
    There is no such thing as an open pull request the user has not been offered: it is in their
    list, it notifies them, and they can merge it. A review still running while one is open is a
    review whose findings can arrive after the merge.
-5. **Integrate.** Push, open the pull request, and hand the user the link with the state of its
-   continuous integration run named. Its body says what the diff does not say for itself, in
-   particular any surface whose consumer arrives in a later block. **It is merged only after the
-   human has reviewed it** (rebase only, no local-merge exemption), approval never assumed. Then
+5. **Integrate.** Push, open the pull request, then **wait for its continuous integration run to
+   settle and hand the user the link with the result named**, green or not. Handing over a link
+   while the run is pending only moves "the merge precedes the evidence" from the reviews onto
+   continuous integration: `enforce_admins` is false, so nothing but this rule holds the merge.
+   Measured on PR #74, whose `validate / gate` reported success 4 minutes 45 after the merge.
+   The body says what the diff does not say for itself, in particular any surface whose consumer
+   arrives in a later block. **It is merged only after the human has reviewed it** (rebase only,
+   no local-merge exemption), approval never assumed. Then
    clean up the branch or worktree, and the next block starts from `main`.
 6. **Wrap.** Once per lot. Two halves, and the first runs inside the last block, before its Verify:
    (a) the backlog reconciled, an item closed by a block having been deleted in that block's own
@@ -190,8 +194,8 @@ the reasoning that produced them. Reviewers report findings and never edit.
 | Review | When | Mandate |
 | --- | --- | --- |
 | Spec angles | On the draft spec, before the user reads it | `evidence` and `falsifiability` always, plus one of `precedent`, `security`, `operations`, `testability` (three) |
-| Block | In Verify, after the gate is green, before the user reads the pull request | `block` |
-| Holistic | In Verify on the last block of a lot that has more than one, before that pull request merges | `holistic` |
+| Block | In Verify, after the gate is green, on the branch, before any pull request opens | `block` |
+| Holistic | In Verify on the last block of a tier-Spec lot, whatever its block count, on the branch, before any pull request opens | `holistic` |
 
 Every mandate is `agents/reviews/<name>.md`; the table names them without the path. Angles dispatch
 in parallel, so a pass costs the slowest angle, not their sum.
@@ -233,8 +237,9 @@ the brief that the agent works its inbox to empty before reporting.
   `main` bypasses CI).
 - **One block, one PR, in series**: the next block does not start until the current one is merged.
   Each PR branches from `main`, so there is no stack and no cascading rebase.
-- **A PR run costs about 12 minutes**, container image included. A lot pays that per block, and
-  that is the accepted price of the operator reading about 300 lines at a time.
+- **A PR run costs about 7 minutes on the median and up to 13**, container image included (twelve
+  most recent `pr.yml` runs). A lot pays that per block, serially now that Integrate waits for it,
+  and that is the accepted price of the operator reading about 300 lines at a time.
 - **Clean tree before reporting completion**: `git status --porcelain` shown at wrap.
 - **"Leave as-is" stays available** as an integration option.
 

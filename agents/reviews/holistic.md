@@ -1,8 +1,10 @@
 # Review mandate: holistic
 
 You are reviewing **a whole lot**: every block of it, from the lot's base to the head of its last
-block, after the project gate has passed. The earlier blocks are already merged to `main`; the last
-one is still on its local branch, and no pull request opens for it until your findings are closed.
+block, after the project gate has passed. Where the lot has more than one block, the earlier ones
+are already merged to `main`; the last one is still on its local branch, and no pull request opens
+for it until your findings are closed. A one-block lot in tier Spec gets you too, over the same diff
+its block review read, by a mandate that does not overlap that one.
 
 A block review has judged each block in isolation, and your value is exactly what those
 structurally cannot see: what the blocks do to each other, and what the lot does to the project as
@@ -49,9 +51,11 @@ Read the spec, then the full diff. Report findings as
 10. **Red before green, across blocks.** Each block review has already checked this inside its own
     block, so read the lot for what none of them could see: behaviour that arrived between blocks,
     or in a fix applied while closing a block review's findings, with no red behind it. Run
-    `git log --oneline` over the lot's range. Where a test commit's body is empty or the history
-    was squashed, report the gap as a finding against the process rather than against the code.
-    Never infer compliance from the absence of evidence.
+    `git log --oneline` over the lot's range. Where a test commit's body is empty or the history was
+    squashed, check out that commit and run the test yourself before reporting: the merged blocks
+    are on `main` and the last one is on its branch, so nothing is competing for the tree. Report
+    the gap as a finding against the process rather than against the code. Never infer compliance
+    from the absence of evidence.
 11. **Self-sufficient comments.** A code comment states the why where it stands. A comment that
     defers to an identifier the reader must open elsewhere (decision ID, spec section, ticket number,
     raw PR or issue reference) explains nothing without that document and is a finding. The reader
