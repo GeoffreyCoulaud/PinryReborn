@@ -464,8 +464,11 @@ Each names the output that fails it.
 **Block 1**
 
 - A1. `ls agents/reviews/` lists `spec.md` and `holistic.md` and nothing else; `spec.md` contains the
-  ADR-existence check as a numbered criterion; `holistic.md` contains neither "block review" nor
-  "pull request".
+  ADR-existence check as its own section; `holistic.md` contains neither "block review" nor a
+  pull request as the thing it reads. *(Corrected in block 1: the first draft said "nor 'pull
+  request'", and the mandate has to name the closing block's pull request, D12, and the human's
+  reading of each, D1. The grep that fails it is `grep -n "block review" agents/reviews/holistic.md`
+  returning a line, or its first paragraph naming a pull request as the artefact.)*
 - A2. `grep -n "may still be dispatched" agents/workflow.md` returns nothing;
   `grep -n "block review" agents/*.md AGENTS.md` returns nothing.
 - A3. `head -12` of ADRs 0001, 0010, 0014, 0018 and 0019 names `0020`; the status lines of ADRs

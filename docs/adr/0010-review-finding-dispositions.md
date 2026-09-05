@@ -1,6 +1,8 @@
 # 0010. A review finding has four exits, and the backlog is banded by nature
 
-Status: Accepted
+Status: Accepted; the default exit is changed by `0018-a-block-is-a-pull-request.md` decision 5, and
+`0020-two-reviews-and-an-inline-act.md` decision 4 gives a holistic finding against an already
+merged block its exit, the closing block
 Date: 2026-08-12
 Specification: `docs/specs/2026-08-12-p2-debt-triage.md`
 Related: `docs/adr/0001-adopt-agents-baseline.md` (the workflow whose Wrap phase feeds the backlog),

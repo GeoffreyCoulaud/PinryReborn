@@ -77,30 +77,34 @@ Discuss and Spec run once for the lot. Then **Act, Verify and Integrate run once
 request is merged before the next block starts. Wrap closes the lot.
 
 1. **Discuss** : Explore the project, read the backlog, and ask the user questions to align. No code, no files.
-2. **Spec** : One document, `docs/specs/<ISO date>-<slug>.md` describing in detail the work to do. Also reviewed by the
-   user, in addition to an autonomous adversarial agent review.
-3. **Act.** One block. A block that exceeds the budget anyway may still be dispatched, and the brief says why. Strict
-   TDD as `agents/engineering.md` states it. An adjacent defect found here takes one of the three tiers under Scope, and
-   tier 2 stops the work to ask.
-4. **Verify, entirely on the local branch. No pull request exists yet.** Run the full gate. **On the last block of the
-   lot, write Wrap's documents first** : they belong in this block's diff, and a review that runs after them reads them.
+2. **Spec** : One document, `docs/specs/<ISO date>-<slug>.md` describing in detail the work to do, its block table
+   included. Reviewed once by an adversarial subagent on `agents/reviews/spec.md`, its findings closed, then by the
+   user. It is delivered in the first block's pull request and freezes when the lot's last block merges
+   (`agents/writing.md`). A lot whose subject is this process writes its ADR and no separate spec.
+3. **Act.** One block, written inline by the main loop, never dispatched: a subagent cannot stop to ask, and tier 2
+   requires it (`docs/adr/0020-two-reviews-and-an-inline-act.md`). Strict TDD as `agents/engineering.md` states it. An
+   adjacent defect found here takes one of the three tiers under Scope, and tier 2 stops the work to ask.
+4. **Verify, entirely on the local branch. No pull request exists yet.** Run the full gate. **On the last code block of
+   the lot, write the handoff first**, then dispatch the holistic review (`agents/reviews/holistic.md`) over the whole
+   lot, `git diff <lot base>..HEAD`, merged blocks included: it reads the handoff, and its findings become the closing
+   block, the lot's last, with its own pull request. Tier Direct skips it.
 5. **Integrate.** Push and open the pull request. It is merged only after the human has reviewed it (rebase only, no
    local-merge exemption), approval never assumed. **A red run, or a change the human asks for, returns the block to
-   Verify**:, commit the fix, re-run the gate, and re-run the block review over the new commits only. A merge never
-   rests on a review that did not read what is being merged. Then clean up the branch or worktree, and the next block
-   starts from `main`.
-6. **Wrap.** Once per lot. Two halves, and the first runs inside the last block, before its Verify:
-   (a) the backlog reconciled, an item closed by a block having been deleted in that block's own pull request; (b) the
-   handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`: current state, what was built, pitfalls, what is not
-   validated, next step. The second half runs after that pull request merges: (c) tag if the spec called for a release;
-   (d) report what was done and the friction points, including the third spec angle chosen with the reason given for it,
-   and every tier-2 question asked with the answer it got. That report is the input to Improve.
+   Verify**: commit the fix, re-run the gate. Then clean up the branch or worktree, and the next block starts from
+   `main`.
+6. **Wrap.** Once per lot. The first half is the closing block: (a) the holistic findings fixed, each named in the
+   handoff with its exit, and the count of those against an already merged block stated, that number being what series
+   costs in rework; (b) the backlog reconciled, an item closed by a block having been deleted in that block's own pull
+   request; (c) the handoff in `docs/handoffs/<ISO date> - handoff - <context>.md`, written in the last code block and
+   corrected here: current state, what was built, pitfalls, what is not validated, next step. The second half runs
+   after that pull request merges: (d) tag if the spec called for a release; (e) report what was done and the friction
+   points, and every tier-2 question asked with the answer it got. That report is the input to Improve.
 
 ## The backlog
 
 - **Open items only.** No shipped section: completed work is recorded by its handoff, git history and tag. An item a
-  block closes is deleted in that block's PR; Wrap reconciles in the last block's diff, and the result is re-checked on
-  `main` after that merge.
+  block closes is deleted in that block's PR; Wrap reconciles in the closing block's diff, and the result is re-checked
+  on `main` after that merge.
 - **A lot closes the backlog items adjacent to its subject.** Binding, not advisory
   (`docs/adr/0018-a-block-is-a-pull-request.md`, decision 6): the spec names every adjacent item, and for each one it
   leaves open it states why, which is the operator's to accept. A lot with no adjacent item says so. An adopted item
@@ -113,5 +117,5 @@ request is merged before the next block starts. Wrap closes the lot.
   (written where the decision lives, never copied to the backlog); or refused, with the reason in the handoff. Wrap
   states which exit each finding took. The default is the first: the backlog receives what the operator refused or what
   genuinely belongs to another lot, not what was merely out of the original scope.
-- **Banded by nature before priority**: Open work (P0, P1, P2), Known limits (pointers to documents), Before beta (dated
-  events). A limit is not debt.
+- **Banded by nature before priority**, four bands: Open work (`P0`, `P1`, `P2`; a priority may hold nothing), Known
+  limits (pointers to documents), Before beta (dated events), Features (the roadmap, unsequenced). A limit is not debt.

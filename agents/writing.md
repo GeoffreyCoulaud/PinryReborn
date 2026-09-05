@@ -16,9 +16,10 @@
 
 ## Rules
 
-- **A dated document freezes at delivery** (branch integrated), not at writing. After delivery, changes go in a new
-  dated document, cross-linked both ways, the old one marked
-  `Status: Superseded by <file>`.
+- **A lot's dated documents freeze when its last block merges**, not at writing and not at the first pull request that
+  carries them. Until then a block's pull request may correct them, in the `(Corrected: ...)` form at the sentence it
+  corrects, never a rewrite. After the freeze, changes go in a new dated document, cross-linked both ways, the old one
+  marked `Status: Superseded by <file>`.
 - **The backlog is the pressure valve**: findings the operator declined, or that genuinely belong to another lot, are
   proposed for it rather than done or lost. What the operator authorized is fixed in the lot instead.
 - **A backlog item holds in two lines**, plus a pointer to the dated document that carries its reasoning. Symptom and

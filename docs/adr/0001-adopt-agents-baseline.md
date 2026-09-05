@@ -1,8 +1,9 @@
 # 0001. Adopt agents-baseline v2.1.0
 
-Status: Accepted, review regime amended by `0014-review-budget-upstream.md`. The three reviews
-stand, in fresh subagents, never editing; what `0014` changes is their count, their placement and
-their timing, on measurements this ADR did not take.
+Status: Accepted, review regime amended by `0014-review-budget-upstream.md`, then by
+`0018-a-block-is-a-pull-request.md` and `0020-two-reviews-and-an-inline-act.md`. Of the three
+reviews this ADR adopted, two stand under `0020`, the specification's and the holistic, in fresh
+subagents, never editing; the block review is gone, and each pull request is read by the human alone.
 Date: 2026-07-23
 
 ## Context
