@@ -1,6 +1,7 @@
 # 0016. A row two actors write is fenced by compare-and-set, not by a version column
 
-Status: Proposed
+Status: Accepted; the rule's reach named below as the open half is widened by
+`docs/specs/2026-09-05-p2-debt-elimination.md` section 4.6
 Date: 2026-08-15
 Specification: `docs/specs/2026-08-15-export-row-fencing.md`
 Amends: `docs/backlog.md`, P2 item "Only `TaskModel` carries a version, so every other entity two

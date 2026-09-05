@@ -1,6 +1,8 @@
 # 0014. The review budget moves upstream, and block review runs behind the work
 
-Status: Proposed
+Status: Accepted; amended by `0018-a-block-is-a-pull-request.md` (the plan pass folded into the spec
+pass, six angles to three), `0019-review-before-the-pull-request.md` (reviews on the branch), and
+`0020-two-reviews-and-an-inline-act.md` (the block review removed, the three angles one review)
 Date: 2026-08-13
 Specification: `docs/specs/2026-08-13-review-regime-rework.md`
 Amends: `docs/adr/0001-adopt-agents-baseline.md`, whose review regime this changes. The three

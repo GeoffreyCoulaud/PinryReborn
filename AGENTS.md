@@ -6,7 +6,7 @@ long operations.
 
 Process, engineering norms and writing conventions live in separate documents; read the one your task needs:
 
-- `agents/workflow.md` : phases, tiers, review mandates, backlog rules.
+- `agents/workflow.md` : phases, tiers, the two reviews (mandates under `agents/reviews/`), backlog rules.
 - `agents/engineering.md` : TDD, coverage, gate perimeter, Kotlin and backend norms.
 - `agents/writing.md` : documentation regimes, language and style rules.
 - `docs/handoffs/` : the newest file is the entry point (current state, pitfalls, next step).
@@ -55,8 +55,10 @@ Twelve Gradle modules (`settings.gradle.kts`). Layering enforced by the build gr
 ## CI
 
 CI (`validate.yml`) is not a caller of `gate`: it enumerates the gate's parts. A check added to
-`gate` alone runs on no pull request. CI also builds the container image and checks
-`docs/openapi.json` sync; no local command covers either.
+`gate` alone runs on no pull request. CI also builds the container image and checks the
+`docs/openapi.json` sync. The gate covers neither: the `pre-commit` hook regenerates `docs/openapi.json`,
+`ImportDataDirectoryImageTest` and `ExportDataDirectoryImageTest` read the Dockerfile's ownership lines
+from inside the gate, and the image build itself runs only in CI.
 
 ## Gotchas
 

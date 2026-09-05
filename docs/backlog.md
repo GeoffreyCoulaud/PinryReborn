@@ -7,12 +7,12 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 
 - This file holds **open items only**. Do not keep a "shipped" log here: completed work is recorded by git
   history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*` tags.
-- **Three bands, by nature.** *Open work* is what someone will do. *Known limits* points at the document that
-  records each one and holds no copy of it. *Before beta* holds dated events no session can start early. A limit
-  is not debt and is not counted as debt.
+- **Four bands, by nature.** *Open work* is what someone will do. *Known limits* points at the document that
+  records each one and holds no copy of it. *Before beta* holds dated events no session can start early.
+  *Features* is the roadmap, unsequenced. A limit is not debt and is not counted as debt.
 - **Open work is grouped by priority**, not by module. `P0` = product decisions that shape the data model and
   the UI. `P1` = client ergonomics needed for the web UI and the browser extension. `P2` = operational debt
-  (not UI blockers).
+  (not UI blockers). A priority may hold nothing; `P0` holds nothing today.
 - **An item holds in two lines**: the symptom and where it lives, plus a pointer to the dated document that
   carries the reasoning. Never a copy of that reasoning (`agents/writing.md`, Rules). The exception is an item
   whose reasoning was only ever written here, which keeps it: dated documents are append-only, so compressing
@@ -47,80 +47,66 @@ in git history, the handoffs under `docs/handoffs/`, and the annotated `vX.Y.Z-*
 
 ### P2: Operational debt
 
+Every item below is taken by `docs/specs/2026-09-05-p2-debt-elimination.md`; the branch on each item is the
+block that closes it.
+
 - **`PinModel` and `BoardModel` keep a dangerous read-then-write pair unfenced, and the `exports` package has no
-  static guard.** `docs/adr/0016-fence-by-compare-and-set.md`; `docs/specs/2026-08-27-export-build-completion.md`
-  section 8, last item (which also names the seven entities that need no fence).
+  static guard.** `docs/adr/0016-fence-by-compare-and-set.md`; `docs/specs/2026-08-15-export-row-fencing.md`
+  section 8 (the two models, and the seven entities that need no fence);
+  `docs/specs/2026-08-27-export-build-completion.md` section 8, "the `exports` package still has no static guard".
+  Branches `fix/p2-debt-fences`, `fix/p2-debt-fence-rule`.
 - **A task handler is never told it lost its lease**: `TaskContext.renewLease` is `() -> Unit` where the queue
   answers `Boolean`. Its reach, and why it was not done in the lot that found it:
-  `docs/specs/2026-08-27-export-build-completion.md` section 8, first item.
+  `docs/specs/2026-08-27-export-build-completion.md` section 8, first item. Branch `fix/p2-debt-lost-lease`.
 - **`EbeanTaskQueue.claimNext` kills a task whose handler may still hold a live lease**, which the export sweep's
   `PT6H` grace only makes improbable. `docs/specs/2026-08-27-export-build-completion.md` section 8, fourth item.
+  Branch `fix/p2-debt-lost-lease`.
 - **Two defects in the import half, found while mirroring it.** `ReapAbandonedUserDataImports.reap()`'s KDoc names
-  the wrong pass for its ordering: `abandonStaleUploads` selects rows with no `storageKey` yet, so it is
-  `failInterruptedRuns` that makes a key-holding row terminal. And `ImportLifecycle.start()` calls its sweep
-  outside its own `safe` wrapper, so a throwing sweep fails the boot; the export half was fixed in its own lot.
-  *(Reasoning is only here.)*
+  the wrong pass for its ordering, and `ImportLifecycle.start()` calls its sweep outside its own `safe` wrapper.
+  `docs/specs/2026-08-27-export-build-completion.md` section 8, last item. Branch `fix/p2-debt-sweep-names`.
 - **The export reclaim pass has no order, and a permanently refused delete blocks its head.**
   `findReclaimableTerminal` converges only because acting on a row destroys its own selection predicate, which is
   false for exactly the row whose delete throws. With `exports.sweep_batch_size` such rows it stalls for good.
-  Order the selection, or mark the refusals. *(Reasoning is only here.)*
+  Order the selection, or mark the refusals. *(Reasoning is only here.)* Branch `fix/p2-debt-paged-sweeps`.
 - **`ReapExpiredUserDataExports` runs three passes under a name that says one**
   (`docs/specs/2026-08-27-export-build-completion.md` section 8, third item), and `ExportArchiveKey.DIRECTORY`
   still has two rivals: `ReapOrphanedStorage.EXPORTS_PREFIX`, and the `"tmp"` segment duplicated across
   `ExportDataDirectoryCheck` and the three filesystem stores. Rename and unification are each their own task.
+  Branch `fix/p2-debt-sweep-names`.
 - **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the fake-store
   base, so a case driven by the mock still sees the fake store and an assertion on it would pass vacuously. No
   case does it today; the shape that closes both directions is a shared base with two siblings.
-  *(Reasoning is only here.)*
+  *(Reasoning is only here.)* Branch `test/p2-debt-export-fixtures`.
 - **`TaskQueueBootIntegrationTest` counts every row in `tasks` and expects exactly one**, in a shared profile where
   another class enqueues one (`docs/handoffs/2026-08-27 - handoff - export-build-completion.md`, pitfall 7).
   Counting its own kind removes the coupling. Left open on purpose: the mechanism was never reproduced, and
-  repairing an unexplained symptom hides the next one. *(Last sentence: reasoning is only here.)*
+  repairing an unexplained symptom hides the next one. *(Last sentence: reasoning is only here.)* Refused by
+  `docs/specs/2026-09-05-p2-debt-elimination.md` D7; leaves with the handoff, branch `fix/p2-debt-lost-lease`.
 - **`MeExportController` declares no `@APIResponse`**, so `docs/openapi.json` publishes `200` where the endpoint
   answers `202` and carries none of the export refusals a client must handle. The import half is done and shows
-  the shape to copy: `docs/specs/2026-08-14-user-data-import.md` section 7.
+  the shape to copy: `docs/specs/2026-08-14-user-data-import.md` section 7. Branch `fix/p2-debt-openapi`.
 - **A request body that fails to deserialize gets Quarkus's own `400`, not a `ProblemDetail`**, and the import put
   every REST body through `KotlinModule` (`docs/specs/2026-08-14-user-data-import.md` section 5), which moved
   which bodies land there. To decide: a mapper over `JsonProcessingException` and which `code` it publishes.
+  Branch `fix/p2-debt-error-format`.
 - **`EbeanTaskQueue.reapExpired` selects every expired lease at once**: `findList()` carries no `setMaxRows`, so
   one sweep re-saves every expired row inside a single transaction on the one write connection. Bound it the way
-  a claim is bounded.
+  a claim is bounded. Branch `fix/p2-debt-paged-sweeps`.
 - **`ImportStateMergedOutsideTransaction` reads a construction as an insert**, so a row rebuilt from an earlier
   read walks through untouched. The inversion is deliberate and the rule's own KDoc says why; open is whether a
-  second condition can tell a rebuild from an insert without type resolution.
+  second condition can tell a rebuild from an insert without type resolution. Branch `fix/p2-debt-fence-rule`.
 - **The tag respelling is a contract change nobody published.** `PUT /api/v1/pins/{pinId}/tags` answers the stored
   spelling and `docs/openapi.json` says nothing: no `@Operation`, no summary of the ASCII fold.
-  `docs/specs/2026-08-14-user-data-import.md` section 12.
+  `docs/specs/2026-08-14-user-data-import.md` section 12. Branch `fix/p2-debt-openapi`.
 - **An absent `offset` on a chunk upload defaults to 0, undocumented.** `PUT /api/v1/me/imports/{id}/archive`;
   `docs/specs/2026-08-14-user-data-import.md` section 7 writes the parameter as `?offset=N` and states no default.
-- **The backlog compression lost an argument and mis-resolved three pointers.** Twelve findings against
-  `d644257f`, the worst being that the `renewLease` item's two sentences saying why the work matters exist
-  nowhere else, and that its pointer target argues the fix was dropped. `docs/adr/0019-review-before-the-pull-request.md`,
-  Findings filed, names them all.
-- **Decisions 4 and 5 of ADR 0018 cannot both hold for an over-budget block.** Inline Act is justified by a
-  subagent being unable to interrupt, yet a block over budget may be dispatched, which is where the mandatory
-  tier-2 question becomes impossible. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
-- **A specification freezes at delivery and the regime requires it to keep changing.** Under one branch per
-  block it is delivered in an early block's pull request, while later blocks must correct it and record
-  adjacent items in it. To decide: freeze a lot's spec when its last block merges, and say which block carries
-  it. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
-- **A holistic finding against an already merged block has no legitimate exit**, being neither fixable in the
-  lot nor the operator's refusal nor another lot's. Restore Wrap's count of them: that number is the rework
-  series pays. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
-- **The ADR-existence check was deleted with `agents/reviews/plan.md` and moved nowhere.** Nothing now tests
-  the one-line justification `agents/workflow.md` accepts for an absent ADR; it belongs in `evidence` or
-  `falsifiability`. `docs/handoffs/2026-09-04 - handoff - review-before-the-pull-request.md`.
-- **`AGENTS.md` says no local command covers the image build or the `docs/openapi.json` sync**, and
-  `ExportDataDirectoryImageTest` moved the Dockerfile half of that into the gate. Narrow the sentence.
-- **`docs/backlog.md` and `agents/workflow.md` both describe a `P0` band this file does not have**, and name
-  three bands where it carries five.
-- **ADR 0018 carries no back-link from the ADRs it amends, and ADR 0014 is still `Status: Proposed`** although
-  0018 cut its spec pass and folded its plan pass away. `agents/writing.md` requires cross-linking both ways.
+  Branch `fix/p2-debt-openapi`.
 - **Measure what review costs and what it returns**, from the session transcripts: the share of
   spend that goes to reviews, and the findings per review by kind. Re-scoped from ADR 0014's
   re-measurement by `docs/adr/0018-a-block-is-a-pull-request.md`, which changed the regime without
   answering it and dropped the third quantity (hours between consecutive implementers) as meaningless
-  once Act runs inline.
+  once Act runs inline. Refused by `docs/specs/2026-09-05-p2-debt-elimination.md` D2; leaves with the handoff,
+  branch `fix/p2-debt-lost-lease`.
 
 ## Known limits
 

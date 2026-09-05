@@ -1,6 +1,6 @@
 # 0017. The promote runs inside the transaction that publishes
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-27
 Specification: `docs/specs/2026-08-27-export-build-completion.md`
 
