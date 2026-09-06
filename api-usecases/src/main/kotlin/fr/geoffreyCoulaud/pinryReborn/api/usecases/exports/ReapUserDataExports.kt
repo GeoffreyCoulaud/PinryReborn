@@ -33,7 +33,7 @@ data class ExportSweepCounts(val failed: Int, val expired: Int, val reclaimed: I
  * batch: one bad row must not leave the rest unswept that run. Same shape as `ReapTombstonedAccounts`.
  */
 @Suppress("LongParameterList") // Four ports, the clock, the two Durations and the bound ARC cannot resolve.
-class ReapExpiredUserDataExports(
+class ReapUserDataExports(
     private val repository: UserDataExportRepositoryInterface,
     private val archiveStore: ExportArchiveStore,
     private val taskQueue: TaskQueueInterface,
@@ -122,7 +122,7 @@ class ReapExpiredUserDataExports(
     }
 
     /**
-     * Item-level isolation, as `ReapAbandonedUserDataImports` has: one row the store or the database
+     * Item-level isolation, as `ReapUserDataImports` has: one row the store or the database
      * refuses must not leave the rest of the sweep undone, and either can throw anything.
      */
     @Suppress("TooGenericExceptionCaught")

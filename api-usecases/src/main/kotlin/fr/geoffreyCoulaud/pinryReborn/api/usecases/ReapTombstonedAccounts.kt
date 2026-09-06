@@ -13,7 +13,7 @@ import java.time.Duration
  *
  * Not `@ApplicationScoped`: [tombstoneGrace] is a primitive ARC cannot resolve, so the bean is
  * produced in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for
- * `ReapExpiredUserDataExports`.
+ * `ReapUserDataExports`.
  *
  * The second logger in `api-usecases`: the cleaner's DB transaction can still throw (its disk half
  * is best-effort after Sequence 1), so each re-drive is isolated in its own try/catch and a failure

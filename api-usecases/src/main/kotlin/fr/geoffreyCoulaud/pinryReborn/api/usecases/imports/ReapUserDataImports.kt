@@ -18,7 +18,7 @@ import java.util.UUID
  * reclaims the bytes of terminal rows, and drops staged files past their age. Built by `ImportProducers`.
  */
 @Suppress("LongParameterList") // Four ports, the clock, and the two Durations ARC cannot resolve.
-class ReapAbandonedUserDataImports(
+class ReapUserDataImports(
     private val repository: UserDataImportRepositoryInterface,
     private val archiveStore: ImportArchiveStore,
     private val taskQueue: TaskQueueInterface,
@@ -28,8 +28,8 @@ class ReapAbandonedUserDataImports(
     private val stagedFileMaxAge: Duration,
 ) {
     /**
-     * The rows acted on, counting an abandonment, a failure and a reclamation alike. Abandonment runs
-     * first: it is what makes a row holding a promoted archive terminal, and reclaimable in this run.
+     * The rows acted on, counting an abandonment, a failure and a reclamation alike. The transitions run
+     * first: `failInterruptedRuns` is what makes a key-holding row terminal, so reclaimable in this run.
      */
     fun reap(): Int {
         val now = clock.now()
@@ -85,7 +85,7 @@ class ReapAbandonedUserDataImports(
     }
 
     /**
-     * Item-level isolation, as `ReapExpiredUserDataExports` has: one row the store or the database
+     * Item-level isolation, as `ReapUserDataExports` has: one row the store or the database
      * refuses must not leave the rest of the hour's sweep undone, and either can throw anything.
      */
     @Suppress("TooGenericExceptionCaught")

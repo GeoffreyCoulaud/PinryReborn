@@ -13,7 +13,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserRepositoryInte
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.Reauthenticator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapUserDataExports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.UserDataExportBuilder
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.UserDataExportRequester
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
@@ -29,7 +29,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty
  * [TaskHandlerProducers].
  *
  * `FilesystemZipExportArchiveStore`, [UserDataExportRequester], [UserDataExportBuilder] and
- * [ReapExpiredUserDataExports] are deliberately not `@ApplicationScoped` (see their kdoc) since
+ * [ReapUserDataExports] are deliberately not `@ApplicationScoped` (see their kdoc) since
  * ARC cannot resolve their plain constructor parameters (`Duration`, `Int`, `Long`, `String`) on
  * its own. These producers are the single place that construct them.
  */
@@ -93,8 +93,8 @@ class ExportProducers {
         clock: Clock,
         transactionRunner: TransactionRunner,
         config: ExportsConfig,
-    ): ReapExpiredUserDataExports =
-        ReapExpiredUserDataExports(
+    ): ReapUserDataExports =
+        ReapUserDataExports(
             repository, archiveStore, taskQueue, clock, transactionRunner,
             interruptedGrace = config.interruptedGrace(),
             stagedFileMaxAge = config.stagedFileMaxAge(),

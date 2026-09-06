@@ -11,6 +11,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportChunkOffsetMismatchException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StorageLayout
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -34,7 +35,7 @@ class FilesystemZipImportArchiveStore(
     private val maxLineBytes: Int,
 ) : ImportArchiveStore {
     private val paths = DataDirPaths(dataDir)
-    private val tmpDir: Path get() = Path.of(dataDir).resolve("tmp")
+    private val tmpDir: Path get() = Path.of(dataDir).resolve(StorageLayout.STAGING_DIRECTORY)
 
     /**
      * Reader only, never handed to a writer. The Kotlin module turns a missing or null field into a parse
@@ -150,13 +151,16 @@ class FilesystemZipImportArchiveStore(
         // Only `<dataDir>/imports/`, never the root, which also holds the uploads still in flight the
         // sweep would otherwise reclaim from under a client. A fresh install has no such directory yet,
         // and the loan contract says the block runs exactly once either way.
-        val importsDir = paths.resolveWithinRoot(IMPORTS_DIR)
+        val importsDir = paths.resolveWithinRoot(StorageLayout.IMPORTS_DIRECTORY)
         if (!Files.isDirectory(importsDir)) {
             block(emptySequence())
             return
         }
         Files.list(importsDir).use { stream ->
-            block(stream.asSequence().filter { Files.isRegularFile(it) }.map { "$IMPORTS_DIR/${it.fileName}" })
+            block(
+                stream.asSequence().filter { Files.isRegularFile(it) }
+                    .map { "${StorageLayout.IMPORTS_DIRECTORY}/${it.fileName}" },
+            )
         }
     }
 
@@ -166,7 +170,6 @@ class FilesystemZipImportArchiveStore(
 
     private companion object {
         const val UPLOAD_PREFIX = "import-"
-        const val IMPORTS_DIR = "imports"
         const val COPY_BUFFER_BYTES = 8 * 1024
         const val MAX_NESTING_DEPTH = 32
         const val MAX_STRING_LENGTH = 1 * 1024 * 1024

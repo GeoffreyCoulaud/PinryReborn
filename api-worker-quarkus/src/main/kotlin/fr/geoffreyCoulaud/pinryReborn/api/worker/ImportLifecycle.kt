@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapAbandonedUserDataImports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapUserDataImports
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
  */
 @ApplicationScoped
 class ImportLifecycle(
-    private val reapAbandonedUserDataImports: ReapAbandonedUserDataImports,
+    private val reapUserDataImports: ReapUserDataImports,
     private val sweepScheduler: PeriodicScheduler,
     private val config: ImportsConfig,
 ) {
@@ -26,8 +26,9 @@ class ImportLifecycle(
         @Observes ignored: ShutdownEvent,
     ) = stop()
 
+    // safeReap, not reap: the sweep's selections sit outside its per-row net, and a throw there ends the boot.
     fun start() {
-        reapAbandonedUserDataImports.reap()
+        safeReap()
         val sweepIntervalMs = config.sweepInterval().toMillis().coerceAtLeast(1)
         sweepScheduler.scheduleWithFixedDelay(
             { safeReap() },
@@ -41,7 +42,7 @@ class ImportLifecycle(
     @Suppress("TooGenericExceptionCaught")
     fun safeReap() {
         try {
-            reapAbandonedUserDataImports.reap()
+            reapUserDataImports.reap()
         } catch (e: Exception) {
             logger.error(e) { "import sweep failed" }
         }

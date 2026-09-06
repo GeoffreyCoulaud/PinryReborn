@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportArchiveKey
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StorageLayout
 import io.quarkus.runtime.StartupEvent
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.event.Observes
@@ -20,7 +20,10 @@ class ExportDataDirectoryCheck(
     ) {
         // The two names FilesystemZipExportArchiveStore resolves under the data dir.
         val dataDir = Path.of(config.dataDir())
-        verifySameFileStore(dataDir.resolve("tmp"), dataDir.resolve(ExportArchiveKey.DIRECTORY))
+        verifySameFileStore(
+            dataDir.resolve(StorageLayout.STAGING_DIRECTORY),
+            dataDir.resolve(StorageLayout.EXPORTS_DIRECTORY),
+        )
     }
 
     /**

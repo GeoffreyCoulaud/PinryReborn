@@ -16,7 +16,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.presentation.quarkus.config.ImagesConfig
 import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.TagCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapAbandonedUserDataImports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapUserDataImports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportChunkReceiver
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.UserDataImportRunner
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ImportsConfig
@@ -45,8 +45,8 @@ class ImportProducers {
         clock: Clock,
         transactionRunner: TransactionRunner,
         config: ImportsConfig,
-    ): ReapAbandonedUserDataImports =
-        ReapAbandonedUserDataImports(
+    ): ReapUserDataImports =
+        ReapUserDataImports(
             repository, archiveStore, taskQueue, clock, transactionRunner,
             uploadGrace = config.uploadGrace(),
             stagedFileMaxAge = config.stagedFileMaxAge(),

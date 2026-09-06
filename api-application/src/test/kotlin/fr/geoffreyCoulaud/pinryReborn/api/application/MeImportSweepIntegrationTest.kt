@@ -3,7 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.application
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataImportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.ReapOrphanedStorage
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapAbandonedUserDataImports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapUserDataImports
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ImportsConfig
 import io.quarkus.test.junit.QuarkusTest
 import io.quarkus.test.junit.TestProfile
@@ -33,7 +33,7 @@ class MeImportSweepIntegrationTest : IntegrationTest() {
     lateinit var repository: UserDataImportRepositoryInterface
 
     @Inject
-    lateinit var reapAbandonedUserDataImports: ReapAbandonedUserDataImports
+    lateinit var reapUserDataImports: ReapUserDataImports
 
     @Inject
     lateinit var reapOrphanedStorage: ReapOrphanedStorage
@@ -89,7 +89,7 @@ class MeImportSweepIntegrationTest : IntegrationTest() {
         backdatePastGrace(importId)
 
         // When
-        reapAbandonedUserDataImports.reap()
+        reapUserDataImports.reap()
 
         // Then
         val reaped = requireNotNull(repository.findById(importId))
@@ -112,7 +112,7 @@ class MeImportSweepIntegrationTest : IntegrationTest() {
         )
 
         // When
-        reapAbandonedUserDataImports.reap()
+        reapUserDataImports.reap()
 
         // Then: the row stops naming bytes that are gone, so the next hour reclaims nothing
         assertFalse(Files.exists(archivePath), "the archive should be reclaimed once the row is terminal")

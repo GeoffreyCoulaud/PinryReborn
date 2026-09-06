@@ -17,8 +17,8 @@
     <ID>CommentCarriesDocumentation:GetPinImageRendition.kt:GetPinImageRendition$Companion</ID>
     <ID>CommentCarriesDocumentation:OpenedExport.kt:OpenedExport</ID>
     <ID>CommentCarriesDocumentation:PinSearcher.kt:PinSearcher$fun searchPins: List&lt;SearchResult&lt;Pin&gt;&gt;</ID>
-    <ID>CommentCarriesDocumentation:ReapExpiredUserDataExports.kt:ReapExpiredUserDataExports</ID>
-    <ID>CommentCarriesDocumentation:ReapExpiredUserDataExports.kt:ReapExpiredUserDataExports$fun reap: Int</ID>
+    <ID>CommentCarriesDocumentation:ReapUserDataExports.kt:ReapUserDataExports</ID>
+    <ID>CommentCarriesDocumentation:ReapUserDataExports.kt:ReapUserDataExports$fun reap: Int</ID>
     <ID>CommentCarriesDocumentation:ReapOrphanedStorage.kt:ReapOrphanedStorage</ID>
     <ID>CommentCarriesDocumentation:ReapOrphanedStorage.kt:ReapOrphanedStorage$fun reap: Int</ID>
     <ID>CommentCarriesDocumentation:ReapOrphanedStorage.kt:ReapOrphanedStorage$private fun parseExportId: UUID?</ID>

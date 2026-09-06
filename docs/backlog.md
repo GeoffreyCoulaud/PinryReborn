@@ -61,18 +61,10 @@ block that closes it.
 - **`EbeanTaskQueue.claimNext` kills a task whose handler may still hold a live lease**, which the export sweep's
   `PT6H` grace only makes improbable. `docs/specs/2026-08-27-export-build-completion.md` section 8, fourth item.
   Branch `fix/p2-debt-lost-lease`.
-- **Two defects in the import half, found while mirroring it.** `ReapAbandonedUserDataImports.reap()`'s KDoc names
-  the wrong pass for its ordering, and `ImportLifecycle.start()` calls its sweep outside its own `safe` wrapper.
-  `docs/specs/2026-08-27-export-build-completion.md` section 8, last item. Branch `fix/p2-debt-sweep-names`.
 - **The export reclaim pass has no order, and a permanently refused delete blocks its head.**
   `findReclaimableTerminal` converges only because acting on a row destroys its own selection predicate, which is
   false for exactly the row whose delete throws. With `exports.sweep_batch_size` such rows it stalls for good.
   Order the selection, or mark the refusals. *(Reasoning is only here.)* Branch `fix/p2-debt-paged-sweeps`.
-- **`ReapExpiredUserDataExports` runs three passes under a name that says one**
-  (`docs/specs/2026-08-27-export-build-completion.md` section 8, third item), and `ExportArchiveKey.DIRECTORY`
-  still has two rivals: `ReapOrphanedStorage.EXPORTS_PREFIX`, and the `"tmp"` segment duplicated across
-  `ExportDataDirectoryCheck` and the three filesystem stores. Rename and unification are each their own task.
-  Branch `fix/p2-debt-sweep-names`.
 - **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the fake-store
   base, so a case driven by the mock still sees the fake store and an assertion on it would pass vacuously. No
   case does it today; the shape that closes both directions is a shared base with two siblings.

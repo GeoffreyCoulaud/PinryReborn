@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapAbandonedUserDataImports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.ReapUserDataImports
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -11,7 +11,7 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class ImportLifecycleTest {
-    private val reap: ReapAbandonedUserDataImports = mockk(relaxed = true)
+    private val reap: ReapUserDataImports = mockk(relaxed = true)
     private val scheduler: PeriodicScheduler = mockk(relaxed = true)
     private val config: ImportsConfig = mockk()
 
@@ -55,6 +55,17 @@ class ImportLifecycleTest {
         lifecycle().safeReap()
         // Then
         verify(exactly = 1) { reap.reap() }
+    }
+
+    @Test
+    fun `Given a reap that throws at startup, Then the application still starts and keeps its schedule`() {
+        // Given
+        every { config.sweepInterval() } returns Duration.ofSeconds(1)
+        every { reap.reap() } throws RuntimeException("boom")
+        // When (no exception escapes)
+        lifecycle().start()
+        // Then
+        verify { scheduler.scheduleWithFixedDelay(any(), 1000L, 1000L, TimeUnit.MILLISECONDS) }
     }
 
     @Test

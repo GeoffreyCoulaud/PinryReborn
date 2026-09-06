@@ -1,6 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapUserDataExports
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.quarkus.runtime.ShutdownEvent
 import io.quarkus.runtime.StartupEvent
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  */
 @ApplicationScoped
 class ExportRetentionLifecycle(
-    private val reapExpiredUserDataExports: ReapExpiredUserDataExports,
+    private val reapUserDataExports: ReapUserDataExports,
     private val purgeScheduler: PeriodicScheduler,
     private val config: ExportsConfig,
 ) {
@@ -44,7 +44,7 @@ class ExportRetentionLifecycle(
     @Suppress("TooGenericExceptionCaught")
     fun safeReap() {
         try {
-            val counts = reapExpiredUserDataExports.reap()
+            val counts = reapUserDataExports.reap()
             logger.info {
                 "export sweep: ${counts.failed} failed, ${counts.expired} expired, ${counts.reclaimed} reclaimed"
             }
