@@ -78,11 +78,12 @@ class UserDataImportCreatorTest : BaseTest() {
         override fun findAllForUser(userId: UUID, cursor: Cursor?, pageSize: Int): Page<UserDataImport> =
             refuse("findAllForUser")
 
-        override fun findAbandonableBefore(instant: Instant) = refuse("findAbandonableBefore")
+        override fun findAbandonableBefore(instant: Instant, afterId: UUID?, limit: Int) =
+            refuse("findAbandonableBefore")
 
-        override fun findReclaimableTerminal() = refuse("findReclaimableTerminal")
+        override fun findReclaimableTerminal(afterId: UUID?, limit: Int) = refuse("findReclaimableTerminal")
 
-        override fun findRunning() = refuse("findRunning")
+        override fun findRunning(afterId: UUID?, limit: Int) = refuse("findRunning")
 
         override fun findAllImportIdsForUser(userId: UUID) = refuse("findAllImportIdsForUser")
 

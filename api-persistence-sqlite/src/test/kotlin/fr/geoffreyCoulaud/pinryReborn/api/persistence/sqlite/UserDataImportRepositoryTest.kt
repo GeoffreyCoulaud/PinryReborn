@@ -30,8 +30,9 @@ class UserDataImportRepositoryTest : RepositoryTest() {
     private fun awaitingImport(
         userId: UUID,
         at: Instant = requestedAt,
+        id: UUID = randomUUID(),
     ) = UserDataImport(
-        id = randomUUID(),
+        id = id,
         userId = userId,
         state = UserDataImportState.AWAITING_ARCHIVE,
         requestedAt = at,
@@ -177,7 +178,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
             repository.save(awaitingImport(user.id).copy(lastUploadActivityAt = requestedAt.plusSeconds(60)))
 
         // When
-        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(120))
+        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(120), afterId = null, limit = 10)
 
         // Then
         assertEquals(listOf(stored.id), abandonable.map { it.id })
@@ -190,7 +191,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         repository.save(awaitingImport(user.id).copy(lastUploadActivityAt = requestedAt.plusSeconds(300)))
 
         // When
-        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(120))
+        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(120), afterId = null, limit = 10)
 
         // Then
         assertTrue(abandonable.isEmpty())
@@ -203,7 +204,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         val stored = repository.save(awaitingImport(user.id))
 
         // When
-        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(1))
+        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(1), afterId = null, limit = 10)
 
         // Then
         assertEquals(listOf(stored.id), abandonable.map { it.id })
@@ -217,7 +218,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         repository.save(stored.copy(state = UserDataImportState.PENDING))
 
         // When
-        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(120))
+        val abandonable = repository.findAbandonableBefore(requestedAt.plusSeconds(120), afterId = null, limit = 10)
 
         // Then
         assertTrue(abandonable.isEmpty())
@@ -233,7 +234,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         repository.save(stored.copy(state = UserDataImportState.CANCELLED, storageKey = "imports/${stored.id}.zip"))
 
         // When
-        val reclaimable = repository.findReclaimableTerminal()
+        val reclaimable = repository.findReclaimableTerminal(afterId = null, limit = 10)
 
         // Then
         assertEquals(listOf(stored.id), reclaimable.map { it.id })
@@ -247,7 +248,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         repository.save(stored.copy(state = UserDataImportState.COMPLETED, storageKey = null))
 
         // When
-        val reclaimable = repository.findReclaimableTerminal()
+        val reclaimable = repository.findReclaimableTerminal(afterId = null, limit = 10)
 
         // Then
         assertTrue(reclaimable.isEmpty())
@@ -261,7 +262,7 @@ class UserDataImportRepositoryTest : RepositoryTest() {
         repository.save(stored.copy(state = UserDataImportState.RUNNING, storageKey = "imports/${stored.id}.zip"))
 
         // When
-        val reclaimable = repository.findReclaimableTerminal()
+        val reclaimable = repository.findReclaimableTerminal(afterId = null, limit = 10)
 
         // Then
         assertTrue(reclaimable.isEmpty())
@@ -281,10 +282,64 @@ class UserDataImportRepositoryTest : RepositoryTest() {
             }
 
         // When
-        val found = repository.findRunning()
+        val found = repository.findRunning(afterId = null, limit = 10)
 
         // Then
         assertEquals(listOf(running.id), found.map { it.id })
+    }
+
+    // --- the sweep selections page by id ---
+
+    /** Ids that sort the same way whatever the column stores, so the seeding order can contradict them. */
+    private fun orderedId(n: Int): UUID = UUID.fromString("00000000-0000-4000-8000-%012d".format(n))
+
+    /** Three rows seeded in descending id order, so a scan in rowid order fails on the first page alone. */
+    private fun seedThreeDescending(save: (UUID) -> UUID): List<UUID> = (3 downTo 1).map { save(orderedId(it)) }.sorted()
+
+    private fun assertPagesCoverOnce(ids: List<UUID>, page: (UUID?) -> List<UserDataImport>) {
+        // When
+        val first = page(null)
+        val second = page(first.last().id)
+        val third = page(second.last().id)
+
+        // Then: bounded, ordered, and the page after the last id starts past it
+        assertEquals(ids.take(2), first.map { it.id })
+        assertEquals(ids.drop(2), second.map { it.id })
+        assertTrue(third.isEmpty())
+    }
+
+    @Test
+    fun `Given more abandonable imports than the limit, Then the pages after each last id cover them once, by id`() {
+        // Given
+        val ids = seedThreeDescending { id -> repository.save(awaitingImport(createAndSaveUser().id, id = id)).id }
+
+        // When / Then
+        assertPagesCoverOnce(ids) { after ->
+            repository.findAbandonableBefore(requestedAt.plusSeconds(120), afterId = after, limit = 2)
+        }
+    }
+
+    @Test
+    fun `Given more reclaimable imports than the limit, Then the pages after each last id cover them once, by id`() {
+        // Given
+        val ids = seedThreeDescending { id ->
+            val stored = repository.save(awaitingImport(createAndSaveUser().id, id = id))
+            repository.save(stored.copy(state = UserDataImportState.CANCELLED, storageKey = "imports/$id.zip")).id
+        }
+
+        // When / Then
+        assertPagesCoverOnce(ids) { after -> repository.findReclaimableTerminal(afterId = after, limit = 2) }
+    }
+
+    @Test
+    fun `Given more running imports than the limit, Then the pages after each last id cover them once, by id`() {
+        // Given
+        val ids = seedThreeDescending { id ->
+            repository.save(awaitingImport(createAndSaveUser().id, id = id).copy(state = UserDataImportState.RUNNING)).id
+        }
+
+        // When / Then
+        assertPagesCoverOnce(ids) { after -> repository.findRunning(afterId = after, limit = 2) }
     }
 
     // --- orphan sweep, ids and deletion ---

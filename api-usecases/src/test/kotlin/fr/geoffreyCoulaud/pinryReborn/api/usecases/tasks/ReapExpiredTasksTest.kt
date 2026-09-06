@@ -35,28 +35,28 @@ class ReapExpiredTasksTest {
     fun `Given expired running tasks, Then reap delegates to reapExpired with clock now`() {
         // Given
         every { clock.now() } returns now
-        every { taskQueue.reapExpired(now, any()) } returns 3
+        every { taskQueue.reapExpired(now, any(), ReapExpiredTasks.REAP_BATCH_SIZE) } returns 3
 
         // When
         val result = useCase.reap()
 
         // Then
         assertEquals(3, result)
-        verify { taskQueue.reapExpired(now, any()) }
+        verify { taskQueue.reapExpired(now, any(), ReapExpiredTasks.REAP_BATCH_SIZE) }
     }
 
     @Test
     fun `Given no expired tasks, Then reap returns zero`() {
         // Given
         every { clock.now() } returns now
-        every { taskQueue.reapExpired(now, any()) } returns 0
+        every { taskQueue.reapExpired(now, any(), ReapExpiredTasks.REAP_BATCH_SIZE) } returns 0
 
         // When
         val result = useCase.reap()
 
         // Then
         assertEquals(0, result)
-        verify { taskQueue.reapExpired(now, any()) }
+        verify { taskQueue.reapExpired(now, any(), ReapExpiredTasks.REAP_BATCH_SIZE) }
     }
 
     @Test
@@ -65,7 +65,7 @@ class ReapExpiredTasksTest {
         // kind travels with the sweep (spec 2026-08-14-user-data-import.md section 9)
         every { clock.now() } returns now
         val floors = slot<Map<String, Duration>>()
-        every { taskQueue.reapExpired(now, capture(floors)) } returns 1
+        every { taskQueue.reapExpired(now, capture(floors), any()) } returns 1
 
         // When
         useCase.reap()

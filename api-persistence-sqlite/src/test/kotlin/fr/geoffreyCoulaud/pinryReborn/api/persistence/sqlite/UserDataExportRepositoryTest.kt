@@ -29,8 +29,9 @@ class UserDataExportRepositoryTest : RepositoryTest() {
     private fun pendingExport(
         userId: UUID,
         requestedAt: Instant = Instant.parse("2026-07-22T10:00:00Z"),
+        id: UUID = randomUUID(),
     ) = UserDataExport(
-        id = randomUUID(),
+        id = id,
         userId = userId,
         state = UserDataExportState.PENDING,
         formatVersion = 1,
@@ -201,7 +202,7 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         val now = Instant.parse("2026-07-23T00:00:00Z")
 
         // When
-        val expired = repository.findExpiredReadyExports(now)
+        val expired = repository.findExpiredReadyExports(now, afterId = null, limit = 10)
 
         // Then
         assertEquals(listOf(export.id), expired.map { it.id })
@@ -220,7 +221,7 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         val now = Instant.parse("2026-07-23T00:00:00Z")
 
         // When
-        val expired = repository.findExpiredReadyExports(now)
+        val expired = repository.findExpiredReadyExports(now, afterId = null, limit = 10)
 
         // Then
         assertTrue(expired.isEmpty())
@@ -241,8 +242,9 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         state: UserDataExportState,
         requestedAt: Instant = Instant.parse("2026-07-22T10:00:00Z"),
         archived: Boolean = true,
+        id: UUID = randomUUID(),
     ): UserDataExport {
-        val export = pendingExport(createAndSaveUser().id, requestedAt)
+        val export = pendingExport(createAndSaveUser().id, requestedAt, id)
         val storageKey = if (archived) "exports/${export.id}.zip" else null
         return repository.save(export.copy(state = state, storageKey = storageKey))
     }
@@ -287,7 +289,7 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         (UserDataExportState.entries - terminalStates.toSet()).forEach { saveExport(it) }
 
         // When
-        val reclaimable = repository.findReclaimableTerminal(limit = 10)
+        val reclaimable = repository.findReclaimableTerminal(afterId = null, limit = 10)
 
         // Then
         assertEquals(reclaimableIds, reclaimable.map { it.id }.toSet())
@@ -299,22 +301,52 @@ class UserDataExportRepositoryTest : RepositoryTest() {
         saveExport(UserDataExportState.EXPIRED, archived = false)
 
         // When
-        val reclaimable = repository.findReclaimableTerminal(limit = 10)
+        val reclaimable = repository.findReclaimableTerminal(afterId = null, limit = 10)
 
         // Then
         assertTrue(reclaimable.isEmpty())
     }
 
+    /** Ids that sort the same way whatever the column stores, so the seeding order can contradict them. */
+    private fun orderedId(n: Int): UUID = UUID.fromString("00000000-0000-4000-8000-%012d".format(n))
+
     @Test
-    fun `Given more reclaimable exports than the limit, Then findReclaimableTerminal stops at the limit`() {
-        // Given: bounded at the query, so a first run over a whole history does not materialise it
-        repeat(3) { saveExport(UserDataExportState.DELETED) }
+    fun `Given more reclaimable exports than the limit, Then the pages after each last id cover them once, by id`() {
+        // Given: seeded in descending id order, so a scan in rowid order fails on the first page alone
+        val ids = (3 downTo 1).map { saveExport(UserDataExportState.DELETED, id = orderedId(it)).id }.sorted()
 
         // When
-        val reclaimable = repository.findReclaimableTerminal(limit = 2)
+        val first = repository.findReclaimableTerminal(afterId = null, limit = 2)
+        val second = repository.findReclaimableTerminal(afterId = first.last().id, limit = 2)
+        val third = repository.findReclaimableTerminal(afterId = second.last().id, limit = 2)
+
+        // Then: bounded, ordered, and the page after the last id starts past it
+        assertEquals(ids.take(2), first.map { it.id })
+        assertEquals(ids.drop(2), second.map { it.id })
+        assertTrue(third.isEmpty())
+    }
+
+    @Test
+    fun `Given more expired exports than the limit, Then the pages after each last id cover them once, by id`() {
+        // Given: seeded in descending id order, as above
+        val expiredAt = Instant.parse("2026-07-22T00:00:00Z")
+        val ids = (3 downTo 1).map { n ->
+            repository.save(
+                pendingExport(createAndSaveUser().id, id = orderedId(n))
+                    .copy(state = UserDataExportState.READY, expiresAt = expiredAt),
+            ).id
+        }.sorted()
+        val now = Instant.parse("2026-07-23T00:00:00Z")
+
+        // When
+        val first = repository.findExpiredReadyExports(now, afterId = null, limit = 2)
+        val second = repository.findExpiredReadyExports(now, afterId = first.last().id, limit = 2)
+        val third = repository.findExpiredReadyExports(now, afterId = second.last().id, limit = 2)
 
         // Then
-        assertEquals(2, reclaimable.size)
+        assertEquals(ids.take(2), first.map { it.id })
+        assertEquals(ids.drop(2), second.map { it.id })
+        assertTrue(third.isEmpty())
     }
 
     // --- last requested ---

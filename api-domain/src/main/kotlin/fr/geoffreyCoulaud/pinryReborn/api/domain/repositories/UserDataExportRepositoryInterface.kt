@@ -27,7 +27,11 @@ interface UserDataExportRepositoryInterface {
     /** The most recent requestedAt across ALL states, DELETED and FAILED included. */
     fun findLastRequestedAtForUser(userId: UUID): Instant?
 
-    fun findExpiredReadyExports(now: Instant): List<UserDataExport>
+    /**
+     * `READY` rows past their expiry, one page by `id`: the rows after [afterId], `null` for the first
+     * page, at most [limit] of them, so a row whose write is refused is passed by the next page.
+     */
+    fun findExpiredReadyExports(now: Instant, afterId: UUID?, limit: Int): List<UserDataExport>
 
     /**
      * `PENDING` rows oldest first, bounded at the query: the sweep applies its grace after the
@@ -35,8 +39,11 @@ interface UserDataExportRepositoryInterface {
      */
     fun findPending(limit: Int): List<UserDataExport>
 
-    /** Terminal rows that still name an archive, so a row is held here until its bytes are gone. */
-    fun findReclaimableTerminal(limit: Int): List<UserDataExport>
+    /**
+     * Terminal rows that still name an archive, one page by `id` after [afterId] as above: a row is
+     * held here until its bytes are gone, and one whose delete is refused is passed by the next page.
+     */
+    fun findReclaimableTerminal(afterId: UUID?, limit: Int): List<UserDataExport>
 
     fun findAllExportIdsForUser(userId: UUID): List<UUID>
 

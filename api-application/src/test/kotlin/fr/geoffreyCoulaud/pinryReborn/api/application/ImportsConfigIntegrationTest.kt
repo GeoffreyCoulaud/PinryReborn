@@ -56,6 +56,7 @@ class ImportsConfigIntegrationTest {
         assertEquals(Duration.ofHours(24), config.uploadGrace())
         assertEquals(Duration.ofHours(1), config.sweepInterval())
         assertEquals(Duration.ofHours(48), config.stagedFileMaxAge())
+        assertEquals(500, config.sweepBatchSize())
         assertEquals(200, config.leaseRenewalLines())
         assertEquals(Duration.ofMinutes(10), config.retryFloor())
         assertEquals(500, config.reportDetailLimit())

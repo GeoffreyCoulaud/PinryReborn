@@ -497,7 +497,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val claimed = claimFresh() // lease 1 minute from now
         val later = now.plusSeconds(120)
         // When
-        val reaped = queue.reapExpired(later, NO_FLOORS)
+        val reaped = queue.reapExpired(later, NO_FLOORS, REAP_LIMIT)
         // Then
         assertEquals(1, reaped)
         val stored = queue.findById(claimed.id)
@@ -514,7 +514,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val reapedAt = now.plusSeconds(120)
 
         // When
-        val reaped = queue.reapExpired(reapedAt, NO_FLOORS)
+        val reaped = queue.reapExpired(reapedAt, NO_FLOORS, REAP_LIMIT)
 
         // Then: a reap spends an attempt, so it backs off like a returned failure. Left where the
         // claim put it, availableAt is in the past and the next poll re-claims within the second,
@@ -524,11 +524,25 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     @Test
+    fun `Given more expired leases than the limit, Then reapExpired takes the limit and leaves the rest for the next call`() {
+        // Given: one more expired lease than the bound, so an unbounded select is caught by the count
+        repeat(REAP_LIMIT + 1) { claimFresh() }
+        val later = now.plusSeconds(120)
+
+        // When
+        val reaped = queue.reapExpired(later, NO_FLOORS, REAP_LIMIT)
+
+        // Then: bounded, and the next call takes what this one left
+        assertEquals(REAP_LIMIT, reaped)
+        assertEquals(1, queue.reapExpired(later, NO_FLOORS, REAP_LIMIT))
+    }
+
+    @Test
     fun `Given a running task with a live lease, Then reapExpired leaves it alone`() {
         // Given
         claimFresh()
         // When (before lease expiry)
-        val reaped = queue.reapExpired(now.plusSeconds(1), NO_FLOORS)
+        val reaped = queue.reapExpired(now.plusSeconds(1), NO_FLOORS, REAP_LIMIT)
         // Then
         assertEquals(0, reaped)
     }
@@ -542,7 +556,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         val reapedAt = now.plusSeconds(120)
 
         // When
-        val reaped = queue.reapExpired(reapedAt, mapOf("floored.kind" to floor))
+        val reaped = queue.reapExpired(reapedAt, mapOf("floored.kind" to floor), REAP_LIMIT)
 
         // Then: the jitter is full and the clock is a parameter, so both instants are exact rather
         // than bounds; at or above the floor would pass an adapter adding it to the window.
@@ -566,7 +580,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Given
         val enqueued = queue.enqueue(NewTask(kind = "test.kind", payload = "{}", availableAt = now, maxAttempts = 1))
         queue.claimNext(now, Duration.ofMinutes(1))
-        queue.reapExpired(now.plusSeconds(120), NO_FLOORS)
+        queue.reapExpired(now.plusSeconds(120), NO_FLOORS, REAP_LIMIT)
 
         // When: past the backoff the reap wrote, since a task that is not yet available is not claimed
         // at all and would sit PENDING rather than being killed
@@ -596,7 +610,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
         // Then
         assertTrue(renewed)
         assertEquals(extendedUntil, queue.findById(claimed.id)?.leaseExpiresAt)
-        assertEquals(0, queue.reapExpired(now.plusSeconds(120), NO_FLOORS))
+        assertEquals(0, queue.reapExpired(now.plusSeconds(120), NO_FLOORS, REAP_LIMIT))
     }
 
     @Test
@@ -609,7 +623,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
 
         // Then
         assertFalse(renewed)
-        assertEquals(1, queue.reapExpired(now.plusSeconds(120), NO_FLOORS))
+        assertEquals(1, queue.reapExpired(now.plusSeconds(120), NO_FLOORS, REAP_LIMIT))
     }
 
     @Test
@@ -698,6 +712,9 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     private companion object {
+        /** Small, so a case seeding one more than it stays readable. */
+        private const val REAP_LIMIT = 3
+
         val NO_FLOORS: Map<String, Duration> = emptyMap()
         val BACKOFF_BASE: Duration = Duration.ofSeconds(30)
         val BACKOFF_CAP: Duration = Duration.ofMinutes(5)

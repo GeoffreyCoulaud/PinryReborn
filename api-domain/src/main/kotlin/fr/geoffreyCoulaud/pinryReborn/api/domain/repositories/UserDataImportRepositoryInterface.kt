@@ -28,15 +28,20 @@ interface UserDataImportRepositoryInterface {
 
     /**
      * `AWAITING_ARCHIVE` rows whose last upload activity, or [UserDataImport.requestedAt] when it
-     * never received one, is older than [instant]. The grace counts inactivity, not age.
+     * never received one, is older than [instant]. The grace counts inactivity, not age. One page by
+     * `id`: the rows after [afterId], `null` for the first page, at most [limit] of them, so a row
+     * whose write is refused is passed by the next page.
      */
-    fun findAbandonableBefore(instant: Instant): List<UserDataImport>
+    fun findAbandonableBefore(instant: Instant, afterId: UUID?, limit: Int): List<UserDataImport>
 
-    /** Terminal rows that still hold archive bytes, so the sweep reclaims each one exactly once. */
-    fun findReclaimableTerminal(): List<UserDataImport>
+    /** Terminal rows that still hold archive bytes, one page by `id` after [afterId] as above. */
+    fun findReclaimableTerminal(afterId: UUID?, limit: Int): List<UserDataImport>
 
-    /** `RUNNING` rows, which the sweep pairs with their task to tell a live attempt from a dead one. */
-    fun findRunning(): List<UserDataImport>
+    /**
+     * `RUNNING` rows, one page by `id` after [afterId] as above, which the sweep pairs with their
+     * task to tell a live attempt from a dead one.
+     */
+    fun findRunning(afterId: UUID?, limit: Int): List<UserDataImport>
 
     fun findAllImportIdsForUser(userId: UUID): List<UUID>
 
