@@ -44,6 +44,7 @@ class ReapUserDataExportsTest : BaseTest() {
     private val deletedArchives = mutableListOf<String>()
     private var orphanCutoff: Instant? = null
     private val selectionLimits = mutableListOf<Int>()
+    private var reclaimPages = 0
 
     /** The key an export's own id derives, which is the one a dead builder's archive is named by. */
     private fun keyOf(exportId: UUID): String = ExportArchiveKey.forExport(exportId, FORMAT.fileExtension)
@@ -90,14 +91,20 @@ class ReapUserDataExportsTest : BaseTest() {
             selectionLimits += firstArg<Int>()
             rows.values.filter { row -> row.state == UserDataExportState.PENDING }
         }
-        every { repository.findExpiredReadyExports(now) } answers {
-            rows.values.filter { row -> row.state == UserDataExportState.READY }
+        every { repository.findExpiredReadyExports(now, any(), any()) } answers {
+            selectionLimits += thirdArg<Int>()
+            pageAfter(secondArg(), thirdArg()) { row -> row.state == UserDataExportState.READY }
         }
-        every { repository.findReclaimableTerminal(any()) } answers {
-            selectionLimits += firstArg<Int>()
-            rows.values.filter { row -> row.state.isTerminal && row.storageKey != null }
+        every { repository.findReclaimableTerminal(any(), any()) } answers {
+            selectionLimits += secondArg<Int>()
+            reclaimPages++
+            pageAfter(firstArg(), secondArg()) { row -> row.state.isTerminal && row.storageKey != null }
         }
     }
+
+    /** One page by id, as the repository answers it: the rows past [afterId], the first [limit] of them. */
+    private fun pageAfter(afterId: UUID?, limit: Int, selected: (UserDataExport) -> Boolean): List<UserDataExport> =
+        rows.values.filter(selected).sortedBy { it.id }.filter { afterId == null || it.id > afterId }.take(limit)
 
     /** Only the runs that act on a row reach these, and `BaseTest` fails a stub nothing reached. */
     private fun stubRowWrites() {
@@ -598,7 +605,27 @@ class ReapUserDataExportsTest : BaseTest() {
     }
 
     @Test
-    fun `Given any run, Then both bounded selections take the configured batch size`() {
+    fun `Given more reclaimable exports than one page and the first refused, Then every other one is still reclaimed`() {
+        // Given: a refused delete leaves its row in the selection, so a sweep re-reading one page from
+        // the top would stall on it for good once a page's worth of them had accumulated
+        stubSweep()
+        stubRowWrites()
+        val exports = List(SWEEP_BATCH_SIZE + 1) { exportNamingItsBytes(UserDataExportState.DELETED) }
+        val refused = exports.minBy { it.id }
+        stubArchiveDeletionRefusing(keyOf(refused.id))
+
+        // When
+        val counts = reaper.reap()
+
+        // Then: the page after the refused row's reaches the row beyond it, and the run ends on an empty one
+        assertEquals(SWEEP_BATCH_SIZE, counts.reclaimed)
+        exports.filter { it.id != refused.id }.forEach { assertNull(stored(it.id).storageKey) }
+        assertEquals(keyOf(refused.id), stored(refused.id).storageKey)
+        assertEquals(3, reclaimPages)
+    }
+
+    @Test
+    fun `Given any run, Then every selection takes the configured batch size`() {
         // Given: an unbounded select the caller truncates still materialises the whole history, which
         // is what the first run after deployment would do over every terminal export ever written
         stubSweep()
@@ -606,8 +633,8 @@ class ReapUserDataExportsTest : BaseTest() {
         // When
         reaper.reap()
 
-        // Then
-        assertEquals(listOf(SWEEP_BATCH_SIZE, SWEEP_BATCH_SIZE), selectionLimits)
+        // Then: the pending selection once, and one empty page for each of the two paged ones
+        assertEquals(listOf(SWEEP_BATCH_SIZE, SWEEP_BATCH_SIZE, SWEEP_BATCH_SIZE), selectionLimits)
     }
 
     @Test

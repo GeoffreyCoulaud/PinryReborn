@@ -34,6 +34,7 @@ class ReapUserDataImportsTest : BaseTest() {
             repository, archiveStore, taskQueue, clock, transactions,
             uploadGrace = UPLOAD_GRACE,
             stagedFileMaxAge = STAGED_FILE_MAX_AGE,
+            sweepBatchSize = SWEEP_BATCH_SIZE,
         )
 
     private val now: Instant = Instant.parse("2026-08-15T10:00:00Z")
@@ -45,6 +46,7 @@ class ReapUserDataImportsTest : BaseTest() {
     private val deletedArchives = mutableListOf<String>()
     private var abandonCutoff: Instant? = null
     private var orphanCutoff: Instant? = null
+    private var reclaimPages = 0
 
     private fun anImport(
         state: UserDataImportState,
@@ -69,18 +71,23 @@ class ReapUserDataImportsTest : BaseTest() {
     /** What every run reads, whether or not it finds anything: the three selections and the tmp sweep. */
     private fun stubSweep() {
         every { clock.now() } returns now
-        every { repository.findAbandonableBefore(any()) } answers {
+        every { repository.findAbandonableBefore(any(), any(), any()) } answers {
             abandonCutoff = firstArg()
-            rows.values.filter { row -> row.state == UserDataImportState.AWAITING_ARCHIVE }
+            pageAfter(secondArg(), thirdArg()) { row -> row.state == UserDataImportState.AWAITING_ARCHIVE }
         }
-        every { repository.findRunning() } answers {
-            rows.values.filter { row -> row.state == UserDataImportState.RUNNING }
+        every { repository.findRunning(any(), any()) } answers {
+            pageAfter(firstArg(), secondArg()) { row -> row.state == UserDataImportState.RUNNING }
         }
-        every { repository.findReclaimableTerminal() } answers {
-            rows.values.filter { row -> row.state.isTerminal && row.storageKey != null }
+        every { repository.findReclaimableTerminal(any(), any()) } answers {
+            reclaimPages++
+            pageAfter(firstArg(), secondArg()) { row -> row.state.isTerminal && row.storageKey != null }
         }
         every { archiveStore.discardOrphanedStagedFiles(any()) } answers { orphanCutoff = firstArg(); 0 }
     }
+
+    /** One page by id, as the repository answers it: the rows past [afterId], the first [limit] of them. */
+    private fun pageAfter(afterId: UUID?, limit: Int, selected: (UserDataImport) -> Boolean): List<UserDataImport> =
+        rows.values.filter(selected).sortedBy { it.id }.filter { afterId == null || it.id > afterId }.take(limit)
 
     /** Only the runs that act on a row reach these, and `BaseTest` fails a stub nothing reached. */
     private fun stubRowWrites() {
@@ -192,6 +199,28 @@ class ReapUserDataImportsTest : BaseTest() {
         // Then
         assertEquals(0, reaped)
         assertEquals("imports/stuck.zip", stored(cancelled.id).storageKey)
+    }
+
+    @Test
+    fun `Given more reclaimable imports than one page and the first refused, Then every other one is still reclaimed`() {
+        // Given: the export sweep's shape, since a refused delete holds its row in this selection too
+        stubSweep()
+        stubRowWrites()
+        val imports = List(SWEEP_BATCH_SIZE + 1) { anImport(UserDataImportState.CANCELLED, storageKey = "imports/$it.zip") }
+        val refused = imports.minBy { it.id }
+        every { archiveStore.delete(any()) } answers {
+            val key = firstArg<String>()
+            if (key == ImportArchiveKey.forImport(refused.id)) throw IOException("permission denied")
+            deletedArchives += key
+        }
+
+        // When
+        val reaped = sweep.reap()
+
+        // Then: the page after the refused row's reaches the row beyond it, and the run ends on an empty one
+        assertEquals(SWEEP_BATCH_SIZE, reaped)
+        imports.filter { it.id != refused.id }.forEach { assertNull(stored(it.id).storageKey) }
+        assertEquals(3, reclaimPages)
     }
 
     @Test
@@ -334,7 +363,7 @@ class ReapUserDataImportsTest : BaseTest() {
         every { clock.now() } returns now
         stubRowWrites()
         val refused = anImport(UserDataImportState.AWAITING_ARCHIVE)
-        every { repository.findAbandonableBefore(any()) } returns listOf(refused)
+        every { repository.findAbandonableBefore(any(), any(), any()) } returns listOf(refused)
         every { archiveStore.discardPartialUpload(refused.id) } throws StackOverflowError("native frame")
 
         // When / Then
@@ -375,5 +404,6 @@ class ReapUserDataImportsTest : BaseTest() {
     private companion object {
         private val UPLOAD_GRACE: Duration = Duration.ofHours(24)
         private val STAGED_FILE_MAX_AGE: Duration = Duration.ofHours(48)
+        private const val SWEEP_BATCH_SIZE = 500
     }
 }

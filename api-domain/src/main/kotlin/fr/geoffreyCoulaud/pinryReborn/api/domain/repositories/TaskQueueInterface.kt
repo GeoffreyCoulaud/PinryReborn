@@ -55,9 +55,10 @@ interface TaskQueueInterface {
 
     /**
      * Flip RUNNING rows whose lease expired back to PENDING, delayed by the queue's backoff floored
-     * at [retryFloors] for the row's kind (a kind it does not name is unfloored). Returns the count.
+     * at [retryFloors] for the row's kind (a kind it does not name is unfloored). At most [limit]
+     * rows per call, the rest waiting for the next one. Returns the count.
      */
-    fun reapExpired(now: Instant, retryFloors: Map<String, Duration>): Int
+    fun reapExpired(now: Instant, retryFloors: Map<String, Duration>, limit: Int): Int
 
     /** Count tasks currently in [state]. For metrics/inspection. */
     fun countByState(state: TaskState): Int
