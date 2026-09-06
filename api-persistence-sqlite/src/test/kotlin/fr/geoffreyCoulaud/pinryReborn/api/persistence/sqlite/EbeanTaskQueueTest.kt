@@ -524,7 +524,7 @@ class EbeanTaskQueueTest : RepositoryTest() {
     }
 
     @Test
-    fun `Given more expired leases than the limit, Then reapExpired takes the limit and leaves the rest for the next call`() {
+    fun `Given more expired leases than the limit, Then reapExpired takes the limit and the next call the rest`() {
         // Given: one more expired lease than the bound, so an unbounded select is caught by the count
         repeat(REAP_LIMIT + 1) { claimFresh() }
         val later = now.plusSeconds(120)

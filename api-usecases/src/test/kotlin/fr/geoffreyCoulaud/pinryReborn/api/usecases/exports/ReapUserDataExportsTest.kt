@@ -605,7 +605,7 @@ class ReapUserDataExportsTest : BaseTest() {
     }
 
     @Test
-    fun `Given more reclaimable exports than one page and the first refused, Then every other one is still reclaimed`() {
+    fun `Given more reclaimable exports than a page and the first refused, Then the others are still reclaimed`() {
         // Given: a refused delete leaves its row in the selection, so a sweep re-reading one page from
         // the top would stall on it for good once a page's worth of them had accumulated
         stubSweep()

@@ -291,10 +291,11 @@ class UserDataImportRepositoryTest : RepositoryTest() {
     // --- the sweep selections page by id ---
 
     /** Ids that sort the same way whatever the column stores, so the seeding order can contradict them. */
-    private fun orderedId(n: Int): UUID = UUID.fromString("00000000-0000-4000-8000-%012d".format(n))
+    private fun orderedId(n: Int): UUID = UUID.fromString("00000000-0000-4000-8000-" + n.toString().padStart(12, '0'))
 
     /** Three rows seeded in descending id order, so a scan in rowid order fails on the first page alone. */
-    private fun seedThreeDescending(save: (UUID) -> UUID): List<UUID> = (3 downTo 1).map { save(orderedId(it)) }.sorted()
+    private fun seedThreeDescending(save: (UUID) -> UUID): List<UUID> =
+        (3 downTo 1).map { save(orderedId(it)) }.sorted()
 
     private fun assertPagesCoverOnce(ids: List<UUID>, page: (UUID?) -> List<UserDataImport>) {
         // When
@@ -335,7 +336,8 @@ class UserDataImportRepositoryTest : RepositoryTest() {
     fun `Given more running imports than the limit, Then the pages after each last id cover them once, by id`() {
         // Given
         val ids = seedThreeDescending { id ->
-            repository.save(awaitingImport(createAndSaveUser().id, id = id).copy(state = UserDataImportState.RUNNING)).id
+            val awaiting = awaitingImport(createAndSaveUser().id, id = id)
+            repository.save(awaiting.copy(state = UserDataImportState.RUNNING)).id
         }
 
         // When / Then

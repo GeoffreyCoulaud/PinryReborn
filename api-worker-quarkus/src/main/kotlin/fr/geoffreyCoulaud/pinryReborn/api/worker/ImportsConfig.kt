@@ -45,6 +45,10 @@ interface ImportsConfig {
     @WithDefault("PT48H")
     fun stagedFileMaxAge(): Duration
 
+    /** One page of a sweep selection, the export's figure: a key, so a large instance can raise it. */
+    @WithDefault("500")
+    fun sweepBatchSize(): Int
+
     @WithDefault("200")
     fun leaseRenewalLines(): Int
 

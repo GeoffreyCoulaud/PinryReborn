@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.SweepPages
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
 import java.time.Instant
@@ -89,7 +90,9 @@ class ReapUserDataExports(
         } != null
 
     private fun expireReadyExports(now: Instant): Int =
-        repository.findExpiredReadyExports(now).count { swept(it.id) { expire(it.id) } }
+        SweepPages
+            .of(UserDataExport::id) { afterId -> repository.findExpiredReadyExports(now, afterId, sweepBatchSize) }
+            .count { swept(it.id) { expire(it.id) } }
 
     /** The state and nothing else: the bytes of every terminal row are pass 3's, this row's included. */
     private fun expire(exportId: UUID): Boolean =
@@ -105,7 +108,8 @@ class ReapUserDataExports(
     }
 
     private fun reclaimTerminalArchives(): Int =
-        repository.findReclaimableTerminal(sweepBatchSize).count { export -> swept(export.id) { reclaim(export) } }
+        SweepPages.of(UserDataExport::id) { afterId -> repository.findReclaimableTerminal(afterId, sweepBatchSize) }
+            .count { export -> swept(export.id) { reclaim(export) } }
 
     /**
      * The bytes before the column (`docs/adr/0017`, decision 3): the column is this sweep's only index

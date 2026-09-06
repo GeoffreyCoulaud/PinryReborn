@@ -15,6 +15,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserD
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPaginationHelper
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.UserDataExportModelSortStrategy
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.pageByIdAfter
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
 import java.time.Instant
@@ -109,10 +110,11 @@ class UserDataExportRepository(
             .findOne()
             ?.requestedAt
 
-    override fun findExpiredReadyExports(now: Instant): List<UserDataExport> =
+    override fun findExpiredReadyExports(now: Instant, afterId: UUID?, limit: Int): List<UserDataExport> =
         QUserDataExportModel()
             .state.equalTo(UserDataExportState.READY.name)
             .expiresAt.lessThan(now)
+            .pageByIdAfter(afterId, limit)
             .findList()
             .map { it.toDomain() }
 
@@ -125,11 +127,11 @@ class UserDataExportRepository(
             .findList()
             .map { it.toDomain() }
 
-    override fun findReclaimableTerminal(limit: Int): List<UserDataExport> =
+    override fun findReclaimableTerminal(afterId: UUID?, limit: Int): List<UserDataExport> =
         QUserDataExportModel()
             .state.isIn(TerminalExportStates.all)
             .storageKey.isNotNull()
-            .setMaxRows(limit)
+            .pageByIdAfter(afterId, limit)
             .findList()
             .map { it.toDomain() }
 

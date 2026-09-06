@@ -202,11 +202,13 @@ class ReapUserDataImportsTest : BaseTest() {
     }
 
     @Test
-    fun `Given more reclaimable imports than one page and the first refused, Then every other one is still reclaimed`() {
+    fun `Given more reclaimable imports than a page and the first refused, Then the others are still reclaimed`() {
         // Given: the export sweep's shape, since a refused delete holds its row in this selection too
         stubSweep()
         stubRowWrites()
-        val imports = List(SWEEP_BATCH_SIZE + 1) { anImport(UserDataImportState.CANCELLED, storageKey = "imports/$it.zip") }
+        val imports = List(SWEEP_BATCH_SIZE + 1) {
+            anImport(UserDataImportState.CANCELLED, storageKey = "imports/$it.zip")
+        }
         val refused = imports.minBy { it.id }
         every { archiveStore.delete(any()) } answers {
             val key = firstArg<String>()

@@ -308,7 +308,7 @@ class UserDataExportRepositoryTest : RepositoryTest() {
     }
 
     /** Ids that sort the same way whatever the column stores, so the seeding order can contradict them. */
-    private fun orderedId(n: Int): UUID = UUID.fromString("00000000-0000-4000-8000-%012d".format(n))
+    private fun orderedId(n: Int): UUID = UUID.fromString("00000000-0000-4000-8000-" + n.toString().padStart(12, '0'))
 
     @Test
     fun `Given more reclaimable exports than the limit, Then the pages after each last id cover them once, by id`() {
