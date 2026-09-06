@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class ReapExpiredUserDataExportsTest : BaseTest() {
+class ReapUserDataExportsTest : BaseTest() {
     private val repository = mockk<UserDataExportRepositoryInterface>()
     private val archiveStore = mockk<ExportArchiveStore>()
     private val taskQueue = mockk<TaskQueueInterface>()
@@ -32,7 +32,7 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
     private val transactions = PassthroughTransactionRunner()
     private val now = Instant.parse("2026-07-22T10:00:00Z")
     private val reaper =
-        ReapExpiredUserDataExports(
+        ReapUserDataExports(
             repository, archiveStore, taskQueue, clock, transactions,
             interruptedGrace = INTERRUPTED_GRACE,
             stagedFileMaxAge = STAGED_FILE_MAX_AGE,
@@ -408,7 +408,7 @@ class ReapExpiredUserDataExportsTest : BaseTest() {
 
     @Test
     fun `Given one export the database refuses, Then the rest of the run still happens`() {
-        // Given: item-level isolation, as ReapAbandonedUserDataImports has for the same reason
+        // Given: item-level isolation, as ReapUserDataImports has for the same reason
         stubSweep()
         stubRowWrites()
         val refused = anExport(UserDataExportState.READY, storageKey = null)

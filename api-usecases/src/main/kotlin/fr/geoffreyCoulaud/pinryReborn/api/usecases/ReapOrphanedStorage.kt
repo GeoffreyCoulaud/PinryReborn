@@ -6,6 +6,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.imports.ImportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.ImageRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataExportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StorageLayout
 import java.util.UUID
 
 /**
@@ -17,7 +18,7 @@ import java.util.UUID
  * docs/specs/2026-07-27-periodic-gc.md, decision D5).
  *
  * Not `@ApplicationScoped`: [batchSize] is a primitive ARC cannot resolve, so the bean is produced
- * in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for `ReapExpiredUserDataExports`.
+ * in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for `ReapUserDataExports`.
  *
  * Logger-free: the `*Quietly` extensions log per-item failures, and the lifecycle `safeAll` logs a
  * sweep-level throw. Add no logger here.
@@ -92,7 +93,7 @@ class ReapOrphanedStorage(
     }
 
     private companion object {
-        const val EXPORTS_PREFIX = "exports/"
-        const val IMPORTS_PREFIX = "imports/"
+        const val EXPORTS_PREFIX = "${StorageLayout.EXPORTS_DIRECTORY}/"
+        const val IMPORTS_PREFIX = "${StorageLayout.IMPORTS_DIRECTORY}/"
     }
 }

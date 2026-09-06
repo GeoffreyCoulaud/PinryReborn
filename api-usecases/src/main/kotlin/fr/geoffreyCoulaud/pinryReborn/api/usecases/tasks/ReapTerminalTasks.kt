@@ -11,7 +11,7 @@ import java.time.Duration
  *
  * Not `@ApplicationScoped`: [terminalTaskGrace] is a primitive ARC cannot resolve, so the bean is
  * produced in wiring (`GarbageCollectionProducers`), mirroring `ExportProducers` for
- * `ReapExpiredUserDataExports`.
+ * `ReapUserDataExports`.
  *
  * Logger-free: the lifecycle `safeAll` logs a sweep-level throw, and the count is returned for the
  * eventual metrics surface (same shape as `ReapExpiredTasks`).

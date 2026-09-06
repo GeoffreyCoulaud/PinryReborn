@@ -22,7 +22,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.UUID.randomUUID
 
-class ReapAbandonedUserDataImportsTest : BaseTest() {
+class ReapUserDataImportsTest : BaseTest() {
     private val repository = mockk<UserDataImportRepositoryInterface>()
     private val archiveStore = mockk<ImportArchiveStore>()
     private val taskQueue = mockk<TaskQueueInterface>()
@@ -30,7 +30,7 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
     private val transactions = PassthroughTransactionRunner()
 
     private val sweep =
-        ReapAbandonedUserDataImports(
+        ReapUserDataImports(
             repository, archiveStore, taskQueue, clock, transactions,
             uploadGrace = UPLOAD_GRACE,
             stagedFileMaxAge = STAGED_FILE_MAX_AGE,
@@ -355,7 +355,7 @@ class ReapAbandonedUserDataImportsTest : BaseTest() {
 
     @Test
     fun `Given one row the store refuses, Then the rest of the run still happens`() {
-        // Given: item-level isolation, as ReapExpiredUserDataExports has for the same reason
+        // Given: item-level isolation, as ReapUserDataExports has for the same reason
         stubSweep()
         stubRowWrites()
         val refused = anImport(UserDataImportState.AWAITING_ARCHIVE)

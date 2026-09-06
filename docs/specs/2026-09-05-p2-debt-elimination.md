@@ -484,8 +484,13 @@ Each names the output that fails it.
 - A6. `grep -rn "ReapExpiredUserDataExports\|ReapAbandonedUserDataImports" --include="*.kt" .`
   returns nothing; the two new names have a test class each, and the `--tests` case count before
   and after the rename is pasted in the commit.
-- A7. `grep -rn '"tmp"\|"exports\|"imports' --include="*.kt" */src/main` returns lines in
-  `StorageLayout.kt` only. Run today it returns the ten sites of the table in 4.2.
+- A7. `grep -rn '"tmp"\|"exports"\|"exports/\|"imports"\|"imports/' --include="*.kt" */src/main | grep -v
+  "@ConfigMapping"` returns lines in `StorageLayout.kt` only. Run before block 2 it returns the ten
+  sites of the table in 4.2. *(Corrected in block 2: the first grep, `'"tmp"\|"exports\|"imports'`,
+  also matched the two `@ConfigMapping(prefix = ...)` lines and three error messages naming
+  `exports.data_dir` or `imports.data_dir`, which are configuration keys, not path segments. The
+  narrowed pattern matches a segment as a whole string or as a prefix followed by a slash, and the
+  filter drops the two namespace declarations.)*
 - A8. `ImportLifecycleTest` has a case in which `reap()` throws at startup and the scheduler is still
   given its fixed-delay task; it fails against `start()` calling `reap()` bare (mutation pasted in
   the commit).

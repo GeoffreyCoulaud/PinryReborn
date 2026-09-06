@@ -7,6 +7,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveSink
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StorageLayout
 import java.io.BufferedOutputStream
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -39,7 +40,7 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
     private val paths = DataDirPaths(dataDir)
-    private val tmpDir: Path get() = Path.of(dataDir).resolve("tmp")
+    private val tmpDir: Path get() = Path.of(dataDir).resolve(StorageLayout.STAGING_DIRECTORY)
 
     override fun hasFreeSpace(requiredBytes: Long): Boolean {
         Files.createDirectories(tmpDir)
@@ -108,7 +109,7 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
     override fun forEachStorageKeyOnDisk(block: (Sequence<String>) -> Unit) {
         // List ONLY <dataDir>/exports/, never the dataDir root: the root also holds `tmp/`
         // staged files, which are not promoted archives and must never be swept here.
-        val exportsDir = paths.resolveWithinRoot("exports")
+        val exportsDir = paths.resolveWithinRoot(StorageLayout.EXPORTS_DIRECTORY)
         // A fresh install has no exports/ yet: Files.list would throw NoSuchFileException, which the
         // periodic sweep would log as a failure every tick. Run the block once on an empty sequence
         // instead, preserving the loan contract (the block always runs exactly once). Mirrors
@@ -118,7 +119,10 @@ class FilesystemZipExportArchiveStore(private val dataDir: String) : ExportArchi
             return
         }
         Files.list(exportsDir).use { stream ->
-            block(stream.asSequence().filter { Files.isRegularFile(it) }.map { "exports/${it.fileName}" })
+            block(
+                stream.asSequence().filter { Files.isRegularFile(it) }
+                    .map { "${StorageLayout.EXPORTS_DIRECTORY}/${it.fileName}" },
+            )
         }
     }
 

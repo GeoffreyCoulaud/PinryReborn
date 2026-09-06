@@ -1,7 +1,7 @@
 package fr.geoffreyCoulaud.pinryReborn.api.worker
 
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ExportSweepCounts
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapUserDataExports
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -12,7 +12,7 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class ExportRetentionLifecycleTest {
-    private val reap: ReapExpiredUserDataExports = mockk(relaxed = true)
+    private val reap: ReapUserDataExports = mockk(relaxed = true)
     private val scheduler: PeriodicScheduler = mockk(relaxed = true)
     private val config: ExportsConfig = mockk()
 

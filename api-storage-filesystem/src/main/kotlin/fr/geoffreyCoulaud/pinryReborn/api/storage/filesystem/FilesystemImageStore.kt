@@ -3,6 +3,7 @@ package fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageTooLargeException
 import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StagedFile
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StorageLayout
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -35,7 +36,7 @@ class FilesystemImageStore(private val dataDir: String) : ImageStore {
     }
 
     private val root: Path get() = Path.of(dataDir)
-    private val tmpDir: Path get() = root.resolve("tmp")
+    private val tmpDir: Path get() = root.resolve(StorageLayout.STAGING_DIRECTORY)
     private val paths = DataDirPaths(dataDir)
 
     // Cleanup-on-failure genuinely has to catch everything: the ImageTooLargeException guard,

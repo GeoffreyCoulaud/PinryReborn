@@ -19,7 +19,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.storage.filesystem.FilesystemZipExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.BoardCreator
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.PinCreator
-import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapExpiredUserDataExports
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.ReapUserDataExports
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.exports.UserDataExportBuilder
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.tasks.EnqueueTask
 import fr.geoffreyCoulaud.pinryReborn.api.worker.ExportRetentionLifecycle
@@ -82,7 +82,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
     lateinit var userDataExportRepository: UserDataExportRepositoryInterface
 
     @Inject
-    lateinit var reapExpiredUserDataExports: ReapExpiredUserDataExports
+    lateinit var reapUserDataExports: ReapUserDataExports
 
     @Inject
     lateinit var exportsConfig: ExportsConfig
@@ -385,13 +385,13 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
             requestedAt = Instant.now().minus(exportsConfig.interruptedGrace()).minus(Duration.ofHours(1)),
         )
 
-    // --- Purge: driven directly through the injected ReapExpiredUserDataExports bean ---
+    // --- Purge: driven directly through the injected ReapUserDataExports bean ---
 
     @Test
     fun `Given an expired READY export, Then reaping it purges the bytes, marks it EXPIRED and keeps the row`() {
         // Given: a real READY export, backdated past its retention window. Forcing exports.purge_interval
         // low enough to observe the scheduled sweep would still be a race against a fixed-delay scheduler;
-        // calling the produced ReapExpiredUserDataExports bean directly is the deterministic route the
+        // calling the produced ReapUserDataExports bean directly is the deterministic route the
         // task brief itself points at.
         val password = "password123"
         val auth = createAuthenticatedUser(password = password)
@@ -403,7 +403,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         userDataExportRepository.save(ready.copy(expiresAt = Instant.now().minus(Duration.ofDays(1))))
 
         // When
-        reapExpiredUserDataExports.reap()
+        reapUserDataExports.reap()
 
         // Then
         val reaped = requireNotNull(userDataExportRepository.findById(exportId))
@@ -432,7 +432,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         assertNotNull(superseded.storageKey, "a superseded row keeps the key that names its residue")
 
         // When
-        reapExpiredUserDataExports.reap()
+        reapUserDataExports.reap()
 
         // Then
         assertFalse(Files.exists(archivePath), "the residue should leave the disk")
@@ -462,7 +462,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         val buildingId = seedInterruptedExport(building, liveTask.id)
 
         // When
-        reapExpiredUserDataExports.reap()
+        reapUserDataExports.reap()
 
         // Then
         val swept = requireNotNull(userDataExportRepository.findById(exportId))
@@ -546,7 +546,7 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         val failed = requireNotNull(userDataExportRepository.findById(exportId))
         assertEquals(UserDataExportState.FAILED, failed.state, "the last attempt is what makes the row terminal")
         assertTrue(Files.exists(archivePath), "nothing on the failure path reclaims the promoted bytes")
-        reapExpiredUserDataExports.reap()
+        reapUserDataExports.reap()
 
         // Then: stated on the disk, since a row that stopped naming the bytes would satisfy anything else
         assertFalse(Files.exists(archivePath), "the sweep should take the bytes the rolled-back publish left")
@@ -655,8 +655,8 @@ class MeExportCompletionIntegrationTest : IntegrationTest() {
         QuarkusMock.installMockForType(RefusingStagingSweep(exportsConfig.dataDir()), ExportArchiveStore::class.java)
 
         // When
-        val logged = capturingLogsOf(ReapExpiredUserDataExports::class.java.name) {
-            assertEquals(1, reapExpiredUserDataExports.reap().expired, "the refusal must not cost the passes")
+        val logged = capturingLogsOf(ReapUserDataExports::class.java.name) {
+            assertEquals(1, reapUserDataExports.reap().expired, "the refusal must not cost the passes")
         }
 
         // Then: absorbed, and named on the channel, cause included. A net that swallows in silence

@@ -1,5 +1,6 @@
 package fr.geoffreyCoulaud.pinryReborn.api.usecases.imports
 
+import fr.geoffreyCoulaud.pinryReborn.api.domain.storage.StorageLayout
 import java.util.UUID
 
 /**
@@ -7,5 +8,5 @@ import java.util.UUID
  * bytes a completer promoted before dying are still named by whoever has to reclaim them.
  */
 object ImportArchiveKey {
-    fun forImport(importId: UUID): String = "imports/$importId.zip"
+    fun forImport(importId: UUID): String = "${StorageLayout.IMPORTS_DIRECTORY}/$importId.zip"
 }
