@@ -10,7 +10,6 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.entities.UserDataExport
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.PinSortStrategy
 import fr.geoffreyCoulaud.pinryReborn.api.domain.enums.UserDataExportState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveEntryDigest
-import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveFormat
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ArchiveSink
 import fr.geoffreyCoulaud.pinryReborn.api.domain.exports.ExportArchiveStore
 import fr.geoffreyCoulaud.pinryReborn.api.domain.images.ImageStore
@@ -25,9 +24,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
 import fr.geoffreyCoulaud.pinryReborn.api.usecases.imports.PassthroughTransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.utilities.BaseTest
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.runs
 import java.io.InputStream
 import java.security.MessageDigest
 import java.time.Duration
@@ -81,77 +78,11 @@ internal class RecordingSink : ArchiveSink {
 }
 
 /**
- * A fake [ExportArchiveStore] holding what the disk holds, so a criterion about the canonical key is
- * asserted as state rather than as `verify(exactly = 0)` on the call the test itself configured.
- */
-internal class FakeExportArchiveStore(
-    override val format: ArchiveFormat = ArchiveFormat("application/zip", "zip"),
-    /** What the next staging answers with: a var, so two attempts of one build hold distinct handles. */
-    var staged: StagedFile = StagedFile(path = "tmp/staged.zip", byteSize = 1L, contentHash = "staged"),
-    /** The open transaction a promote ran in, so the fence and its effect are read as one number. */
-    private val transactionOf: () -> Int? = { null },
-) : ExportArchiveStore {
-    /** The canonical keys and the bytes each holds: what a losing attempt must never overwrite. */
-    val promoted = linkedMapOf<String, StagedFile>()
-    val discarded = mutableListOf<StagedFile>()
-    val deleted = mutableListOf<String>()
-    val promotedInTransactions = mutableListOf<Int?>()
-    val sink = RecordingSink()
-
-    /** What a promote does before it lands, so a case drives the disk failure the net must cover. */
-    var beforePromote: () -> Unit = {}
-
-    /** What lands once this attempt has staged, which is where a rival's whole transaction fits. */
-    var afterStage: () -> Unit = {}
-
-    /** What a discard does before it lands, so a case drives the unlink the net must survive. */
-    var beforeDiscard: () -> Unit = {}
-
-    // Named apart from the fixture's own stageCalls, which counts the mock: a rival keyed on the
-    // wrong one never arrives, and the case goes green without testing the race.
-    /** How far a build got, which is what a racing actor lands on rather than a call ordinal. */
-    var stagings = 0
-        private set
-
-    override fun hasFreeSpace(requiredBytes: Long): Boolean = true
-
-    override fun stage(block: (ArchiveSink) -> Unit): StagedFile {
-        stagings++
-        block(sink)
-        afterStage()
-        return staged
-    }
-
-    override fun promote(staged: StagedFile, storageKey: String) {
-        beforePromote()
-        promotedInTransactions += transactionOf()
-        promoted[storageKey] = staged
-    }
-
-    override fun openStream(storageKey: String, skipBytes: Long): InputStream =
-        error("a build never reads an archive back")
-
-    override fun delete(storageKey: String) {
-        deleted += storageKey
-        promoted.remove(storageKey)
-    }
-
-    override fun discard(staged: StagedFile) {
-        beforeDiscard()
-        discarded += staged
-    }
-
-    override fun discardOrphanedStagedFiles(olderThan: Instant): Int = 0
-
-    override fun forEachStorageKeyOnDisk(block: (Sequence<String>) -> Unit) = block(promoted.keys.asSequence())
-}
-
-/**
- * What a build over [FakeExportArchiveStore] reads and writes through, mock store excluded: a case
- * whose criterion is the disk cannot answer it with a verification on a store it never drove.
+ * What every export build case reads and writes through, over whichever archive store a sibling
+ * supplies: one sibling per store, so an assertion on the other store cannot pass vacuously.
  */
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base, as the import suite has.
-internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {
+internal abstract class UserDataExportFixtures : BaseTest() {
     protected val exportRepository = mockk<UserDataExportRepositoryInterface>()
     protected val userRepository = mockk<UserRepositoryInterface>()
     protected val pinRepository = mockk<PinRepositoryInterface>()
@@ -177,15 +108,6 @@ internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {
 
     /** The handle the first staging answers with, held apart from the fake's own var, which moves. */
     protected val stagedFile = StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash)
-
-    /** The store as a fake, for the cases whose criterion is what the disk holds afterwards. */
-    protected val fakeArchiveStore = FakeExportArchiveStore(
-        staged = stagedFile,
-        transactionOf = { transactions.current },
-    )
-
-    /** The builder over the fake store, so a case reads the disk instead of a store's calls. */
-    protected val fakeStoreBuilder = builderOver(fakeArchiveStore)
 
     protected fun builderOver(store: ExportArchiveStore) = UserDataExportBuilder(
         exportRepository, userRepository, pinRepository, imageRepository, boardRepository, tagRepository,
@@ -257,73 +179,6 @@ internal abstract class UserDataExportFakeStoreFixtures : BaseTest() {
         }
     }
 
-    /**
-     * The other attempt of the same build, whole, between this one's staging and its completion. A
-     * rival landing inside the fence's own read instead is overwritten by a promote placed before it.
-     */
-    protected fun rivalPublishes(rivalStaged: StagedFile) {
-        fakeArchiveStore.afterStage = {
-            fakeArchiveStore.promote(rivalStaged, storageKey)
-            val row = requireNotNull(stored()) { "the rival publishes over this attempt's own stamped row" }
-            seedRow(
-                row.copy(
-                    state = UserDataExportState.READY, storageKey = storageKey,
-                    byteSize = rivalStaged.byteSize, sha256 = rivalStaged.contentHash,
-                ),
-            )
-        }
-    }
-
-    /** Stubs a single active-pin page holding exactly [pins]. */
-    protected fun stubActivePins(pins: List<Pin>) {
-        every { pinRepository.findPinsForUser(user, null, pageSize, PinSortStrategy.CREATED_AT_DESC) } returns
-            Page(items = pins, previousCursor = null, nextCursor = null)
-    }
-
-    /** Stubs a single recycled-pin page holding exactly [pins]. */
-    protected fun stubRecycledPins(pins: List<Pin>) {
-        every {
-            pinRepository.findSoftDeletedPinsForUser(user, null, pageSize, PinSortStrategy.DELETED_AT_DESC)
-        } returns Page(items = pins, previousCursor = null, nextCursor = null)
-    }
-
-    /** An empty single page for both pin walks, and empty boards and tags: the "nothing but the shell" case. */
-    protected fun stubEmptyCollections() {
-        stubActivePins(emptyList())
-        stubRecycledPins(emptyList())
-        every { boardRepository.findActiveBoardsForUser(user) } returns emptyList()
-        every { boardRepository.findRecycledBoardsForUser(user) } returns emptyList()
-        every { tagRepository.findAllTagsForUser(user) } returns emptyList()
-    }
-
-    /**
-     * The whole path for [fakeStoreBuilder]: the fake answers the free space, the format and the
-     * staging itself, so no mock store is stubbed and `checkUnnecessaryStub` stays satisfied.
-     */
-    protected fun stubFakeStoreBuild(row: UserDataExport = anExport()) {
-        stubRow(row)
-        stubRowWrites()
-        every { userRepository.findUserById(userId) } returns user
-        every { clock.now() } returns now
-        stubEmptyCollections()
-    }
-}
-
-/**
- * The same fixtures plus the archive store as a mock, for the cases whose window opens before the
- * completion: the entry guards, the two fenced writes and the staging failures.
- */
-@Suppress("AbstractClassCanBeConcreteClass") // Abstract by intent: a fixture base, as the import suite has.
-internal abstract class UserDataExportBuilderFixtures : UserDataExportFakeStoreFixtures() {
-    protected val archiveStore = mockk<ExportArchiveStore>()
-
-    protected val builder = builderOver(archiveStore)
-
-    protected lateinit var sink: RecordingSink
-
-    /** How far the build got, which is what a racing actor lands on rather than a call ordinal. */
-    protected var stageCalls = 0
-
     protected fun aPin(
         id: UUID = randomUUID(),
         tags: List<Tag> = emptyList(),
@@ -346,43 +201,25 @@ internal abstract class UserDataExportBuilderFixtures : UserDataExportFakeStoreF
         createdAt = now, updatedAt = now,
     )
 
-    protected fun stubArchiveStore() {
-        sink = RecordingSink()
-        every { archiveStore.stage(any()) } answers {
-            stageCalls++
-            firstArg<(ArchiveSink) -> Unit>().invoke(sink)
-            StagedFile(path = "tmp/staged.zip", byteSize = stagedByteSize, contentHash = stagedHash)
-        }
+    /** Stubs a single active-pin page holding exactly [pins]. */
+    protected fun stubActivePins(pins: List<Pin>) {
+        every { pinRepository.findPinsForUser(user, null, pageSize, PinSortStrategy.CREATED_AT_DESC) } returns
+            Page(items = pins, previousCursor = null, nextCursor = null)
     }
 
-    /** A staging that fails once the build has committed to it, which is the window site 2 answers for. */
-    protected fun stubFailingStage() {
-        every { archiveStore.stage(any()) } answers {
-            stageCalls++
-            error("the archive could not be staged")
-        }
+    /** Stubs a single recycled-pin page holding exactly [pins]. */
+    protected fun stubRecycledPins(pins: List<Pin>) {
+        every {
+            pinRepository.findSoftDeletedPinsForUser(user, null, pageSize, PinSortStrategy.DELETED_AT_DESC)
+        } returns Page(items = pins, previousCursor = null, nextCursor = null)
     }
 
-    /** What a build reads before it stages: the row, the account, the disk and the archive format. */
-    protected fun stubBuildEntry(row: UserDataExport = anExport()) {
-        stubRow(row)
-        every { userRepository.findUserById(userId) } returns user
-        every { archiveStore.hasFreeSpace(minimumFreeBytes) } returns true
-        every { archiveStore.format } returns ArchiveFormat("application/zip", "zip")
-    }
-
-    /** A build that reaches its staging, whatever the staging then does. */
-    protected fun stubBuildToStaging(row: UserDataExport = anExport()) {
-        stubBuildEntry(row)
-        stubRowWrites()
-        every { clock.now() } returns now
-    }
-
-    /** The whole path: an empty archive, staged, promoted and published. */
-    protected fun stubHappyPathBuild(row: UserDataExport = anExport()) {
-        stubBuildToStaging(row)
-        stubArchiveStore()
-        stubEmptyCollections()
-        every { archiveStore.promote(any(), any()) } just runs
+    /** An empty single page for both pin walks, and empty boards and tags: the "nothing but the shell" case. */
+    protected fun stubEmptyCollections() {
+        stubActivePins(emptyList())
+        stubRecycledPins(emptyList())
+        every { boardRepository.findActiveBoardsForUser(user) } returns emptyList()
+        every { boardRepository.findRecycledBoardsForUser(user) } returns emptyList()
+        every { tagRepository.findAllTagsForUser(user) } returns emptyList()
     }
 }

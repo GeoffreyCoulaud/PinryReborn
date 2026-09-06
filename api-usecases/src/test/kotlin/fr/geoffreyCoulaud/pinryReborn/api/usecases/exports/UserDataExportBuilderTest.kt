@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-internal class UserDataExportBuilderTest : UserDataExportBuilderFixtures() {
+internal class UserDataExportBuilderTest : UserDataExportMockStoreFixtures() {
 
     @Test
     fun `Given active and recycled pins, Then every pin is written with its deletion marker`() {
