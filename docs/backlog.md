@@ -61,10 +61,6 @@ block that closes it.
 - **`EbeanTaskQueue.claimNext` kills a task whose handler may still hold a live lease**, which the export sweep's
   `PT6H` grace only makes improbable. `docs/specs/2026-08-27-export-build-completion.md` section 8, fourth item.
   Branch `fix/p2-debt-lost-lease`.
-- **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the fake-store
-  base, so a case driven by the mock still sees the fake store and an assertion on it would pass vacuously. No
-  case does it today; the shape that closes both directions is a shared base with two siblings.
-  *(Reasoning is only here.)* Branch `test/p2-debt-export-fixtures`.
 - **`TaskQueueBootIntegrationTest` counts every row in `tasks` and expects exactly one**, in a shared profile where
   another class enqueues one (`docs/handoffs/2026-08-27 - handoff - export-build-completion.md`, pitfall 7).
   Counting its own kind removes the coupling. Left open on purpose: the mechanism was never reproduced, and
