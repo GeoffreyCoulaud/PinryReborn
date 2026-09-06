@@ -27,10 +27,8 @@ interface UserDataImportRepositoryInterface {
     ): Page<UserDataImport>
 
     /**
-     * `AWAITING_ARCHIVE` rows whose last upload activity, or [UserDataImport.requestedAt] when it
-     * never received one, is older than [instant]. The grace counts inactivity, not age. One page by
-     * `id`: the rows after [afterId], `null` for the first page, at most [limit] of them, so a row
-     * whose write is refused is passed by the next page.
+     * `AWAITING_ARCHIVE` rows idle since before [instant] (the grace counts inactivity, not age), one
+     * page by `id` after [afterId], `null` first, at most [limit] rows: a refused row is passed next page.
      */
     fun findAbandonableBefore(instant: Instant, afterId: UUID?, limit: Int): List<UserDataImport>
 

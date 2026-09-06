@@ -50,6 +50,7 @@ class ImportProducers {
             repository, archiveStore, taskQueue, clock, transactionRunner,
             uploadGrace = config.uploadGrace(),
             stagedFileMaxAge = config.stagedFileMaxAge(),
+            sweepBatchSize = config.sweepBatchSize(),
         )
 
     // A producer's parameter list is the injection points of what it builds, and this receiver takes

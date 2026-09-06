@@ -14,6 +14,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.UserModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.models.query.QUserDataImportModel
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelCursor
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.ModelPaginationHelper
+import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.pageByIdAfter
 import fr.geoffreyCoulaud.pinryReborn.api.persistence.sqlite.pagination.UserDataImportModelSortStrategy
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.PersistenceException
@@ -76,23 +77,26 @@ class UserDataImportRepository(
     }
 
     // The grace counts inactivity, so a row that never received a chunk falls back on its request time.
-    override fun findAbandonableBefore(instant: Instant): List<UserDataImport> =
+    override fun findAbandonableBefore(instant: Instant, afterId: UUID?, limit: Int): List<UserDataImport> =
         QUserDataImportModel()
             .state.equalTo(UserDataImportState.AWAITING_ARCHIVE.name)
             .raw("coalesce(last_upload_activity_at, requested_at) < ?", instant)
+            .pageByIdAfter(afterId, limit)
             .findList()
             .map { it.toDomain() }
 
-    override fun findReclaimableTerminal(): List<UserDataImport> =
+    override fun findReclaimableTerminal(afterId: UUID?, limit: Int): List<UserDataImport> =
         QUserDataImportModel()
             .state.isIn(TerminalImportStates.all)
             .storageKey.isNotNull()
+            .pageByIdAfter(afterId, limit)
             .findList()
             .map { it.toDomain() }
 
-    override fun findRunning(): List<UserDataImport> =
+    override fun findRunning(afterId: UUID?, limit: Int): List<UserDataImport> =
         QUserDataImportModel()
             .state.equalTo(UserDataImportState.RUNNING.name)
+            .pageByIdAfter(afterId, limit)
             .findList()
             .map { it.toDomain() }
 

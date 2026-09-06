@@ -61,10 +61,6 @@ block that closes it.
 - **`EbeanTaskQueue.claimNext` kills a task whose handler may still hold a live lease**, which the export sweep's
   `PT6H` grace only makes improbable. `docs/specs/2026-08-27-export-build-completion.md` section 8, fourth item.
   Branch `fix/p2-debt-lost-lease`.
-- **The export reclaim pass has no order, and a permanently refused delete blocks its head.**
-  `findReclaimableTerminal` converges only because acting on a row destroys its own selection predicate, which is
-  false for exactly the row whose delete throws. With `exports.sweep_batch_size` such rows it stalls for good.
-  Order the selection, or mark the refusals. *(Reasoning is only here.)* Branch `fix/p2-debt-paged-sweeps`.
 - **The export test fixtures close only one direction.** `UserDataExportBuilderFixtures` extends the fake-store
   base, so a case driven by the mock still sees the fake store and an assertion on it would pass vacuously. No
   case does it today; the shape that closes both directions is a shared base with two siblings.
@@ -81,9 +77,6 @@ block that closes it.
   every REST body through `KotlinModule` (`docs/specs/2026-08-14-user-data-import.md` section 5), which moved
   which bodies land there. To decide: a mapper over `JsonProcessingException` and which `code` it publishes.
   Branch `fix/p2-debt-error-format`.
-- **`EbeanTaskQueue.reapExpired` selects every expired lease at once**: `findList()` carries no `setMaxRows`, so
-  one sweep re-saves every expired row inside a single transaction on the one write connection. Bound it the way
-  a claim is bounded. Branch `fix/p2-debt-paged-sweeps`.
 - **`ImportStateMergedOutsideTransaction` reads a construction as an insert**, so a row rebuilt from an earlier
   read walks through untouched. The inversion is deliberate and the rule's own KDoc says why; open is whether a
   second condition can tell a rebuild from an insert without type resolution. Branch `fix/p2-debt-fence-rule`.

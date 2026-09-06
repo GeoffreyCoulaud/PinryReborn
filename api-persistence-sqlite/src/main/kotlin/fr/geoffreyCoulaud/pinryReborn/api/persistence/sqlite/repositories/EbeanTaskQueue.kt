@@ -227,14 +227,15 @@ class EbeanTaskQueue(
 
     /**
      * Row by row rather than in one bulk update: the delay is per row, off its attempts and the floor
-     * its kind is given. The pair is a transaction for [claimNext]'s reason, a settle landing between.
+     * its kind is given. One transaction for [claimNext]'s reason; at most [limit] rows, the rest next sweep.
      */
-    override fun reapExpired(now: Instant, retryFloors: Map<String, Duration>): Int =
+    override fun reapExpired(now: Instant, retryFloors: Map<String, Duration>, limit: Int): Int =
         transactionRunner.inTransaction {
             val expired =
                 QTaskModel()
                     .state.equalTo(TaskState.RUNNING.name)
                     .leaseExpiresAt.le(now)
+                    .setMaxRows(limit)
                     .findList()
             expired.forEach { model ->
                 model.state = TaskState.PENDING.name

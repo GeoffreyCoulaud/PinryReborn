@@ -54,9 +54,8 @@ interface TaskQueueInterface {
     fun requestCancel(id: UUID): Boolean
 
     /**
-     * Flip RUNNING rows whose lease expired back to PENDING, delayed by the queue's backoff floored
-     * at [retryFloors] for the row's kind (a kind it does not name is unfloored). At most [limit]
-     * rows per call, the rest waiting for the next one. Returns the count.
+     * Flip at most [limit] RUNNING rows whose lease expired back to PENDING, delayed by the queue's
+     * backoff floored at [retryFloors] for the row's kind (unnamed kinds unfloored). Returns the count.
      */
     fun reapExpired(now: Instant, retryFloors: Map<String, Duration>, limit: Int): Int
 

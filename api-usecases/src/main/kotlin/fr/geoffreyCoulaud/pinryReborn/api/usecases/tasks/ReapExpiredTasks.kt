@@ -14,5 +14,10 @@ class ReapExpiredTasks(
     private val registry: TaskHandlerRegistry,
     private val clock: Clock,
 ) {
-    fun reap(): Int = taskQueue.reapExpired(clock.now(), registry.retryFloors())
+    fun reap(): Int = taskQueue.reapExpired(clock.now(), registry.retryFloors(), REAP_BATCH_SIZE)
+
+    companion object {
+        /** A constant, not a key: the sweep runs every half lease, and the bound is met only after a crash. */
+        const val REAP_BATCH_SIZE = 500
+    }
 }

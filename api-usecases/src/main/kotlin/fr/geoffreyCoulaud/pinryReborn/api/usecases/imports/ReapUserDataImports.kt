@@ -8,6 +8,7 @@ import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.TransactionRunner
 import fr.geoffreyCoulaud.pinryReborn.api.domain.repositories.UserDataImportRepositoryInterface
 import fr.geoffreyCoulaud.pinryReborn.api.domain.tasks.TaskState
 import fr.geoffreyCoulaud.pinryReborn.api.domain.time.Clock
+import fr.geoffreyCoulaud.pinryReborn.api.usecases.SweepPages
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
 import java.time.Instant
@@ -17,7 +18,7 @@ import java.util.UUID
  * The import lifecycle sweep (spec §6): abandons uploads nobody fed, fails walks whose task is gone,
  * reclaims the bytes of terminal rows, and drops staged files past their age. Built by `ImportProducers`.
  */
-@Suppress("LongParameterList") // Four ports, the clock, and the two Durations ARC cannot resolve.
+@Suppress("LongParameterList") // Four ports, the clock, the two Durations and the bound ARC cannot resolve.
 class ReapUserDataImports(
     private val repository: UserDataImportRepositoryInterface,
     private val archiveStore: ImportArchiveStore,
@@ -26,6 +27,7 @@ class ReapUserDataImports(
     private val transactionRunner: TransactionRunner,
     private val uploadGrace: Duration,
     private val stagedFileMaxAge: Duration,
+    private val sweepBatchSize: Int,
 ) {
     /**
      * The rows acted on, counting an abandonment, a failure and a reclamation alike. The transitions run
@@ -38,8 +40,12 @@ class ReapUserDataImports(
         return reaped
     }
 
-    private fun abandonStaleUploads(now: Instant): Int =
-        repository.findAbandonableBefore(now.minus(uploadGrace)).count { swept(it.id) { abandon(it.id) } }
+    private fun abandonStaleUploads(now: Instant): Int {
+        val idleSince = now.minus(uploadGrace)
+        return SweepPages
+            .of(UserDataImport::id) { afterId -> repository.findAbandonableBefore(idleSince, afterId, sweepBatchSize) }
+            .count { swept(it.id) { abandon(it.id) } }
+    }
 
     /**
      * The state first, the file after: a fence refused here means the upload was completed while this
@@ -54,7 +60,9 @@ class ReapUserDataImports(
     }
 
     private fun failInterruptedRuns(): Int =
-        repository.findRunning().filter { it.lostItsTask() }.count { swept(it.id) { failInterrupted(it.id) } }
+        SweepPages.of(UserDataImport::id) { afterId -> repository.findRunning(afterId, sweepBatchSize) }
+            .filter { it.lostItsTask() }
+            .count { swept(it.id) { failInterrupted(it.id) } }
 
     /**
      * Live is [TaskState.isLiveAttempt], shared with the export sweep so the set has one source.
@@ -71,7 +79,8 @@ class ReapUserDataImports(
         } != null
 
     private fun reclaimTerminalArchives(): Int =
-        repository.findReclaimableTerminal().count { swept(it.id) { reclaim(it.id) } }
+        SweepPages.of(UserDataImport::id) { afterId -> repository.findReclaimableTerminal(afterId, sweepBatchSize) }
+            .count { swept(it.id) { reclaim(it.id) } }
 
     /**
      * The bytes go before the row stops naming them: stamping over a failed delete would hide residue
